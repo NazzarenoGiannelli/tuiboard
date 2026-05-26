@@ -211,6 +211,10 @@ function ColumnView(props: ColumnViewProps) {
                 cursor={props.active && ri() === cursorRow()}
                 marked={props.store.isMarked(ref)}
                 titleMaxChars={props.zoomed ? 68 : 28}
+                onClick={() => {
+                  props.store.setInVirtual(false);
+                  props.store.setCursor(props.columnIndex, ri());
+                }}
               />
             );
           }}

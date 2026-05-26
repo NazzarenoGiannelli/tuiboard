@@ -447,4 +447,4 @@ function handleKey(
 
 // ─── Mount ──────────────────────────────────────────────────────────────────
 
-await render(() => <App />);
+await render(() => <App />, { useMouse: true });

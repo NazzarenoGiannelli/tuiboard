@@ -27,6 +27,8 @@ interface TaskRowProps {
   hideDateSuffix?: boolean;
   /** Max characters shown for the title before middle-truncation kicks in. */
   titleMaxChars?: number;
+  /** Mouse click callback — called on left button down. */
+  onClick?: () => void;
 }
 
 export function TaskRow(props: TaskRowProps) {
@@ -50,6 +52,7 @@ export function TaskRow(props: TaskRowProps) {
         paddingRight: 1,
         backgroundColor: props.cursor ? T.cardBgCursor : undefined,
       }}
+      onMouseDown={props.onClick ? (() => props.onClick!()) : undefined}
     >
       <text
         style={{ flexGrow: 1, flexShrink: 1 }}

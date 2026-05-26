@@ -83,6 +83,10 @@ export function VirtualPanel(props: { store: TuiStore }) {
             cursorRow={cursorRow()}
             titleMaxChars={isZoomed() ? 84 : 28}
             isMarkedFn={(r) => props.store.isMarked(r)}
+            onClickItem={(flatIndex) => {
+              props.store.setInVirtual(true);
+              props.store.setCursor(0, flatIndex);
+            }}
           />
         </scrollbox>
       </Show>
@@ -96,11 +100,8 @@ function RenderGroups(props: {
   cursorRow: number;
   titleMaxChars: number;
   isMarkedFn: (ref: import("~/store/index").TaskRef) => boolean;
+  onClickItem: (flatIndex: number) => void;
 }) {
-  // Walking counter for cursor highlighting across the flat row index
-  // (matches the order of items returned by buildVirtualItems).
-  let globalIdx = 0;
-
   return (
     <For each={props.groups}>
       {(group, gi) => {
@@ -129,22 +130,20 @@ function RenderGroups(props: {
               when={group.subgroups && group.subgroups.length > 0}
               fallback={
                 <For each={group.items}>
-                  {(item) => {
-                    const myIdx = globalIdx++;
-                    return (
-                      <TaskRow
-                        task={item.task}
-                        cursor={props.isActive && myIdx === props.cursorRow}
-                        marked={props.isMarkedFn(item.ref)}
-                        titleMaxChars={props.titleMaxChars}
-                        contextTag={
-                          group.bucket === "agenda" || group.bucket === "priority"
-                            ? `${item.boardName}·${item.columnName}`
-                            : undefined
-                        }
-                      />
-                    );
-                  }}
+                  {(item) => (
+                    <TaskRow
+                      task={item.task}
+                      cursor={props.isActive && item.flatIndex === props.cursorRow}
+                      marked={props.isMarkedFn(item.ref)}
+                      titleMaxChars={props.titleMaxChars}
+                      contextTag={
+                        group.bucket === "agenda" || group.bucket === "priority"
+                          ? `${item.boardName}·${item.columnName}`
+                          : undefined
+                      }
+                      onClick={() => props.onClickItem(item.flatIndex)}
+                    />
+                  )}
                 </For>
               }
             >
@@ -159,17 +158,15 @@ function RenderGroups(props: {
                       </text>
                     </box>
                     <For each={sub.items}>
-                      {(item) => {
-                        const myIdx = globalIdx++;
-                        return (
-                          <TaskRow
-                            task={item.task}
-                            cursor={props.isActive && myIdx === props.cursorRow}
-                            marked={props.isMarkedFn(item.ref)}
-                            titleMaxChars={props.titleMaxChars}
-                          />
-                        );
-                      }}
+                      {(item) => (
+                        <TaskRow
+                          task={item.task}
+                          cursor={props.isActive && item.flatIndex === props.cursorRow}
+                          marked={props.isMarkedFn(item.ref)}
+                          titleMaxChars={props.titleMaxChars}
+                          onClick={() => props.onClickItem(item.flatIndex)}
+                        />
+                      )}
                     </For>
                   </box>
                 )}

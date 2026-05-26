@@ -16,12 +16,14 @@
 
 import { basename, extname } from "node:path";
 import type {
+  BlankLine,
   Board,
   Column,
   ColumnChild,
   ParseDiagnostic,
   ParseResult,
   PriorityLevel,
+  RawOther,
   SectionBreak,
   Task,
   TimeBlock,
@@ -72,6 +74,7 @@ export function parseBoard(
   { filepath }: ParseOptions,
 ): ParseResult {
   const diagnostics: ParseDiagnostic[] = [];
+  const lineEnding: "\n" | "\r\n" = content.includes("\r\n") ? "\r\n" : "\n";
 
   // 1. Strip frontmatter (verbatim block to preserve).
   const fmMatch = content.match(RE_FRONTMATTER);
@@ -85,38 +88,37 @@ export function parseBoard(
   }
 
   // 2. Identify trailer (everything from `%% kanban:settings %%` onwards).
+  //    We split on lines but keep enough info to reassemble whitespace exactly.
   const lines = body.split(/\r?\n/);
   let trailerStart = lines.length;
-  let inSettings = false;
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
-    if (!inSettings && RE_KANBAN_SETTINGS_START.test(line)) {
+    if (RE_KANBAN_SETTINGS_START.test(lines[i]!)) {
       trailerStart = i;
-      inSettings = true;
       break;
     }
   }
-  const trailer = lines.slice(trailerStart).join("\n");
+  // Trailer is verbatim; pop leading blank lines but remember them so they
+  // are emitted as part of the *last column's* trailing blanks. Actually
+  // simpler: just glue them back via the joining algorithm in `serialize`.
+  const trailer = lines.slice(trailerStart).join(lineEnding);
   const bodyLines = lines.slice(0, trailerStart);
 
-  // 3. Walk lines: build columns from `## Heading`, children from tasks /
-  //    section breaks. Lines that are neither become "loose" — for now we
-  //    drop them but keep a diagnostic. (Day 2: attach to nearest task as
-  //    continuation, e.g. nested bullet under a card.)
+  // 3. Walk lines top-down. Build columns; *every line* before the first
+  //    column is preamble, every line after a heading is a child of that
+  //    column (task / section-break / blank / raw). Nothing is silently
+  //    dropped — round-trip fidelity depends on it.
+  const preambleLines: string[] = [];
   const columns: Column[] = [];
   let current: Column | undefined;
+
   for (let i = 0; i < bodyLines.length; i++) {
     const raw = bodyLines[i]!;
     const lineNo = bodyStartLine + i;
     const trimmed = raw.trim();
 
-    if (trimmed === "") continue;
-
     const h = raw.match(RE_HEADING);
     if (h) {
       const headerLevel = h[1]!.length;
-      // We treat ## as canonical column header (Kanban-plugin convention).
-      // Other heading levels become columns too, but get a diagnostic.
       if (headerLevel !== 2) {
         diagnostics.push({
           line: lineNo,
@@ -134,16 +136,13 @@ export function parseBoard(
       continue;
     }
 
+    // Not a heading. Route to preamble or current column.
+    const target = current ? current.children : undefined;
+
     if (RE_SECTION_BREAK.test(raw)) {
-      if (current) {
-        current.children.push({ kind: "section-break", rawLine: raw });
-      } else {
-        diagnostics.push({
-          line: lineNo,
-          level: "warn",
-          message: "Section break (***) outside any column — dropped.",
-        });
-      }
+      const sb: SectionBreak = { kind: "section-break", rawLine: raw };
+      if (target) target.push(sb);
+      else preambleLines.push(raw);
       continue;
     }
 
@@ -174,20 +173,39 @@ export function parseBoard(
       continue;
     }
 
-    // Unknown line. Day 2: attach as continuation to previous task if indented.
-    diagnostics.push({
-      line: lineNo,
-      level: "info",
-      message: `Unparsed line dropped: "${raw.slice(0, 60)}"`,
-    });
+    // Blank or unrecognized line. Preserve verbatim.
+    if (trimmed === "") {
+      const bl: BlankLine = { kind: "blank", rawLine: raw };
+      if (target) target.push(bl);
+      else preambleLines.push(raw);
+    } else {
+      const other: RawOther = { kind: "raw", rawLine: raw };
+      if (target) target.push(other);
+      else preambleLines.push(raw);
+      diagnostics.push({
+        line: lineNo,
+        level: "info",
+        message: `Unrecognized line preserved verbatim: "${raw.slice(0, 60)}"`,
+      });
+    }
   }
+
+  // Preamble: lines were split, rejoin with the original line ending. The
+  // very last line yielded by `.split(/\r?\n/)` is the empty tail after the
+  // final newline, but since we walked bodyLines wholly we always include a
+  // trailing ending if the section had one.
+  const preamble = preambleLines.length > 0
+    ? preambleLines.join(lineEnding) + lineEnding
+    : "";
 
   const board: Board = {
     filepath,
     name: extractBoardName(frontmatter, filepath),
     frontmatter,
+    preamble,
     columns,
     trailer,
+    lineEnding,
     originalContent: content,
   };
 
@@ -257,6 +275,7 @@ function parseTask(input: ParseTaskInput): Task {
     done,
     rawBody: body,
     rawLine,
+    dirty: false,
     displayTitle,
     assignee: am?.[1],
     tags,
@@ -315,9 +334,18 @@ function extractBoardName(frontmatter: string, filepath: string): string {
 // ─── Type guards ─────────────────────────────────────────────────────────────
 
 export function isTask(child: ColumnChild): child is Task {
-  return (child as SectionBreak).kind !== "section-break";
+  // Tasks are the only child type without a `kind` discriminator.
+  return !("kind" in child);
 }
 
 export function isSectionBreak(child: ColumnChild): child is SectionBreak {
-  return (child as SectionBreak).kind === "section-break";
+  return "kind" in child && child.kind === "section-break";
+}
+
+export function isBlankLine(child: ColumnChild): child is BlankLine {
+  return "kind" in child && child.kind === "blank";
+}
+
+export function isRawOther(child: ColumnChild): child is RawOther {
+  return "kind" in child && child.kind === "raw";
 }

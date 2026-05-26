@@ -28,6 +28,8 @@ export interface Task {
   rawBody: string;
   /** Whole raw source line, used for verbatim round-trip until edited. */
   rawLine: string;
+  /** True when the task has been mutated since parsing — serializer rebuilds from structured fields. */
+  dirty: boolean;
   /** Display-friendly title with metadata stripped — derived, do not store source-of-truth here. */
   displayTitle: string;
 
@@ -60,7 +62,19 @@ export interface SectionBreak {
   rawLine: string;
 }
 
-export type ColumnChild = Task | SectionBreak;
+/** A blank line preserved for round-trip fidelity. */
+export interface BlankLine {
+  kind: "blank";
+  rawLine: string;
+}
+
+/** Any other line we didn't recognize (e.g. indented continuation, comments). */
+export interface RawOther {
+  kind: "raw";
+  rawLine: string;
+}
+
+export type ColumnChild = Task | SectionBreak | BlankLine | RawOther;
 
 export interface Column {
   name: string;
@@ -78,9 +92,13 @@ export interface Board {
   name: string;
   /** Verbatim frontmatter block including `---` fences, or empty. */
   frontmatter: string;
+  /** Content between frontmatter and first column heading (verbatim, may be blank lines). */
+  preamble: string;
   columns: Column[];
   /** Trailing content after the last column (e.g. `%% kanban:settings %%`). Verbatim. */
   trailer: string;
+  /** Detected line ending — `\n` or `\r\n`. Used by serializer. */
+  lineEnding: "\n" | "\r\n";
   /** Original full text — kept for diffing on conflict detection later. */
   originalContent: string;
 }

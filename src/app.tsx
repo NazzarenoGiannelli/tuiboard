@@ -1,20 +1,30 @@
 /**
- * tuiboard — Day 1 render.
+ * tuiboard — main app.
  *
- * Loads boards via config, parses them, and shows a flat dashboard:
- * one column per board column, tasks listed inside. No editing yet —
- * this is the "does it render correctly?" milestone.
+ * Composes: cross-board virtual panel (left) + active board view (right).
+ * Reactive store drives all rendering; keyboard input mutates the store;
+ * mutations write back to disk via the atomic writer.
  */
 
-import { readFileSync } from "node:fs";
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { Show, createMemo } from "solid-js";
 import { render, useKeyboard } from "@opentui/solid";
 
 import { loadConfig } from "~/config/loader";
-import { isTask, parseBoard } from "~/parser/markdown";
-import type { Board, Task } from "~/types";
+import { isTask } from "~/parser/markdown";
+import {
+  createTuiStore,
+  isoToday,
+  type TaskRef,
+  type TuiStore,
+} from "~/store/index";
+import {
+  buildVirtualItems,
+} from "~/store/virtual-panel";
+import { ATTR, T } from "~/ui/glyphs";
+import { BoardView } from "~/ui/BoardView";
+import { VirtualPanel } from "~/ui/VirtualPanel";
 
-// ─── Data loading (one-shot for Day 1, watcher in Day 2) ────────────────────
+// ─── Bootstrap ──────────────────────────────────────────────────────────────
 
 const config = loadConfig();
 if (config.boards.length === 0) {
@@ -25,188 +35,32 @@ if (config.boards.length === 0) {
   process.exit(1);
 }
 
-const boards: Board[] = [];
-for (const b of config.boards) {
-  try {
-    const content = readFileSync(b.path, "utf-8");
-    const { board } = parseBoard(content, { filepath: b.path });
-    if (b.name) board.name = b.name;
-    boards.push(board);
-  } catch (e) {
-    console.error(`Skipping ${b.path}: ${(e as Error).message}`);
-  }
+const store = createTuiStore({ config });
+
+if (store.state.boards.length === 0) {
+  console.error("All boards failed to load. Check paths in .tuiboard/config.yaml.");
+  process.exit(1);
 }
 
-// ─── Theme ──────────────────────────────────────────────────────────────────
+process.on("SIGINT", () => {
+  store.dispose().finally(() => process.exit(0));
+});
+process.on("SIGTERM", () => {
+  store.dispose().finally(() => process.exit(0));
+});
 
-const T = {
-  bg: "#16161e",
-  panelBg: "#1f2335",
-  cardBg: "#292e42",
-  cardBgDone: "#1a1b26",
-  border: "#414868",
-  text: "#c0caf5",
-  textDim: "#737aa2",
-  textDone: "#565f89",
-  accent: "#7aa2f7",
-  highest: "#f7768e",
-  high: "#ff9e64",
-  scheduled: "#e0af68",
-  assignee: "#9ece6a",
-  tag: "#7dcfff",
-  time: "#bb9af7",
-} as const;
-
-const PRIORITY_GLYPH: Record<string, string> = {
-  highest: "🔺",
-  high: "⏫",
-  medium: "🔼",
-  low: "🔽",
-  lowest: "⏬",
-  none: "",
-};
-
-// ─── Components ─────────────────────────────────────────────────────────────
-
-function TaskCard(props: { task: Task }) {
-  const { task } = props;
-  return (
-    <box
-      style={{
-        flexDirection: "column",
-        paddingLeft: 1,
-        paddingRight: 1,
-        marginBottom: 1,
-        backgroundColor: task.done ? T.cardBgDone : T.cardBg,
-        border: false,
-      }}
-    >
-      <text>
-        <span fg={task.done ? T.textDone : T.text}>
-          {task.done ? "✓ " : "  "}
-        </span>
-        <Show when={task.priority !== "none"}>
-          <span fg={task.priority === "highest" ? T.highest : T.high}>
-            {PRIORITY_GLYPH[task.priority]}{" "}
-          </span>
-        </Show>
-        <span fg={task.done ? T.textDone : T.text}>
-          {task.displayTitle || "(empty)"}
-        </span>
-      </text>
-      <Show when={hasMetaLine(task)}>
-        <text>
-          <Show when={task.timeBlock}>
-            <span fg={T.time}>
-              {" ⌚ "}
-              {fmtMin(task.timeBlock!.startMin)}-
-              {fmtMin(task.timeBlock!.endMin)}
-            </span>
-          </Show>
-          <Show when={task.scheduled}>
-            <span fg={T.scheduled}>{" ⏳ "}{task.scheduled}</span>
-          </Show>
-          <Show when={task.assignee}>
-            <span fg={T.assignee}>{" @"}{task.assignee}</span>
-          </Show>
-          <For each={task.tags}>
-            {(tag) => <span fg={T.tag}>{" #"}{tag}</span>}
-          </For>
-        </text>
-      </Show>
-    </box>
-  );
-}
-
-function ColumnView(props: { column: import("~/types").Column; boardName: string }) {
-  const tasks = createMemo(() => props.column.children.filter(isTask));
-  const open = createMemo(() => tasks().filter((t) => !t.done));
-  const done = createMemo(() => tasks().filter((t) => t.done));
-
-  return (
-    <box
-      style={{
-        flexDirection: "column",
-        flexGrow: 1,
-        flexShrink: 1,
-        flexBasis: 0,
-        minWidth: 28,
-        marginRight: 1,
-        backgroundColor: T.panelBg,
-        border: true,
-        borderColor: T.border,
-        padding: 1,
-      }}
-    >
-      <text>
-        <span fg={T.accent} attributes={1 /* bold */}>
-          {props.column.name}
-        </span>
-        <span fg={T.textDim}>
-          {"  "}
-          {open().length} open
-          <Show when={done().length > 0}>{` · ${done().length} done`}</Show>
-        </span>
-      </text>
-      <box style={{ height: 1 }} />
-      <scrollbox
-        style={{
-          width: "100%",
-          flexGrow: 1,
-          rootOptions: { backgroundColor: T.panelBg },
-          contentOptions: { backgroundColor: T.panelBg },
-          scrollbarOptions: {
-            trackOptions: {
-              foregroundColor: T.accent,
-              backgroundColor: T.border,
-            },
-          },
-        }}
-      >
-        <For each={tasks()}>{(task) => <TaskCard task={task} />}</For>
-      </scrollbox>
-    </box>
-  );
-}
-
-function BoardView(props: { board: Board }) {
-  return (
-    <box style={{ flexDirection: "column", flexGrow: 1, marginBottom: 1 }}>
-      <text>
-        <span fg={T.text} attributes={1}>{" ▎"}{props.board.name}</span>
-        <span fg={T.textDim}>{"  "}{summarize(props.board)}</span>
-      </text>
-      <box
-        style={{
-          flexDirection: "row",
-          flexGrow: 1,
-          marginTop: 1,
-        }}
-      >
-        <For each={props.board.columns}>
-          {(col) => <ColumnView column={col} boardName={props.board.name} />}
-        </For>
-      </box>
-    </box>
-  );
-}
+// ─── App ────────────────────────────────────────────────────────────────────
 
 function App() {
-  const [boardIdx, setBoardIdx] = createSignal(0);
+  const ui = () => store.state.ui;
+  const activeBoard = createMemo(() => store.state.boards[ui().activeBoardIndex]?.board);
 
-  useKeyboard((key) => {
-    if (key.name === "q" || (key.name === "c" && key.ctrl)) {
-      process.exit(0);
-    }
-    if (key.name === "tab" || key.name === "right") {
-      setBoardIdx((i) => (i + 1) % boards.length);
-    }
-    if (key.name === "left") {
-      setBoardIdx((i) => (i - 1 + boards.length) % boards.length);
-    }
-  });
+  // Recompute virtual items count so we can clamp the cursor on row changes.
+  const virtualItems = createMemo(() =>
+    buildVirtualItems(store.state.boards.map((b) => b.board)),
+  );
 
-  const current = createMemo(() => boards[boardIdx()]!);
+  useKeyboard((key) => handleKey(store, key, virtualItems().length));
 
   return (
     <box
@@ -218,44 +72,185 @@ function App() {
         padding: 1,
       }}
     >
-      <text>
-        <span fg={T.accent} attributes={1}>tuiboard</span>
-        <span fg={T.textDim}>
-          {"  "}Day 1 · {boards.length} board{boards.length === 1 ? "" : "s"} ·
-          [{boardIdx() + 1}/{boards.length}]
-        </span>
-        <span fg={T.textDim}>{"  Tab: next board · q: quit"}</span>
-      </text>
+      <TopBar store={store} />
       <box style={{ height: 1 }} />
-      <BoardView board={current()} />
+
+      <box style={{ flexDirection: "row", flexGrow: 1 }}>
+        <VirtualPanel store={store} />
+        <Show when={activeBoard()}>
+          <BoardView store={store} board={activeBoard()!} />
+        </Show>
+      </box>
+
+      <BottomBar store={store} />
     </box>
   );
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function hasMetaLine(t: Task): boolean {
-  return Boolean(t.timeBlock || t.scheduled || t.assignee || t.tags.length > 0);
+function TopBar(props: { store: TuiStore }) {
+  const boards = () => props.store.state.boards;
+  const active = () => props.store.state.ui.activeBoardIndex;
+  return (
+    <text>
+      <span style={{ fg: T.accent, attributes: ATTR.bold }}>tuiboard</span>
+      <span style={{ fg: T.textDim }}>{"  "}{isoToday()}</span>
+      <span style={{ fg: T.textDim }}>
+        {"  ·  "}
+        {boards().map((b: { board: { name: string } }, i: number) =>
+          i === active()
+            ? `[${i + 1}: ${b.board.name}]`
+            : ` ${i + 1}: ${b.board.name} `,
+        ).join("")}
+      </span>
+    </text>
+  );
 }
 
-function fmtMin(m: number): string {
-  const h = Math.floor(m / 60).toString().padStart(2, "0");
-  const mm = (m % 60).toString().padStart(2, "0");
-  return `${h}:${mm}`;
+function BottomBar(props: { store: TuiStore }) {
+  const banner = () => props.store.state.ui.banner;
+  return (
+    <box style={{ flexDirection: "column" }}>
+      <Show when={banner()}>
+        {(b) => (
+          <text>
+            <span
+              style={{
+                fg:
+                  b().kind === "error"
+                    ? T.bannerError
+                    : b().kind === "warn"
+                      ? T.bannerWarn
+                      : T.bannerInfo,
+              }}
+            >
+              {"⚑ "}{b().text}
+            </span>
+          </text>
+        )}
+      </Show>
+      <text>
+        <span style={{ fg: T.textDim }}>
+          {"hjkl/arrows: move · Tab/1-9: board · Enter: toggle done · z: expand done · v ↔ panel · Ctrl-Z: undo · q: quit"}
+        </span>
+      </text>
+    </box>
+  );
 }
 
-function summarize(b: Board): string {
-  let total = 0;
-  let done = 0;
-  for (const c of b.columns) {
-    for (const child of c.children) {
-      if (isTask(child)) {
-        total++;
-        if (child.done) done++;
-      }
-    }
+// ─── Keyboard ───────────────────────────────────────────────────────────────
+
+function handleKey(
+  store: TuiStore,
+  key: { name: string; ctrl?: boolean; shift?: boolean; sequence?: string },
+  virtualCount: number,
+): void {
+  const ui = store.state.ui;
+  const board = store.state.boards[ui.activeBoardIndex]?.board;
+
+  // Quit
+  if (key.name === "q" || (key.ctrl && key.name === "c")) {
+    store.dispose().finally(() => process.exit(0));
+    return;
   }
-  return `${total - done} open · ${done} done · ${b.columns.length} columns`;
+
+  // Cycle boards
+  if (key.name === "tab") {
+    store.setActiveBoard(ui.activeBoardIndex + 1);
+    return;
+  }
+  if (/^[1-9]$/.test(key.name)) {
+    const i = parseInt(key.name, 10) - 1;
+    if (i < store.state.boards.length) store.setActiveBoard(i);
+    return;
+  }
+
+  // Switch in/out of virtual panel with `v`
+  if (key.name === "v") {
+    store.setInVirtual(!ui.inVirtual);
+    return;
+  }
+
+  // Undo
+  if (key.ctrl && key.name === "z") {
+    store.undo();
+    return;
+  }
+
+  // Toggle done counter expand
+  if (key.name === "z") {
+    if (!ui.inVirtual && board) {
+      const col = board.columns[ui.col];
+      if (col) store.toggleDoneExpanded(board.filepath, col.name);
+    }
+    return;
+  }
+
+  // Navigation
+  if (ui.inVirtual) {
+    if (key.name === "j" || key.name === "down") {
+      store.setCursor(ui.col, Math.min(virtualCount - 1, ui.row + 1));
+    } else if (key.name === "k" || key.name === "up") {
+      store.setCursor(ui.col, Math.max(0, ui.row - 1));
+    } else if (key.name === "l" || key.name === "right") {
+      // jump out into the board's column 0
+      store.setInVirtual(false);
+    } else if (key.name === "enter" || key.name === "return") {
+      // Toggle done on the virtual cursor's target (cross-board).
+      const items = buildVirtualItems(
+        store.state.boards.map((b) => b.board),
+      );
+      const target = items[ui.row];
+      if (target) store.toggleDone(target.ref);
+    }
+    return;
+  }
+
+  // Inside a board
+  if (!board) return;
+  const col = board.columns[ui.col];
+  if (!col) return;
+
+  const allTasks = col.children.filter(isTask);
+  const openTasks = allTasks.filter((t) => !t.done);
+  const doneExpanded = store.isDoneExpanded(board.filepath, col.name);
+  const visibleTasks = doneExpanded ? allTasks : openTasks;
+
+  if (key.name === "j" || key.name === "down") {
+    store.setCursor(ui.col, Math.min(visibleTasks.length - 1, ui.row + 1));
+    return;
+  }
+  if (key.name === "k" || key.name === "up") {
+    store.setCursor(ui.col, Math.max(0, ui.row - 1));
+    return;
+  }
+  if (key.name === "h" || key.name === "left") {
+    if (ui.col === 0) {
+      store.setInVirtual(true);
+    } else {
+      store.setCursor(ui.col - 1, 0);
+    }
+    return;
+  }
+  if (key.name === "l" || key.name === "right") {
+    if (ui.col < board.columns.length - 1) {
+      store.setCursor(ui.col + 1, 0);
+    }
+    return;
+  }
+
+  if (key.name === "enter" || key.name === "return") {
+    const task = visibleTasks[ui.row];
+    if (!task) return;
+    // We need the task index *within all Task children*, not the visible list.
+    const taskIndex = allTasks.indexOf(task);
+    const ref: TaskRef = {
+      boardPath: board.filepath,
+      columnIndex: ui.col,
+      taskIndex,
+    };
+    store.toggleDone(ref);
+    return;
+  }
 }
 
 // ─── Mount ──────────────────────────────────────────────────────────────────

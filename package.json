@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "bun --preload @opentui/solid/preload src/app.tsx",
     "parse:check": "bun run src/scripts/parse-check.ts",
+    "roundtrip:check": "bun run src/scripts/roundtrip-check.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

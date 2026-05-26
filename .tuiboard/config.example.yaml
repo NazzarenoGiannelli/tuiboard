@@ -1,0 +1,21 @@
+# Copy this file to `config.yaml` in the same `.tuiboard/` directory and edit
+# the paths to point at your real markdown board files.
+#
+# tuiboard searches `.tuiboard/config.yaml` walking up from the current
+# working directory, so dropping a `.tuiboard/` folder at your vault root
+# makes the whole vault auto-configured.
+
+boards:
+  - path: ./Tasks - R3PLICA.md
+    name: R3PLICA
+  - path: ./Tasks - Personal.md
+    name: Personal
+  - path: ./Tasks - Platform.md
+    name: Platform
+
+# Optional. Used by the kanban view for the assignee cycle (`a` key).
+assignees: [Nazza]
+
+# Names of the columns treated as "done" and "archive" lanes.
+done_column: Done
+archive_column: Archive

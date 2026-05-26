@@ -1,0 +1,24 @@
+{
+  "name": "tuiboard",
+  "version": "0.0.1",
+  "description": "A modern terminal dashboard for markdown-based task boards. Kanban + timeline + agent view in one TUI.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --preload @opentui/solid/preload src/app.tsx",
+    "parse:check": "bun run src/scripts/parse-check.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opentui/core": "^0.2.15",
+    "@opentui/solid": "^0.2.15",
+    "chokidar": "^4.0.3",
+    "js-yaml": "^4.1.0",
+    "solid-js": "^1.9.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/js-yaml": "^4.0.9",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,15 @@
+node_modules/
+bun.lock
+bun.lockb
+*.log
+.DS_Store
+dist/
+build/
+.env
+.env.local
+.tuiboard-cache/
+
+# Local user config — keep config.example.yaml committed instead
+.tuiboard/config.yaml
+.tuiboard/config.yml
+*.tsbuildinfo

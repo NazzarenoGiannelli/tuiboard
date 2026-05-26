@@ -56,6 +56,15 @@ export interface LoadedBoard {
 
 export type ViewMode = "kanban" | "list";
 
+export type ModalKind =
+  | { kind: "add"; targetColumnIndex: number }
+  | { kind: "edit"; ref: TaskRef }
+  | { kind: "schedule"; ref: TaskRef }
+  | { kind: "timeblock"; ref: TaskRef }
+  | { kind: "assign"; ref: TaskRef }
+  | { kind: "confirm-delete"; ref: TaskRef }
+  | { kind: "help" };
+
 export interface UIState {
   activeBoardIndex: number;
   /** True when the cursor is inside the cross-board Today/Tomorrow virtual panel. */
@@ -73,6 +82,8 @@ export interface UIState {
   filter: "all" | "today" | "overdue" | "tomorrow" | "followup";
   /** Banner messages (errors, conflicts, undo notifications). */
   banner?: { kind: "info" | "warn" | "error"; text: string; ts: number };
+  /** Open modal, if any. Keyboard handler routes input to the modal when set. */
+  modal?: ModalKind;
 }
 
 export interface UndoEntry {
@@ -623,6 +634,14 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     return state.ui.doneExpanded.get(boardPath)?.has(columnName) ?? false;
   }
 
+  function openModal(m: ModalKind): void {
+    setState("ui", "modal", m);
+  }
+
+  function closeModal(): void {
+    setState("ui", "modal", undefined);
+  }
+
   // ─── Private mutation helper ─────────────────────────────────────────────
 
   function mutateTask(ref: TaskRef, f: (t: Task) => void): void {
@@ -668,6 +687,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setCursor,
     setInVirtual,
     toggleDoneExpanded,
+    openModal,
+    closeModal,
     flashBanner,
     clearBanner,
     // undo

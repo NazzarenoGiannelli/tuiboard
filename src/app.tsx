@@ -22,6 +22,7 @@ import {
 } from "~/store/virtual-panel";
 import { ATTR, T } from "~/ui/glyphs";
 import { BoardView } from "~/ui/BoardView";
+import { ModalLayer } from "~/ui/Modal";
 import { VirtualPanel } from "~/ui/VirtualPanel";
 
 // ─── Bootstrap ──────────────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ function App() {
       </box>
 
       <BottomBar store={store} />
+      <ModalLayer store={store} />
     </box>
   );
 }
@@ -111,7 +113,7 @@ function BottomBar(props: { store: TuiStore }) {
   return (
     <box style={{ flexDirection: "column" }}>
       <Show when={banner()}>
-        {(b) => (
+        {(b: () => NonNullable<ReturnType<typeof banner>>) => (
           <text>
             <span
               style={{
@@ -130,7 +132,7 @@ function BottomBar(props: { store: TuiStore }) {
       </Show>
       <text>
         <span style={{ fg: T.textDim }}>
-          {"hjkl/arrows: move · Tab/1-9: board · Enter: toggle done · z: expand done · v ↔ panel · Ctrl-Z: undo · q: quit"}
+          {"hjkl move · Tab/1-9 board · v panel · Enter done · n new · e edit · s sched · b time · a assign · d del · z exp · ? help · ⌃Z undo · q quit"}
         </span>
       </text>
     </box>
@@ -147,9 +149,40 @@ function handleKey(
   const ui = store.state.ui;
   const board = store.state.boards[ui.activeBoardIndex]?.board;
 
+  // Modal dispatcher first — most keys go to the modal's <input>.
+  if (ui.modal) {
+    if (key.name === "escape") {
+      store.closeModal();
+      return;
+    }
+    // Confirm-delete uses single-key shortcuts (y/n) instead of <input>.
+    if (ui.modal.kind === "confirm-delete") {
+      if (key.name === "y") {
+        const ref = ui.modal.ref;
+        store.deleteTask(ref);
+        store.closeModal();
+      } else if (key.name === "n") {
+        store.closeModal();
+      }
+      return;
+    }
+    if (ui.modal.kind === "help" && (key.name === "?" || key.sequence === "?")) {
+      store.closeModal();
+      return;
+    }
+    // Other modals: the <input> consumes typing; we don't intercept here.
+    return;
+  }
+
   // Quit
   if (key.name === "q" || (key.ctrl && key.name === "c")) {
     store.dispose().finally(() => process.exit(0));
+    return;
+  }
+
+  // Help
+  if (key.name === "?" || key.sequence === "?") {
+    store.openModal({ kind: "help" });
     return;
   }
 
@@ -238,17 +271,42 @@ function handleKey(
     return;
   }
 
+  // Task-level actions need a task under the cursor.
+  const cursorTask = visibleTasks[ui.row];
+  const cursorRef: TaskRef | undefined = cursorTask
+    ? {
+        boardPath: board.filepath,
+        columnIndex: ui.col,
+        taskIndex: allTasks.indexOf(cursorTask),
+      }
+    : undefined;
+
   if (key.name === "enter" || key.name === "return") {
-    const task = visibleTasks[ui.row];
-    if (!task) return;
-    // We need the task index *within all Task children*, not the visible list.
-    const taskIndex = allTasks.indexOf(task);
-    const ref: TaskRef = {
-      boardPath: board.filepath,
-      columnIndex: ui.col,
-      taskIndex,
-    };
-    store.toggleDone(ref);
+    if (cursorRef) store.toggleDone(cursorRef);
+    return;
+  }
+  if (key.name === "n") {
+    store.openModal({ kind: "add", targetColumnIndex: ui.col });
+    return;
+  }
+  if (key.name === "e" && cursorRef) {
+    store.openModal({ kind: "edit", ref: cursorRef });
+    return;
+  }
+  if (key.name === "s" && cursorRef) {
+    store.openModal({ kind: "schedule", ref: cursorRef });
+    return;
+  }
+  if (key.name === "b" && cursorRef) {
+    store.openModal({ kind: "timeblock", ref: cursorRef });
+    return;
+  }
+  if (key.name === "a" && cursorRef) {
+    store.openModal({ kind: "assign", ref: cursorRef });
+    return;
+  }
+  if (key.name === "d" && cursorRef) {
+    store.openModal({ kind: "confirm-delete", ref: cursorRef });
     return;
   }
 }

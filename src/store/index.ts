@@ -73,8 +73,12 @@ export interface UIState {
   col: number;
   /** Row index inside the active column or virtual panel. */
   row: number;
-  /** Per-board which columns have their done section expanded (default: collapsed). */
-  doneExpanded: Map<string, Set<string>>; // boardPath → Set<columnName>
+  /**
+   * Which `boardPath::columnName` pairs have their done lane expanded
+   * (default: collapsed). Plain object so Solid's createStore can track
+   * mutations — Map/Set internals are *not* reactive in Solid.
+   */
+  doneExpanded: Record<string, true>;
   view: ViewMode;
   /** Tasks whose IDs are marked for bulk ops (`Space` in kanban view). */
   marked: Set<string>;
@@ -115,7 +119,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       inVirtual: false,
       col: 0,
       row: 0,
-      doneExpanded: new Map(),
+      doneExpanded: {},
       view: "kanban",
       marked: new Set(),
       filter: "all",
@@ -626,24 +630,24 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     if (v) setState("ui", "row", 0);
   }
 
+  function doneExpandedKey(boardPath: string, columnName: string): string {
+    return `${boardPath}::${columnName}`;
+  }
+
   function toggleDoneExpanded(boardPath: string, columnName: string): void {
+    const key = doneExpandedKey(boardPath, columnName);
     setState(
       "ui",
       "doneExpanded",
-      produce((m: Map<string, Set<string>>) => {
-        let set = m.get(boardPath);
-        if (!set) {
-          set = new Set();
-          m.set(boardPath, set);
-        }
-        if (set.has(columnName)) set.delete(columnName);
-        else set.add(columnName);
+      produce((m: Record<string, true>) => {
+        if (m[key]) delete m[key];
+        else m[key] = true;
       }),
     );
   }
 
   function isDoneExpanded(boardPath: string, columnName: string): boolean {
-    return state.ui.doneExpanded.get(boardPath)?.has(columnName) ?? false;
+    return state.ui.doneExpanded[doneExpandedKey(boardPath, columnName)] === true;
   }
 
   function openModal(m: ModalKind): void {

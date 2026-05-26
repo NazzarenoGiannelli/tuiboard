@@ -49,36 +49,36 @@ export const T = {
   textDone: "#4a4f63",
 
   // Cool accents — used for active board columns and generic focus
-  accent: "#88a7c5",         // soft blue-cyan (active border / brand)
+  accent: "#7eb6d6",         // clearer blue-cyan, hue ~200°
   border: "#3b3f51",          // dim border default
-  borderActive: "#88a7c5",   // same as accent
+  borderActive: "#7eb6d6",   // same as accent
 
-  // Warm accents — Today/Tomorrow identity
-  warm: "#d6a06a",           // muted warm peach (today)
-  warmActive: "#e0b378",     // slightly brighter when panel is focused
-  warmDim: "#8a7458",        // dim version for inactive states
+  // Warm accents — Today/Tomorrow identity (hue ~30°)
+  warm: "#e8a05c",           // clear warm orange, distinct from red
+  warmActive: "#f2b272",     // brighter peach when panel is focused
+  warmDim: "#a07a52",        // dim version for tomorrow header
 
-  // Priority emoji colors (kept moderately saturated for visibility)
-  highest: "#cf7a6e",        // muted coral
-  high: "#d6a06a",           // warm peach (same as today)
-  medium: "#c9b67c",         // muted gold
-  low: "#9fb98a",            // muted sage
+  // Priority emoji colors
+  highest: "#e26a6a",        // clearly red (hue 0°)
+  high: "#e8a05c",           // warm orange (same as today)
+  medium: "#d8c074",         // gold (hue 50°)
+  low: "#a4c98a",            // sage (hue 95°)
 
-  // Status-based row colors
-  overdue: "#c97b6e",        // muted coral red (less alarming than pure red)
-  today: "#d6a06a",          // warm peach
-  scheduled: "#b39573",      // dimmer warm (future scheduled)
-  future: "#6b7089",         // dim
+  // Status-based row colors — kept clearly distinct in hue + brightness
+  overdue: "#e26a6a",        // hue 0°, sat 65%, light 65% — clearly red
+  today: "#e8a05c",          // hue 30°, sat 75%, light 64% — clearly orange
+  scheduled: "#c89a6a",      // dimmer warm for non-today future
+  future: "#6b7089",
 
   // Metadata
-  assignee: "#9fb98a",
-  tag: "#88a7c5",
-  time: "#a99ac7",
+  assignee: "#a4c98a",
+  tag: "#7eb6d6",
+  time: "#b3a3d8",
 
   // Banner colors
-  bannerInfo: "#88a7c5",
-  bannerWarn: "#d6a06a",
-  bannerError: "#c97b6e",
+  bannerInfo: "#7eb6d6",
+  bannerWarn: "#e8a05c",
+  bannerError: "#e26a6a",
 } as const;
 
 export const PRIORITY_GLYPH: Record<string, string> = {

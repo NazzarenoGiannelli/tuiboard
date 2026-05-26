@@ -71,9 +71,9 @@ function ColumnView(props: ColumnViewProps) {
   const cursorRow = createMemo(() => props.store.state.ui.row);
 
   const titleText = () => {
-    let s = ` ${props.column.name}  ${openTasks().length}`;
+    let s = `┤ ${props.column.name}  ${openTasks().length}`;
     if (doneTasks().length > 0) s += ` ✓${doneTasks().length}`;
-    return s + " ";
+    return s + " ├";
   };
 
   return (

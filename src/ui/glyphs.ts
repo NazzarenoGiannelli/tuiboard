@@ -21,45 +21,64 @@ export const ATTR = {
  * The only opaque backgrounds we paint are the cursor row highlight and
  * the banner row.
  */
+/**
+ * Palette philosophy:
+ *
+ *  - Backgrounds stay transparent so the terminal theme bleeds through.
+ *  - The few accent colors are *muted hex* (mid-saturation, mid-luminance)
+ *    instead of raw ANSI names like "red"/"yellow" — those tend to render
+ *    as fully-saturated traffic-light colors in most themes and clash
+ *    with everything around them.
+ *  - The Today/Tomorrow virtual panel has its own *warm* identity
+ *    (peach/orange) so the user instantly knows "this is the time zone";
+ *    everything else uses a *cool* identity (soft cyan) for active focus.
+ *  - Cursor row highlight is the only opaque paint outside the modal.
+ */
 export const T = {
-  // Transparent — inherit terminal background.
+  // Backgrounds
   bg: undefined as string | undefined,
   panelBg: undefined as string | undefined,
   panelBgActive: undefined as string | undefined,
   cardBg: undefined as string | undefined,
   cardBgDone: undefined as string | undefined,
-  /** Cursor row highlight — uses inverted/highlight via "brightBlack" terminal color. */
-  cardBgCursor: "brightBlack",
+  cardBgCursor: "#2a2f3c",
 
-  // Foreground (ANSI-named → respects terminal theme)
-  text: undefined as string | undefined,    // default terminal fg
-  textDim: "brightBlack",
-  textDone: "brightBlack",
-  accent: "cyan",
-  border: "brightBlack",
-  borderActive: "cyan",
+  // Foreground neutrals — ANSI-named, respect terminal theme
+  text: undefined as string | undefined,    // terminal default fg
+  textDim: "#6b7089",
+  textDone: "#4a4f63",
 
-  // Priority
-  highest: "red",
-  high: "yellow",
-  medium: "yellow",
-  low: "green",
+  // Cool accents — used for active board columns and generic focus
+  accent: "#88a7c5",         // soft blue-cyan (active border / brand)
+  border: "#3b3f51",          // dim border default
+  borderActive: "#88a7c5",   // same as accent
 
-  // Status-based colors
-  overdue: "red",
-  today: "yellow",
-  scheduled: "yellow",
-  future: "brightBlack",
+  // Warm accents — Today/Tomorrow identity
+  warm: "#d6a06a",           // muted warm peach (today)
+  warmActive: "#e0b378",     // slightly brighter when panel is focused
+  warmDim: "#8a7458",        // dim version for inactive states
+
+  // Priority emoji colors (kept moderately saturated for visibility)
+  highest: "#cf7a6e",        // muted coral
+  high: "#d6a06a",           // warm peach (same as today)
+  medium: "#c9b67c",         // muted gold
+  low: "#9fb98a",            // muted sage
+
+  // Status-based row colors
+  overdue: "#c97b6e",        // muted coral red (less alarming than pure red)
+  today: "#d6a06a",          // warm peach
+  scheduled: "#b39573",      // dimmer warm (future scheduled)
+  future: "#6b7089",         // dim
 
   // Metadata
-  assignee: "green",
-  tag: "cyan",
-  time: "magenta",
+  assignee: "#9fb98a",
+  tag: "#88a7c5",
+  time: "#a99ac7",
 
   // Banner colors
-  bannerInfo: "cyan",
-  bannerWarn: "yellow",
-  bannerError: "red",
+  bannerInfo: "#88a7c5",
+  bannerWarn: "#d6a06a",
+  bannerError: "#c97b6e",
 } as const;
 
 export const PRIORITY_GLYPH: Record<string, string> = {

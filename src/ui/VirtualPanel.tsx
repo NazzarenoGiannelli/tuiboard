@@ -13,8 +13,8 @@ import type { TuiStore } from "~/store/index";
 
 const SECTION_HEADER: Record<string, { label: string; color: string }> = {
   overdue: { label: "● Overdue", color: T.overdue },
-  today: { label: "● Today", color: T.high },
-  tomorrow: { label: "→ Tomorrow", color: T.textDim },
+  today: { label: "● Today", color: T.today },
+  tomorrow: { label: "→ Tomorrow", color: T.warmDim },
 };
 
 const BUCKET_HEADER: Record<string, { label: string; color: string }> = {
@@ -31,7 +31,9 @@ export function VirtualPanel(props: { store: TuiStore }) {
   const isActive = createMemo(() => props.store.state.ui.inVirtual);
   const cursorRow = createMemo(() => props.store.state.ui.row);
 
-  const titleText = () => ` Today / Tomorrow  [${items().length}] `;
+  // Decorate title with vertical "tabs" `┤ … ├` so it visually breaks
+  // through the rounded border line (Superfile-style).
+  const titleText = () => `┤ Today / Tomorrow  ${items().length} ├`;
 
   return (
     <box
@@ -42,7 +44,9 @@ export function VirtualPanel(props: { store: TuiStore }) {
         marginRight: 1,
         border: true,
         borderStyle: "rounded",
-        borderColor: isActive() ? T.borderActive : T.border,
+        // Today/Tomorrow panel keeps its warm identity at all times — when
+        // focused it brightens, otherwise it dims, but never goes cool.
+        borderColor: isActive() ? T.warmActive : T.warm,
         paddingLeft: 1,
         paddingRight: 1,
       }}

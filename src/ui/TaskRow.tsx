@@ -25,6 +25,8 @@ interface TaskRowProps {
   contextTag?: string;
   /** If true, hide the date suffix (used when group header already conveys date). */
   hideDateSuffix?: boolean;
+  /** Max characters shown for the title before middle-truncation kicks in. */
+  titleMaxChars?: number;
 }
 
 export function TaskRow(props: TaskRowProps) {
@@ -32,6 +34,13 @@ export function TaskRow(props: TaskRowProps) {
   const suffix = createMemo(() => buildSuffix(props.task, props.hideDateSuffix));
   const titleColor = createMemo(() => titleColorFor(props.task, status()));
   const suffixColor = createMemo(() => suffixColorFor(props.task, status()));
+  // Middle-truncate so the descriptive head AND the differentiating tail
+  // remain visible (Python kanban shows tail-truncated; we go a step
+  // further with `head…tail` to disambiguate near-duplicate tasks that
+  // share a long common prefix).
+  const visibleTitle = createMemo(() =>
+    middleTruncate(props.task.displayTitle || "(empty)", props.titleMaxChars ?? 22),
+  );
 
   return (
     <box
@@ -62,7 +71,7 @@ export function TaskRow(props: TaskRowProps) {
           </span>
         </Show>
         <span style={{ fg: titleColor() }}>
-          {props.task.displayTitle || "(empty)"}
+          {visibleTitle()}
         </span>
       </text>
 
@@ -136,4 +145,21 @@ function suffixColorFor(task: Task, status: TaskStatus): string | undefined {
   if (status === "future") return T.scheduled;
   return T.textDim;
   void task;
+}
+
+/**
+ * Truncate to `max` chars, but keep BOTH a head and a tail with `…` in the
+ * middle when the string is too long. The head gets ~70% of the budget
+ * because that's the most descriptive portion of a task title.
+ *
+ *   "Founder outreach LinkedIn — kickoff: estrai 5-15 paying users"
+ *   middleTruncate(s, 22)  →  "Founder outreac…users"
+ */
+function middleTruncate(s: string, max: number): string {
+  if (max < 4) return s.slice(0, Math.max(0, max));
+  if (s.length <= max) return s;
+  const budget = max - 1; // reserve 1 for ellipsis
+  const head = Math.max(1, Math.ceil(budget * 0.7));
+  const tail = Math.max(1, budget - head);
+  return s.slice(0, head) + "…" + s.slice(s.length - tail);
 }

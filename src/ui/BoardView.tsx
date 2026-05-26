@@ -18,19 +18,12 @@ export function BoardView(props: BoardViewProps) {
 
   return (
     <box style={{ flexDirection: "column", flexGrow: 1 }}>
-      <text>
-        <span style={{ fg: T.text, attributes: ATTR.bold }}>{" ▎"}{props.board.name}</span>
-        <span style={{ fg: T.textDim }}>{"  "}{summarize(props.board)}</span>
-      </text>
-      <box style={{ height: 1 }} />
-
       <scrollbox
         style={{
           width: "100%",
           flexGrow: 1,
-          rootOptions: { backgroundColor: T.bg },
+          rootOptions: {},
           contentOptions: {
-            backgroundColor: T.bg,
             flexDirection: "row",
           },
           scrollbarOptions: {
@@ -84,16 +77,16 @@ function ColumnView(props: ColumnViewProps) {
     <box
       style={{
         flexDirection: "column",
-        width: 36,
-        minWidth: 36,
-        marginRight: 1,
-        backgroundColor: props.active ? T.panelBgActive : T.panelBg,
-        border: true,
-        borderColor: props.active ? T.borderActive : T.border,
+        width: 34,
+        minWidth: 34,
+        marginRight: 2,
       }}
     >
-      <box style={{ paddingLeft: 1, paddingRight: 1 }}>
+      <box style={{ flexDirection: "row" }}>
         <text wrapMode="none" truncate>
+          <span style={{ fg: props.active ? T.accent : T.textDim }}>
+            {props.active ? "▎" : " "}
+          </span>
           <span style={{ fg: props.active ? T.accent : T.text, attributes: ATTR.bold }}>
             {props.column.name}
           </span>
@@ -108,8 +101,8 @@ function ColumnView(props: ColumnViewProps) {
         style={{
           width: "100%",
           flexGrow: 1,
-          rootOptions: { backgroundColor: props.active ? T.panelBgActive : T.panelBg },
-          contentOptions: { backgroundColor: props.active ? T.panelBgActive : T.panelBg },
+          rootOptions: {},
+          contentOptions: {},
           scrollbarOptions: {
             trackOptions: {
               foregroundColor: T.accent,

@@ -6,7 +6,7 @@
  * mutations write back to disk via the atomic writer.
  */
 
-import { Show, createMemo } from "solid-js";
+import { For, Show, createMemo } from "solid-js";
 import { render, useKeyboard } from "@opentui/solid";
 
 import { loadConfig } from "~/config/loader";
@@ -92,19 +92,67 @@ function App() {
 function TopBar(props: { store: TuiStore }) {
   const boards = () => props.store.state.boards;
   const active = () => props.store.state.ui.activeBoardIndex;
+  const activeStats = () => {
+    const b = boards()[active()]?.board;
+    if (!b) return undefined;
+    let open = 0, done = 0;
+    for (const c of b.columns) {
+      for (const child of c.children) {
+        if (!("kind" in child)) {
+          if (child.done) done++;
+          else open++;
+        }
+      }
+    }
+    return { open, done, cols: b.columns.length };
+  };
+
+  // Build a flat token list for the tab row so we can render as a single
+  // <text> without JSX fragments (which OpenTUI's Solid renderer doesn't
+  // play well with inside <text>).
+  const tabsText = () => {
+    const parts: Array<{ text: string; active: boolean; brand?: boolean }> = [];
+    parts.push({ text: "tuiboard", active: false, brand: true });
+    parts.push({ text: `  ${isoToday()}   `, active: false });
+    boards().forEach((b: { board: { name: string } }, i: number) => {
+      const isActive = i === active();
+      parts.push({
+        text: isActive ? `[${i + 1} ${b.board.name}]` : ` ${i + 1} ${b.board.name} `,
+        active: isActive,
+      });
+      parts.push({ text: " ", active: false });
+    });
+    return parts;
+  };
+
   return (
-    <text>
-      <span style={{ fg: T.accent, attributes: ATTR.bold }}>tuiboard</span>
-      <span style={{ fg: T.textDim }}>{"  "}{isoToday()}</span>
-      <span style={{ fg: T.textDim }}>
-        {"  ·  "}
-        {boards().map((b: { board: { name: string } }, i: number) =>
-          i === active()
-            ? `[${i + 1}: ${b.board.name}]`
-            : ` ${i + 1}: ${b.board.name} `,
-        ).join("")}
-      </span>
-    </text>
+    <box style={{ flexDirection: "row", justifyContent: "space-between" }}>
+      <text wrapMode="none" truncate style={{ flexGrow: 1, flexShrink: 1 }}>
+        <For each={tabsText()}>
+          {(p) => (
+            <span
+              style={{
+                fg: p.brand
+                  ? T.accent
+                  : p.active
+                    ? T.accent
+                    : T.textDim,
+                attributes: p.brand || p.active ? ATTR.bold : 0,
+              }}
+            >
+              {p.text}
+            </span>
+          )}
+        </For>
+      </text>
+      <Show when={activeStats()}>
+        <text wrapMode="none" style={{ flexShrink: 0, marginLeft: 2 }}>
+          <span style={{ fg: T.textDim }}>
+            {activeStats()!.open} open · {activeStats()!.done} done · {activeStats()!.cols} cols
+          </span>
+        </text>
+      </Show>
+    </box>
   );
 }
 

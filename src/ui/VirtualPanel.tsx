@@ -37,14 +37,14 @@ export function VirtualPanel(props: { store: TuiStore }) {
         flexDirection: "column",
         width: 38,
         minWidth: 38,
-        marginRight: 1,
-        backgroundColor: isActive() ? T.panelBgActive : T.panelBg,
-        border: true,
-        borderColor: isActive() ? T.borderActive : T.border,
+        marginRight: 2,
       }}
     >
-      <box style={{ paddingLeft: 1, paddingRight: 1 }}>
-        <text>
+      <box style={{ flexDirection: "row" }}>
+        <text wrapMode="none" truncate>
+          <span style={{ fg: isActive() ? T.accent : T.textDim }}>
+            {isActive() ? "▎" : " "}
+          </span>
           <span style={{ fg: isActive() ? T.accent : T.text, attributes: ATTR.bold }}>
             Today / Tomorrow
           </span>
@@ -66,8 +66,8 @@ export function VirtualPanel(props: { store: TuiStore }) {
           style={{
             width: "100%",
             flexGrow: 1,
-            rootOptions: { backgroundColor: isActive() ? T.panelBgActive : T.panelBg },
-            contentOptions: { backgroundColor: isActive() ? T.panelBgActive : T.panelBg },
+            rootOptions: {},
+            contentOptions: {},
             scrollbarOptions: {
               trackOptions: {
                 foregroundColor: T.accent,

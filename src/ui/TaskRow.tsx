@@ -28,8 +28,10 @@ interface TaskRowProps {
 }
 
 export function TaskRow(props: TaskRowProps) {
+  const status = createMemo(() => statusOf(props.task));
   const suffix = createMemo(() => buildSuffix(props.task, props.hideDateSuffix));
-  const suffixColor = createMemo(() => suffixColorFor(props.task));
+  const titleColor = createMemo(() => titleColorFor(props.task, status()));
+  const suffixColor = createMemo(() => suffixColorFor(props.task, status()));
 
   return (
     <box
@@ -37,14 +39,9 @@ export function TaskRow(props: TaskRowProps) {
         flexDirection: "row",
         paddingLeft: 1,
         paddingRight: 1,
-        backgroundColor: props.cursor
-          ? T.cardBgCursor
-          : props.task.done
-            ? "transparent"
-            : "transparent",
+        backgroundColor: props.cursor ? T.cardBgCursor : undefined,
       }}
     >
-      {/* Left: cursor + priority + title, flexGrow:1, truncate */}
       <text
         style={{ flexGrow: 1, flexShrink: 1 }}
         truncate
@@ -64,12 +61,11 @@ export function TaskRow(props: TaskRowProps) {
             {PRIORITY_GLYPH[props.task.priority]}{" "}
           </span>
         </Show>
-        <span style={{ fg: props.task.done ? T.textDone : T.text }}>
+        <span style={{ fg: titleColor() }}>
           {props.task.displayTitle || "(empty)"}
         </span>
       </text>
 
-      {/* Right: compact date / time suffix */}
       <Show when={suffix()}>
         <text style={{ flexShrink: 0, marginLeft: 1 }} wrapMode="none">
           <span style={{ fg: suffixColor() }}>{suffix()!}</span>
@@ -83,6 +79,26 @@ export function TaskRow(props: TaskRowProps) {
       </Show>
     </box>
   );
+}
+
+type TaskStatus = "done" | "overdue" | "today" | "future" | "unscheduled";
+
+function statusOf(t: Task): TaskStatus {
+  if (t.done) return "done";
+  const d = t.scheduled ?? t.due;
+  if (!d) return "unscheduled";
+  if (d < isoToday()) return "overdue";
+  if (d === isoToday()) return "today";
+  return "future";
+}
+
+function titleColorFor(task: Task, status: TaskStatus): string | undefined {
+  if (status === "done") return T.textDone;
+  if (status === "overdue") return T.overdue;
+  if (status === "today") return T.today;
+  // future / unscheduled: terminal default fg (looks right on any theme).
+  return T.text;
+  void task;
 }
 
 /**
@@ -113,11 +129,11 @@ function buildSuffix(task: Task, hideDate?: boolean): string | undefined {
   return parts.join(" ");
 }
 
-function suffixColorFor(task: Task): string {
-  if (task.done) return T.textDone;
-  const date = task.scheduled ?? task.due;
-  if (!date) return T.textDim;
-  if (date < isoToday()) return T.overdue;
-  if (date === isoToday()) return T.high;
-  return T.scheduled;
+function suffixColorFor(task: Task, status: TaskStatus): string | undefined {
+  if (status === "done") return T.textDone;
+  if (status === "overdue") return T.overdue;
+  if (status === "today") return T.today;
+  if (status === "future") return T.scheduled;
+  return T.textDim;
+  void task;
 }

@@ -9,31 +9,57 @@ export const ATTR = {
   underline: TextAttributes.UNDERLINE,
 } as const;
 
+/**
+ * Theme tokens.
+ *
+ * Foreground colors use ANSI names (`"red"`, `"yellow"`, `"brightBlack"`,
+ * …) so they pick up the user's configured terminal palette. The terminal
+ * theme — Nord, Tokyo Night, Gruvbox, Solarized, whatever — decides what
+ * those names look like.
+ *
+ * Backgrounds are mostly `undefined` (transparent → terminal default).
+ * The only opaque backgrounds we paint are the cursor row highlight and
+ * the banner row.
+ */
 export const T = {
-  bg: "#16161e",
-  panelBg: "#1f2335",
-  panelBgActive: "#24283b",
-  cardBg: "#292e42",
-  cardBgDone: "#1a1b26",
-  cardBgCursor: "#414868",
-  border: "#414868",
-  borderActive: "#7aa2f7",
-  text: "#c0caf5",
-  textDim: "#737aa2",
-  textDone: "#565f89",
-  accent: "#7aa2f7",
-  highest: "#f7768e",
-  high: "#ff9e64",
-  medium: "#e0af68",
-  low: "#9ece6a",
-  scheduled: "#e0af68",
-  overdue: "#f7768e",
-  assignee: "#9ece6a",
-  tag: "#7dcfff",
-  time: "#bb9af7",
-  bannerInfo: "#7aa2f7",
-  bannerWarn: "#e0af68",
-  bannerError: "#f7768e",
+  // Transparent — inherit terminal background.
+  bg: undefined as string | undefined,
+  panelBg: undefined as string | undefined,
+  panelBgActive: undefined as string | undefined,
+  cardBg: undefined as string | undefined,
+  cardBgDone: undefined as string | undefined,
+  /** Cursor row highlight — uses inverted/highlight via "brightBlack" terminal color. */
+  cardBgCursor: "brightBlack",
+
+  // Foreground (ANSI-named → respects terminal theme)
+  text: undefined as string | undefined,    // default terminal fg
+  textDim: "brightBlack",
+  textDone: "brightBlack",
+  accent: "cyan",
+  border: "brightBlack",
+  borderActive: "cyan",
+
+  // Priority
+  highest: "red",
+  high: "yellow",
+  medium: "yellow",
+  low: "green",
+
+  // Status-based colors
+  overdue: "red",
+  today: "yellow",
+  scheduled: "yellow",
+  future: "brightBlack",
+
+  // Metadata
+  assignee: "green",
+  tag: "cyan",
+  time: "magenta",
+
+  // Banner colors
+  bannerInfo: "cyan",
+  bannerWarn: "yellow",
+  bannerError: "red",
 } as const;
 
 export const PRIORITY_GLYPH: Record<string, string> = {
@@ -45,7 +71,7 @@ export const PRIORITY_GLYPH: Record<string, string> = {
   none: "",
 };
 
-export const PRIORITY_COLOR: Record<string, string> = {
+export const PRIORITY_COLOR: Record<string, string | undefined> = {
   highest: T.highest,
   high: T.high,
   medium: T.medium,

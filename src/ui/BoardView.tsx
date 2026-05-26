@@ -1,4 +1,4 @@
-/** Kanban board view — columns side-by-side, with zoom mode. */
+/** Kanban board view — masonry-style flex-wrap layout with zoom mode. */
 
 import { For, Show, createEffect, createMemo } from "solid-js";
 
@@ -13,6 +13,13 @@ import type { Board, Column } from "~/types";
 interface ScrollBoxLike {
   scrollChildIntoView(id: string): void;
 }
+
+/** Fixed column dimensions used to lay out the masonry. */
+const COL_WIDTH = 38;
+/** Gap between columns (also between rows when wrapped). */
+const COL_GAP = 1;
+/** Min usable column height (avoid postage-stamp columns on tiny terminals). */
+const MIN_COL_HEIGHT = 10;
 
 interface BoardViewProps {
   store: TuiStore;
@@ -31,23 +38,28 @@ export function BoardView(props: BoardViewProps) {
   const archiveName = () => props.store.config.archiveColumn;
   let scrollBoxRef: ScrollBoxLike | undefined;
 
-  // Auto-scroll the horizontal viewport so the active column is always
-  // visible, even when the board has more columns than fit on screen.
-  // No-op in zoom mode (only one column rendered) and in virtual focus.
+  // Fixed masonry row height — half of a typical 50-row terminal. Two
+  // visible rows of columns at once, anything beyond that scrolls
+  // vertically. (TODO: react to live terminal dimensions once the
+  // useTerminalDimensions integration stops crashing the renderer.)
+  const colHeight = createMemo(() => 24);
+
+  // Auto-scroll the masonry so the active column is always visible. Now
+  // the scroll is vertical (because we wrap rows) — scrollChildIntoView
+  // handles both axes automatically based on where the child sits.
   createEffect(() => {
     const colIdx = ui().col;
-    const inVirtual = ui().inVirtual;
-    const zoomed = ui().zoomed;
-    if (inVirtual || zoomed || !scrollBoxRef) return;
-    // Defer one tick so the scrollbox has the updated child positions
-    // after the column re-renders.
-    queueMicrotask(() => {
+    if (ui().inVirtual || ui().zoomed || !scrollBoxRef) return;
+    // setTimeout(0) — full event-loop tick — is the only timing that
+    // reliably waits for OpenTUI to recompute child layout before
+    // requesting a scroll. queueMicrotask was too eager.
+    setTimeout(() => {
       try {
         scrollBoxRef?.scrollChildIntoView(columnId(props.board.filepath, colIdx));
       } catch {
-        // Child might not exist yet on initial mount; harmless.
+        // Child not mounted yet on first paint — harmless.
       }
-    });
+    }, 0);
   });
 
   /**
@@ -79,17 +91,19 @@ export function BoardView(props: BoardViewProps) {
         style={{
           width: "100%",
           flexGrow: 1,
-          scrollX: true,
+          scrollX: false,
+          scrollY: true,
           rootOptions: {},
-          contentOptions: { flexDirection: "row" },
+          contentOptions: {
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: "flex-start",
+          },
           scrollbarOptions: { visible: false },
         }}
       >
         <For each={renderedColumns()}>
           {(col) => {
-            // Map back to the original board index so cursor + keyboard
-            // operations still target the right column even though we
-            // may render fewer here (zoom).
             const originalIndex = props.board.columns.indexOf(col);
             const isActive = () =>
               !ui().inVirtual && ui().col === originalIndex;
@@ -102,6 +116,7 @@ export function BoardView(props: BoardViewProps) {
                 active={isActive()}
                 zoomed={ui().zoomed && isActive()}
                 boxId={columnId(props.board.filepath, originalIndex)}
+                height={ui().zoomed ? undefined : colHeight()}
               />
             );
           }}
@@ -124,6 +139,11 @@ interface ColumnViewProps {
   zoomed: boolean;
   /** Stable DOM-equivalent id used by `scrollChildIntoView`. */
   boxId: string;
+  /**
+   * Explicit row height for masonry layout. Undefined when zoomed (the
+   * single zoomed column should fill all available vertical space).
+   */
+  height?: number;
 }
 
 function ColumnView(props: ColumnViewProps) {
@@ -152,12 +172,14 @@ function ColumnView(props: ColumnViewProps) {
       id={props.boxId}
       style={{
         flexDirection: "column",
-        // In zoom mode, the column takes whatever space the parent gives
-        // it (flexGrow: 1). In normal mode, fixed width per column.
-        width: props.zoomed ? undefined : 32,
-        minWidth: props.zoomed ? undefined : 32,
+        width: props.zoomed ? undefined : COL_WIDTH,
+        minWidth: props.zoomed ? undefined : COL_WIDTH,
         flexGrow: props.zoomed ? 1 : 0,
-        marginRight: 1,
+        // Explicit height needed inside a flex-wrap container — otherwise
+        // children with flexGrow would inflate the column infinitely.
+        height: props.zoomed ? undefined : props.height,
+        marginRight: COL_GAP,
+        marginBottom: COL_GAP,
         border: true,
         borderStyle: "rounded",
         borderColor: props.active ? T.borderActive : T.border,

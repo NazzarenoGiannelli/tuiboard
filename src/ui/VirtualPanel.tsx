@@ -29,18 +29,23 @@ export function VirtualPanel(props: { store: TuiStore }) {
   });
   const groups = createMemo(() => groupVirtualItems(items()));
   const isActive = createMemo(() => props.store.state.ui.inVirtual);
+  const isZoomed = createMemo(
+    () => props.store.state.ui.zoomed && props.store.state.ui.inVirtual,
+  );
   const cursorRow = createMemo(() => props.store.state.ui.row);
 
   // Decorate title with vertical "tabs" `┤ … ├` so it visually breaks
   // through the rounded border line (Superfile-style).
-  const titleText = () => `┤ Today / Tomorrow  ${items().length} ├`;
+  const titleText = () =>
+    `┤ ${isZoomed() ? "⤢ " : ""}Today / Tomorrow  ${items().length} ├`;
 
   return (
     <box
       style={{
         flexDirection: "column",
-        width: 38,
-        minWidth: 38,
+        width: isZoomed() ? undefined : 38,
+        minWidth: isZoomed() ? undefined : 38,
+        flexGrow: isZoomed() ? 1 : 0,
         marginRight: 1,
         border: true,
         borderStyle: "rounded",
@@ -76,6 +81,7 @@ export function VirtualPanel(props: { store: TuiStore }) {
             groups={groups()}
             isActive={isActive()}
             cursorRow={cursorRow()}
+            titleMaxChars={isZoomed() ? 80 : 28}
           />
         </scrollbox>
       </Show>
@@ -87,6 +93,7 @@ function RenderGroups(props: {
   groups: VirtualGroup[];
   isActive: boolean;
   cursorRow: number;
+  titleMaxChars: number;
 }) {
   // Walking counter for cursor highlighting across the flat row index
   // (matches the order of items returned by buildVirtualItems).
@@ -126,6 +133,7 @@ function RenderGroups(props: {
                       <TaskRow
                         task={item.task}
                         cursor={props.isActive && myIdx === props.cursorRow}
+                        titleMaxChars={props.titleMaxChars}
                         contextTag={
                           group.bucket === "agenda" || group.bucket === "priority"
                             ? `${item.boardName}·${item.columnName}`
@@ -154,6 +162,7 @@ function RenderGroups(props: {
                           <TaskRow
                             task={item.task}
                             cursor={props.isActive && myIdx === props.cursorRow}
+                            titleMaxChars={props.titleMaxChars}
                           />
                         );
                       }}

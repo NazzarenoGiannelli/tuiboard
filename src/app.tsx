@@ -77,8 +77,16 @@ function App() {
       <box style={{ height: 1 }} />
 
       <box style={{ flexDirection: "row", flexGrow: 1 }}>
-        <VirtualPanel store={store} />
-        <Show when={activeBoard()}>
+        {/*
+          Zoom layout:
+            - zoomed + inVirtual  → only VirtualPanel, full width
+            - zoomed + !inVirtual → only BoardView, full width
+            - not zoomed           → both side-by-side
+        */}
+        <Show when={!ui().zoomed || ui().inVirtual}>
+          <VirtualPanel store={store} />
+        </Show>
+        <Show when={(!ui().zoomed || !ui().inVirtual) && activeBoard()}>
           <BoardView store={store} board={activeBoard()!} />
         </Show>
       </box>
@@ -268,11 +276,10 @@ function handleKey(
     return;
   }
 
-  // Zoom toggle: focus the active column at full width
+  // Zoom toggle: focus the active panel (board column or virtual panel)
+  // at full width.
   if (key.name === "z") {
-    if (!ui.inVirtual && board) {
-      store.toggleZoom();
-    }
+    store.toggleZoom();
     return;
   }
 

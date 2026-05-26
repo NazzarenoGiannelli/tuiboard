@@ -1,6 +1,6 @@
 /** Kanban board view — columns side-by-side, with zoom mode. */
 
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createEffect, createMemo } from "solid-js";
 
 import { isTask } from "~/parser/markdown";
 import { T } from "~/ui/glyphs";
@@ -8,14 +8,47 @@ import { TaskRow } from "~/ui/TaskRow";
 import type { TuiStore } from "~/store/index";
 import type { Board, Column } from "~/types";
 
+// Minimal structural typing for the scrollbox ref so we don't depend on
+// importing OpenTUI's internal Renderable types just to call one method.
+interface ScrollBoxLike {
+  scrollChildIntoView(id: string): void;
+}
+
 interface BoardViewProps {
   store: TuiStore;
   board: Board;
 }
 
+/** Stable id for the column box at original board index `idx`. */
+function columnId(boardPath: string, idx: number): string {
+  // boardPath is encoded so cross-board column ids don't collide if we
+  // ever render multiple boards side-by-side in the future.
+  return `tuiboard-col-${boardPath.replace(/[^a-zA-Z0-9]/g, "_")}-${idx}`;
+}
+
 export function BoardView(props: BoardViewProps) {
   const ui = () => props.store.state.ui;
   const archiveName = () => props.store.config.archiveColumn;
+  let scrollBoxRef: ScrollBoxLike | undefined;
+
+  // Auto-scroll the horizontal viewport so the active column is always
+  // visible, even when the board has more columns than fit on screen.
+  // No-op in zoom mode (only one column rendered) and in virtual focus.
+  createEffect(() => {
+    const colIdx = ui().col;
+    const inVirtual = ui().inVirtual;
+    const zoomed = ui().zoomed;
+    if (inVirtual || zoomed || !scrollBoxRef) return;
+    // Defer one tick so the scrollbox has the updated child positions
+    // after the column re-renders.
+    queueMicrotask(() => {
+      try {
+        scrollBoxRef?.scrollChildIntoView(columnId(props.board.filepath, colIdx));
+      } catch {
+        // Child might not exist yet on initial mount; harmless.
+      }
+    });
+  });
 
   /**
    * Columns shown in the view — Archive is filtered out entirely
@@ -42,9 +75,11 @@ export function BoardView(props: BoardViewProps) {
   return (
     <box style={{ flexDirection: "column", flexGrow: 1 }}>
       <scrollbox
+        ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}
         style={{
           width: "100%",
           flexGrow: 1,
+          scrollX: true,
           rootOptions: {},
           contentOptions: { flexDirection: "row" },
           scrollbarOptions: { visible: false },
@@ -66,6 +101,7 @@ export function BoardView(props: BoardViewProps) {
                 columnIndex={originalIndex}
                 active={isActive()}
                 zoomed={ui().zoomed && isActive()}
+                boxId={columnId(props.board.filepath, originalIndex)}
               />
             );
           }}
@@ -86,6 +122,8 @@ interface ColumnViewProps {
    * shown inline because the user has explicitly focused this column.
    */
   zoomed: boolean;
+  /** Stable DOM-equivalent id used by `scrollChildIntoView`. */
+  boxId: string;
 }
 
 function ColumnView(props: ColumnViewProps) {
@@ -111,12 +149,13 @@ function ColumnView(props: ColumnViewProps) {
 
   return (
     <box
+      id={props.boxId}
       style={{
         flexDirection: "column",
         // In zoom mode, the column takes whatever space the parent gives
         // it (flexGrow: 1). In normal mode, fixed width per column.
-        width: props.zoomed ? undefined : 36,
-        minWidth: props.zoomed ? undefined : 36,
+        width: props.zoomed ? undefined : 32,
+        minWidth: props.zoomed ? undefined : 32,
         flexGrow: props.zoomed ? 1 : 0,
         marginRight: 1,
         border: true,

@@ -74,11 +74,12 @@ export interface UIState {
   /** Row index inside the active column or virtual panel. */
   row: number;
   /**
-   * Which `boardPath::columnName` pairs have their done lane expanded
-   * (default: collapsed). Plain object so Solid's createStore can track
-   * mutations — Map/Set internals are *not* reactive in Solid.
+   * Zoom mode: when true, only the active column is rendered, taking the
+   * full width of the board area. Done tasks within the zoomed column
+   * become visible inline (since the user has explicitly focused there).
+   * Toggled with `z`.
    */
-  doneExpanded: Record<string, true>;
+  zoomed: boolean;
   view: ViewMode;
   /** Tasks whose IDs are marked for bulk ops (`Space` in kanban view). */
   marked: Set<string>;
@@ -119,7 +120,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       inVirtual: false,
       col: 0,
       row: 0,
-      doneExpanded: {},
+      zoomed: false,
       view: "kanban",
       marked: new Set(),
       filter: "all",
@@ -630,24 +631,12 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     if (v) setState("ui", "row", 0);
   }
 
-  function doneExpandedKey(boardPath: string, columnName: string): string {
-    return `${boardPath}::${columnName}`;
+  function toggleZoom(): void {
+    setState("ui", "zoomed", (z: boolean) => !z);
   }
 
-  function toggleDoneExpanded(boardPath: string, columnName: string): void {
-    const key = doneExpandedKey(boardPath, columnName);
-    setState(
-      "ui",
-      "doneExpanded",
-      produce((m: Record<string, true>) => {
-        if (m[key]) delete m[key];
-        else m[key] = true;
-      }),
-    );
-  }
-
-  function isDoneExpanded(boardPath: string, columnName: string): boolean {
-    return state.ui.doneExpanded[doneExpandedKey(boardPath, columnName)] === true;
+  function setZoomed(v: boolean): void {
+    setState("ui", "zoomed", v);
   }
 
   function openModal(m: ModalKind): void {
@@ -682,12 +671,12 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   return {
     state,
+    config,
     activeBoard,
     // queries
     getBoardByPath,
     getTask,
     listTasks,
-    isDoneExpanded,
     // mutations
     toggleDone,
     setScheduled,
@@ -702,7 +691,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setActiveBoard,
     setCursor,
     setInVirtual,
-    toggleDoneExpanded,
+    toggleZoom,
+    setZoomed,
     openModal,
     closeModal,
     flashBanner,

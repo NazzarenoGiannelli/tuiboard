@@ -43,14 +43,14 @@ export const T = {
   cardBgDone: undefined as string | undefined,
   cardBgCursor: "#2a2f3c",
 
-  // Foreground neutrals — ANSI-named, respect terminal theme
+  // Foreground neutrals — readable mid-grays so dim chrome doesn't disappear
   text: undefined as string | undefined,    // terminal default fg
-  textDim: "#6b7089",
-  textDone: "#4a4f63",
+  textDim: "#8a90a8",     // bumped up from #6b7089 for legibility
+  textDone: "#6b7089",    // formerly textDim — done tasks are dim but still readable
 
   // Cool accents — used for active board columns and generic focus
   accent: "#7eb6d6",         // clearer blue-cyan, hue ~200°
-  border: "#3b3f51",          // dim border default
+  border: "#5c627a",          // mid-gray, visible against terminal default bg
   borderActive: "#7eb6d6",   // same as accent
 
   // Warm accents — Today/Tomorrow identity (hue ~30°)
@@ -68,7 +68,7 @@ export const T = {
   overdue: "#e26a6a",        // hue 0°, sat 65%, light 65% — clearly red
   today: "#e8a05c",          // hue 30°, sat 75%, light 64% — clearly orange
   scheduled: "#c89a6a",      // dimmer warm for non-today future
-  future: "#6b7089",
+  future: "#8a90a8",
 
   // Metadata
   assignee: "#a4c98a",

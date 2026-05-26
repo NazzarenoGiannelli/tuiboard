@@ -190,7 +190,7 @@ function BottomBar(props: { store: TuiStore }) {
       <box style={{ height: 1, flexDirection: "row" }}>
         <text>
           <span style={{ fg: T.textDim }}>
-            {"hjkl move · Tab/1-9 board · v panel · Enter done · n new · e edit · s sched · b time · a assign · d del · z exp · ? help · ⌃Z undo · q quit"}
+            {"hjkl move · Tab/1-9 board · v panel · Enter done · n new · e edit · s sched · b time · a assign · d del · z zoom · ? help · ⌃Z undo · q quit"}
           </span>
         </text>
       </box>
@@ -268,11 +268,10 @@ function handleKey(
     return;
   }
 
-  // Toggle done counter expand
+  // Zoom toggle: focus the active column at full width
   if (key.name === "z") {
     if (!ui.inVirtual && board) {
-      const col = board.columns[ui.col];
-      if (col) store.toggleDoneExpanded(board.filepath, col.name);
+      store.toggleZoom();
     }
     return;
   }
@@ -304,8 +303,11 @@ function handleKey(
 
   const allTasks = col.children.filter(isTask);
   const openTasks = allTasks.filter((t) => !t.done);
-  const doneExpanded = store.isDoneExpanded(board.filepath, col.name);
-  const visibleTasks = doneExpanded ? allTasks : openTasks;
+  // Visible task list mirrors what the column renders: in zoom mode the
+  // user can navigate into done tasks too; otherwise only open.
+  const visibleTasks = ui.zoomed
+    ? [...openTasks, ...allTasks.filter((t) => t.done)]
+    : openTasks;
 
   if (key.name === "j" || key.name === "down") {
     store.setCursor(ui.col, Math.min(visibleTasks.length - 1, ui.row + 1));

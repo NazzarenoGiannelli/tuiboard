@@ -305,7 +305,7 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  a                 Set assignee\n"}</span>
         <span style={{ fg: T.text }}>{"  d                 Delete task (with confirm)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nView\n"}</span>
-        <span style={{ fg: T.text }}>{"  z                 Expand/collapse Done lane counter\n"}</span>
+        <span style={{ fg: T.text }}>{"  z                 Zoom active column to full width (focus mode)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nGlobal\n"}</span>
         <span style={{ fg: T.text }}>{"  Ctrl-Z            Undo last mutation\n"}</span>
         <span style={{ fg: T.text }}>{"  ?                 This help\n"}</span>

@@ -11,7 +11,7 @@
  * checks `ui.modal` first and bails if set (only Escape passes through).
  */
 
-import { Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal } from "solid-js";
 
 import {
   parseDateShortcut,
@@ -51,6 +51,7 @@ function ModalRouter(props: { store: TuiStore; modal: NonNullable<TuiStore["stat
     case "timeblock":return <TimeBlockModal store={props.store} modal={m} />;
     case "assign":   return <AssignModal store={props.store} modal={m} />;
     case "confirm-delete": return <ConfirmDeleteModal store={props.store} modal={m} />;
+    case "detail":   return <DetailModal store={props.store} modal={m} />;
     case "help":     return <HelpModal store={props.store} />;
   }
 }
@@ -284,28 +285,118 @@ function ConfirmDeleteModal(props: { store: TuiStore; modal: Extract<NonNullable
   );
 }
 
+// ─── Detail ──────────────────────────────────────────────────────────────────
+
+function DetailModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiStore["state"]["ui"]["modal"]>, { kind: "detail" }> }) {
+  const task = props.store.getTask(props.modal.ref);
+  const lb = props.store.getBoardByPath(props.modal.ref.boardPath);
+  const column = lb?.board.columns[props.modal.ref.columnIndex];
+  if (!task) {
+    return <DialogShell title="Task not found" hint="Esc to close" width={50}><text>{" "}</text></DialogShell>;
+  }
+  return (
+    <DialogShell title="Detail" hint="Esc to close" width={90}>
+      <text wrapMode="word">
+        <span style={{ fg: T.text, attributes: ATTR.bold }}>{task.displayTitle}</span>
+      </text>
+      <box style={{ height: 1 }} />
+      <text>
+        <span style={{ fg: T.textDim }}>Board:    </span>
+        <span style={{ fg: T.text }}>{lb?.board.name ?? "?"} · {column?.name ?? "?"}</span>
+      </text>
+      <Show when={task.scheduled}>
+        <text>
+          <span style={{ fg: T.textDim }}>Scheduled: </span>
+          <span style={{ fg: T.scheduled }}>⏳ {task.scheduled}</span>
+        </text>
+      </Show>
+      <Show when={task.due}>
+        <text>
+          <span style={{ fg: T.textDim }}>Due:       </span>
+          <span style={{ fg: T.scheduled }}>📅 {task.due}</span>
+        </text>
+      </Show>
+      <Show when={task.doneDate}>
+        <text>
+          <span style={{ fg: T.textDim }}>Done:      </span>
+          <span style={{ fg: T.textDone }}>✅ {task.doneDate}</span>
+        </text>
+      </Show>
+      <Show when={task.timeBlock}>
+        <text>
+          <span style={{ fg: T.textDim }}>Time:      </span>
+          <span style={{ fg: T.time }}>
+            ⌚ {fmtMin(task.timeBlock!.startMin)}-{fmtMin(task.timeBlock!.endMin)}
+          </span>
+        </text>
+      </Show>
+      <Show when={task.assignee}>
+        <text>
+          <span style={{ fg: T.textDim }}>Assignee:  </span>
+          <span style={{ fg: T.assignee }}>@{task.assignee}</span>
+        </text>
+      </Show>
+      <Show when={task.priority !== "none"}>
+        <text>
+          <span style={{ fg: T.textDim }}>Priority:  </span>
+          <span style={{ fg: T.highest }}>{task.priority}</span>
+        </text>
+      </Show>
+      <Show when={task.tags.length > 0}>
+        <text wrapMode="word">
+          <span style={{ fg: T.textDim }}>Tags:      </span>
+          <span style={{ fg: T.tag }}>{task.tags.map((t) => "#" + t).join(" ")}</span>
+        </text>
+      </Show>
+      <Show when={task.wikilinks.length > 0}>
+        <box style={{ height: 1 }} />
+        <text>
+          <span style={{ fg: T.textDim }}>Wikilinks (open in Obsidian):</span>
+        </text>
+        <For each={task.wikilinks}>
+          {(link) => (
+            <text wrapMode="word">
+              <span style={{ fg: T.tag }}>  → [[{link}]]</span>
+            </text>
+          )}
+        </For>
+      </Show>
+    </DialogShell>
+  );
+}
+
 // ─── Help ────────────────────────────────────────────────────────────────────
 
 function HelpModal(props: { store: TuiStore }) {
   void props;
   return (
-    <DialogShell title="tuiboard — keyboard reference" hint="Esc/? to close" width={80}>
+    <DialogShell title="tuiboard — keyboard reference" hint="Esc/? to close" width={90}>
       <text>
         <span style={{ fg: T.textDim }}>{"Navigation\n"}</span>
         <span style={{ fg: T.text }}>{"  h j k l  ←↑↓→     Move cursor (or browse virtual panel)\n"}</span>
         <span style={{ fg: T.text }}>{"  Tab               Next board\n"}</span>
         <span style={{ fg: T.text }}>{"  1..9              Jump to board N\n"}</span>
         <span style={{ fg: T.text }}>{"  v                 Toggle Today/Tomorrow panel focus\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nTask actions\n"}</span>
+        <span style={{ fg: T.textDim }}>{"\nSingle-task actions\n"}</span>
         <span style={{ fg: T.text }}>{"  Enter             Toggle done\n"}</span>
+        <span style={{ fg: T.text }}>{"  o                 Open detail view\n"}</span>
         <span style={{ fg: T.text }}>{"  n                 New task in current column (quick-add syntax)\n"}</span>
         <span style={{ fg: T.text }}>{"  e                 Edit task text\n"}</span>
-        <span style={{ fg: T.text }}>{"  s                 Schedule date (t/tm/+N/lun/YYYY-MM-DD)\n"}</span>
-        <span style={{ fg: T.text }}>{"  b                 Set time block (n/HH:MM/HH:MM-HH:MM)\n"}</span>
+        <span style={{ fg: T.text }}>{"  s                 Schedule date modal (t/tm/+N/lun/YYYY-MM-DD)\n"}</span>
+        <span style={{ fg: T.text }}>{"  t                 Set scheduled = today\n"}</span>
+        <span style={{ fg: T.text }}>{"  m                 Set scheduled = tomorrow\n"}</span>
+        <span style={{ fg: T.text }}>{"  b                 Set time block modal\n"}</span>
         <span style={{ fg: T.text }}>{"  a                 Set assignee\n"}</span>
         <span style={{ fg: T.text }}>{"  d                 Delete task (with confirm)\n"}</span>
+        <span style={{ fg: T.text }}>{"  X                 Archive task → moves to Archive column\n"}</span>
+        <span style={{ fg: T.textDim }}>{"\nMulti-select\n"}</span>
+        <span style={{ fg: T.text }}>{"  Space             Mark / unmark task — single-task actions then\n"}</span>
+        <span style={{ fg: T.text }}>{"                    apply to ALL marked instead of just the cursor\n"}</span>
+        <span style={{ fg: T.text }}>{"  Esc               Clear marks (when no modal is open)\n"}</span>
+        <span style={{ fg: T.textDim }}>{"\nBulk\n"}</span>
+        <span style={{ fg: T.text }}>{"  T                 Reset ALL overdue tasks (any board) to today\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nView\n"}</span>
-        <span style={{ fg: T.text }}>{"  z                 Zoom active column to full width (focus mode)\n"}</span>
+        <span style={{ fg: T.text }}>{"  z                 Zoom active panel/column to full width\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nGlobal\n"}</span>
         <span style={{ fg: T.text }}>{"  Ctrl-Z            Undo last mutation\n"}</span>
         <span style={{ fg: T.text }}>{"  ?                 This help\n"}</span>

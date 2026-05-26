@@ -76,14 +76,14 @@ export function TaskRow(props: TaskRowProps) {
       </text>
 
       <Show when={suffix()}>
-        <text style={{ flexShrink: 0, marginLeft: 1 }} wrapMode="none">
-          <span style={{ fg: suffixColor() }}>{suffix()!}</span>
+        <text style={{ flexShrink: 0 }} wrapMode="none">
+          <span style={{ fg: suffixColor() }}>{" "}{suffix()!}</span>
         </text>
       </Show>
 
       <Show when={props.contextTag}>
-        <text style={{ flexShrink: 0, marginLeft: 1 }} wrapMode="none">
-          <span style={{ fg: T.textDim }}>{"["}{props.contextTag}{"]"}</span>
+        <text style={{ flexShrink: 0 }} wrapMode="none">
+          <span style={{ fg: T.textDim }}>{" ["}{props.contextTag}{"]"}</span>
         </text>
       </Show>
     </box>

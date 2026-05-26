@@ -15,7 +15,7 @@ interface ScrollBoxLike {
 }
 
 /** Fixed column dimensions used to lay out the masonry. */
-const COL_WIDTH = 38;
+const COL_WIDTH = 42;
 /** Gap between columns (also between rows when wrapped). */
 const COL_GAP = 1;
 /** Min usable column height (avoid postage-stamp columns on tiny terminals). */
@@ -199,14 +199,21 @@ function ColumnView(props: ColumnViewProps) {
         }}
       >
         <For each={visibleTasks()}>
-          {(task, ri) => (
-            <TaskRow
-              task={task}
-              cursor={props.active && ri() === cursorRow()}
-              // In zoom mode, the column is wide — let titles breathe.
-              titleMaxChars={props.zoomed ? 64 : 22}
-            />
-          )}
+          {(task, ri) => {
+            const ref = {
+              boardPath: props.board.filepath,
+              columnIndex: props.columnIndex,
+              taskIndex: allTasks().indexOf(task),
+            };
+            return (
+              <TaskRow
+                task={task}
+                cursor={props.active && ri() === cursorRow()}
+                marked={props.store.isMarked(ref)}
+                titleMaxChars={props.zoomed ? 68 : 28}
+              />
+            );
+          }}
         </For>
 
         <Show when={!props.zoomed && doneTasks().length > 0}>

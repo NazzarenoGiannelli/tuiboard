@@ -63,6 +63,7 @@ export type ModalKind =
   | { kind: "timeblock"; ref: TaskRef }
   | { kind: "assign"; ref: TaskRef }
   | { kind: "confirm-delete"; ref: TaskRef }
+  | { kind: "detail"; ref: TaskRef }
   | { kind: "help" };
 
 export interface UIState {
@@ -81,8 +82,13 @@ export interface UIState {
    */
   zoomed: boolean;
   view: ViewMode;
-  /** Tasks whose IDs are marked for bulk ops (`Space` in kanban view). */
-  marked: Set<string>;
+  /**
+   * Tasks marked for bulk ops (`Space`). Key format:
+   *   `${boardPath}::${columnIndex}::${taskIndex}`
+   *
+   * Plain Record for Solid reactivity (Set isn't tracked).
+   */
+  marked: Record<string, true>;
   /** Active filter. */
   filter: "all" | "today" | "overdue" | "tomorrow" | "followup";
   /** Banner messages (errors, conflicts, undo notifications). */
@@ -122,7 +128,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       row: 0,
       zoomed: false,
       view: "kanban",
-      marked: new Set(),
+      marked: {},
       filter: "all",
     },
     undo: [],
@@ -639,6 +645,122 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "zoomed", v);
   }
 
+  // ─── Multi-select ────────────────────────────────────────────────────────
+
+  function markKey(ref: TaskRef): string {
+    return `${ref.boardPath}::${ref.columnIndex}::${ref.taskIndex}`;
+  }
+
+  function toggleMark(ref: TaskRef): void {
+    const key = markKey(ref);
+    setState("ui", "marked", produce((m: Record<string, true>) => {
+      if (m[key]) delete m[key];
+      else m[key] = true;
+    }));
+  }
+
+  function isMarked(ref: TaskRef): boolean {
+    return state.ui.marked[markKey(ref)] === true;
+  }
+
+  function clearMarks(): void {
+    setState("ui", "marked", {});
+  }
+
+  /** Decoded list of currently marked refs. */
+  function getMarkedRefs(): TaskRef[] {
+    return Object.keys(state.ui.marked).map((k) => {
+      const [boardPath, ci, ti] = k.split("::");
+      return {
+        boardPath: boardPath!,
+        columnIndex: Number(ci),
+        taskIndex: Number(ti),
+      };
+    });
+  }
+
+  /**
+   * Apply a single-task action to the marked set if non-empty, otherwise
+   * to the provided fallback ref. The caller passes the bound action.
+   */
+  function applyToMarkedOr(
+    fallback: TaskRef | undefined,
+    action: (ref: TaskRef) => void,
+  ): number {
+    const marked = getMarkedRefs();
+    if (marked.length > 0) {
+      for (const ref of marked) action(ref);
+      clearMarks();
+      return marked.length;
+    }
+    if (fallback) {
+      action(fallback);
+      return 1;
+    }
+    return 0;
+  }
+
+  // ─── Archive ─────────────────────────────────────────────────────────────
+
+  /**
+   * Move the task into the configured Archive column. If the Archive
+   * column doesn't exist on the board, create one at the end and use it.
+   * Returns the new TaskRef inside Archive, or undefined on failure.
+   */
+  function archiveTask(ref: TaskRef): TaskRef | undefined {
+    const lb = getBoardByPath(ref.boardPath);
+    if (!lb) return undefined;
+    const archiveName = config.archiveColumn;
+    let archiveIdx = lb.board.columns.findIndex((c) => c.name === archiveName);
+    if (archiveIdx < 0) {
+      // Create Archive column at the end.
+      const lineEnding = lb.board.lineEnding;
+      setState(
+        "boards",
+        (b) => b.board.filepath === ref.boardPath,
+        "board",
+        "columns",
+        produce((cols: Column[]) => {
+          cols.push({
+            name: archiveName,
+            headerLevel: 2,
+            rawHeading: `## ${archiveName}`,
+            children: [],
+          });
+        }),
+      );
+      void lineEnding;
+      archiveIdx = lb.board.columns.length - 1;
+    }
+    return moveTaskWithinBoard(ref, archiveIdx, "top");
+  }
+
+  // ─── Bulk: reset all overdue across all boards to today ──────────────────
+
+  function resetAllOverdueToToday(): number {
+    const today = isoToday();
+    let count = 0;
+    for (const lb of state.boards) {
+      const board = lb.board;
+      for (let ci = 0; ci < board.columns.length; ci++) {
+        const col = board.columns[ci]!;
+        let ti = 0;
+        for (const child of col.children) {
+          if (!isTask(child)) continue;
+          if (!child.done && child.scheduled && child.scheduled < today) {
+            setScheduled(
+              { boardPath: board.filepath, columnIndex: ci, taskIndex: ti },
+              today,
+            );
+            count++;
+          }
+          ti++;
+        }
+      }
+    }
+    return count;
+  }
+
   function openModal(m: ModalKind): void {
     setState("ui", "modal", m);
   }
@@ -693,6 +815,13 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setInVirtual,
     toggleZoom,
     setZoomed,
+    toggleMark,
+    isMarked,
+    clearMarks,
+    getMarkedRefs,
+    applyToMarkedOr,
+    archiveTask,
+    resetAllOverdueToToday,
     openModal,
     closeModal,
     flashBanner,

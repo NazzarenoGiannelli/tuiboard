@@ -81,7 +81,8 @@ export function VirtualPanel(props: { store: TuiStore }) {
             groups={groups()}
             isActive={isActive()}
             cursorRow={cursorRow()}
-            titleMaxChars={isZoomed() ? 80 : 28}
+            titleMaxChars={isZoomed() ? 84 : 28}
+            isMarkedFn={(r) => props.store.isMarked(r)}
           />
         </scrollbox>
       </Show>
@@ -94,6 +95,7 @@ function RenderGroups(props: {
   isActive: boolean;
   cursorRow: number;
   titleMaxChars: number;
+  isMarkedFn: (ref: import("~/store/index").TaskRef) => boolean;
 }) {
   // Walking counter for cursor highlighting across the flat row index
   // (matches the order of items returned by buildVirtualItems).
@@ -133,6 +135,7 @@ function RenderGroups(props: {
                       <TaskRow
                         task={item.task}
                         cursor={props.isActive && myIdx === props.cursorRow}
+                        marked={props.isMarkedFn(item.ref)}
                         titleMaxChars={props.titleMaxChars}
                         contextTag={
                           group.bucket === "agenda" || group.bucket === "priority"
@@ -162,6 +165,7 @@ function RenderGroups(props: {
                           <TaskRow
                             task={item.task}
                             cursor={props.isActive && myIdx === props.cursorRow}
+                            marked={props.isMarkedFn(item.ref)}
                             titleMaxChars={props.titleMaxChars}
                           />
                         );

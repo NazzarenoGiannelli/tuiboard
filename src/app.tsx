@@ -14,6 +14,7 @@ import { isTask } from "~/parser/markdown";
 import {
   createTuiStore,
   isoToday,
+  isoTomorrow,
   type TaskRef,
   type TuiStore,
 } from "~/store/index";
@@ -198,7 +199,7 @@ function BottomBar(props: { store: TuiStore }) {
       <box style={{ height: 1, flexDirection: "row" }}>
         <text>
           <span style={{ fg: T.textDim }}>
-            {"hjkl move · Tab/1-9 board · v panel · Enter done · n new · e edit · s sched · b time · a assign · d del · z zoom · ? help · ⌃Z undo · q quit"}
+            {"hjkl move · Tab/1-9 board · v panel · z zoom · Space mark · Enter done · o detail · n new · e edit · s/t/m sched · b time · a assign · X arch · d del · T reset · ? help · ⌃Z undo · q quit"}
           </span>
         </text>
       </box>
@@ -222,7 +223,6 @@ function handleKey(
       store.closeModal();
       return;
     }
-    // Confirm-delete uses single-key shortcuts (y/n) instead of <input>.
     if (ui.modal.kind === "confirm-delete") {
       if (key.name === "y") {
         const ref = ui.modal.ref;
@@ -233,11 +233,11 @@ function handleKey(
       }
       return;
     }
-    if (ui.modal.kind === "help" && (key.name === "?" || key.sequence === "?")) {
+    if ((ui.modal.kind === "help" || ui.modal.kind === "detail") &&
+        (key.name === "?" || key.sequence === "?" || key.name === "o")) {
       store.closeModal();
       return;
     }
-    // Other modals: the <input> consumes typing; we don't intercept here.
     return;
   }
 
@@ -247,9 +247,27 @@ function handleKey(
     return;
   }
 
+  // Escape clears marks when nothing else handles it.
+  if (key.name === "escape") {
+    if (Object.keys(ui.marked).length > 0) {
+      store.clearMarks();
+      store.flashBanner("info", "Selection cleared");
+    }
+    return;
+  }
+
   // Help
   if (key.name === "?" || key.sequence === "?") {
     store.openModal({ kind: "help" });
+    return;
+  }
+
+  // Bulk: reset all overdue across all boards → today (Shift+T).
+  // We rely on `key.shift` being set so plain `t` still works as
+  // "set today on cursor/marked".
+  if (key.name === "t" && key.shift) {
+    const n = store.resetAllOverdueToToday();
+    store.flashBanner("info", n > 0 ? `Reset ${n} overdue → today` : "No overdue tasks");
     return;
   }
 
@@ -349,18 +367,58 @@ function handleKey(
       }
     : undefined;
 
-  if (key.name === "enter" || key.name === "return") {
-    if (cursorRef) store.toggleDone(cursorRef);
-    return;
-  }
-
   // Defer modal opens by one macrotask so the OpenTUI <input> mounts after
-  // the current key event has been fully dispatched. Without this, the
-  // trigger letter (n/e/s/b/a/d) ends up auto-typed into the new input field.
+  // the current key event has been fully dispatched.
   const openLater = (m: Parameters<typeof store.openModal>[0]) => {
     setTimeout(() => store.openModal(m), 0);
   };
 
+  if (key.name === "enter" || key.name === "return") {
+    if (cursorRef) {
+      const n = store.applyToMarkedOr(cursorRef, (r) => store.toggleDone(r));
+      if (n > 1) store.flashBanner("info", `Toggled done on ${n} tasks`);
+    }
+    return;
+  }
+
+  // Multi-select toggle
+  if (key.name === "space" && cursorRef) {
+    store.toggleMark(cursorRef);
+    return;
+  }
+
+  // Detail
+  if (key.name === "o" && cursorRef) {
+    openLater({ kind: "detail", ref: cursorRef });
+    return;
+  }
+
+  // Quick set scheduled = today / tomorrow on cursor or all marked
+  if (key.name === "t" && !key.shift) {
+    if (cursorRef) {
+      const n = store.applyToMarkedOr(cursorRef, (r) => store.setScheduled(r, isoToday()));
+      if (n > 1) store.flashBanner("info", `${n} tasks → today`);
+    }
+    return;
+  }
+  if (key.name === "m") {
+    if (cursorRef) {
+      const n = store.applyToMarkedOr(cursorRef, (r) => store.setScheduled(r, isoTomorrow()));
+      if (n > 1) store.flashBanner("info", `${n} tasks → tomorrow`);
+    }
+    return;
+  }
+
+  // Archive (Shift+X) — move to Archive column (creates it if absent).
+  if (key.name === "x" && key.shift) {
+    if (cursorRef) {
+      const n = store.applyToMarkedOr(cursorRef, (r) => { store.archiveTask(r); });
+      store.flashBanner("info", n > 1 ? `Archived ${n} tasks` : "Archived");
+    }
+    return;
+  }
+
+  // Modals
   if (key.name === "n") {
     openLater({ kind: "add", targetColumnIndex: ui.col });
     return;

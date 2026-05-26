@@ -31,35 +31,30 @@ export function VirtualPanel(props: { store: TuiStore }) {
   const isActive = createMemo(() => props.store.state.ui.inVirtual);
   const cursorRow = createMemo(() => props.store.state.ui.row);
 
+  const titleText = () => ` Today / Tomorrow  [${items().length}] `;
+
   return (
     <box
       style={{
         flexDirection: "column",
         width: 38,
         minWidth: 38,
-        marginRight: 2,
+        marginRight: 1,
+        border: true,
+        borderStyle: "rounded",
+        borderColor: isActive() ? T.borderActive : T.border,
+        paddingLeft: 1,
+        paddingRight: 1,
       }}
+      title={titleText()}
+      titleAlignment="left"
     >
-      <box style={{ flexDirection: "row" }}>
-        <text wrapMode="none" truncate>
-          <span style={{ fg: isActive() ? T.accent : T.textDim }}>
-            {isActive() ? "▎" : " "}
-          </span>
-          <span style={{ fg: isActive() ? T.accent : T.text, attributes: ATTR.bold }}>
-            Today / Tomorrow
-          </span>
-          <span style={{ fg: T.textDim }}>{"  ["}{items().length}{"]"}</span>
-        </text>
-      </box>
-
       <Show
         when={items().length > 0}
         fallback={
-          <box style={{ paddingLeft: 1, paddingRight: 1, marginTop: 1 }}>
-            <text>
-              <span style={{ fg: T.textDim }}>Niente di schedulato.</span>
-            </text>
-          </box>
+          <text>
+            <span style={{ fg: T.textDim }}>Niente di schedulato.</span>
+          </text>
         }
       >
         <scrollbox
@@ -69,10 +64,7 @@ export function VirtualPanel(props: { store: TuiStore }) {
             rootOptions: {},
             contentOptions: {},
             scrollbarOptions: {
-              trackOptions: {
-                foregroundColor: T.accent,
-                backgroundColor: T.border,
-              },
+              visible: false,
             },
           }}
         >

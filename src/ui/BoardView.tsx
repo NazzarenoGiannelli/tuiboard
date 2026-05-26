@@ -27,10 +27,7 @@ export function BoardView(props: BoardViewProps) {
             flexDirection: "row",
           },
           scrollbarOptions: {
-            trackOptions: {
-              foregroundColor: T.accent,
-              backgroundColor: T.border,
-            },
+            visible: false,
           },
         }}
       >
@@ -73,29 +70,28 @@ function ColumnView(props: ColumnViewProps) {
 
   const cursorRow = createMemo(() => props.store.state.ui.row);
 
+  const titleText = () => {
+    let s = ` ${props.column.name}  ${openTasks().length}`;
+    if (doneTasks().length > 0) s += ` ✓${doneTasks().length}`;
+    return s + " ";
+  };
+
   return (
     <box
       style={{
         flexDirection: "column",
-        width: 34,
-        minWidth: 34,
-        marginRight: 2,
+        width: 36,
+        minWidth: 36,
+        marginRight: 1,
+        border: true,
+        borderStyle: "rounded",
+        borderColor: props.active ? T.borderActive : T.border,
+        paddingLeft: 1,
+        paddingRight: 1,
       }}
+      title={titleText()}
+      titleAlignment="left"
     >
-      <box style={{ flexDirection: "row" }}>
-        <text wrapMode="none" truncate>
-          <span style={{ fg: props.active ? T.accent : T.textDim }}>
-            {props.active ? "▎" : " "}
-          </span>
-          <span style={{ fg: props.active ? T.accent : T.text, attributes: ATTR.bold }}>
-            {props.column.name}
-          </span>
-          <span style={{ fg: T.textDim }}>{"  "}{openTasks().length}</span>
-          <Show when={doneTasks().length > 0}>
-            <span style={{ fg: T.textDone }}>{"  ✓"}{doneTasks().length}</span>
-          </Show>
-        </text>
-      </box>
 
       <scrollbox
         style={{
@@ -103,12 +99,7 @@ function ColumnView(props: ColumnViewProps) {
           flexGrow: 1,
           rootOptions: {},
           contentOptions: {},
-          scrollbarOptions: {
-            trackOptions: {
-              foregroundColor: T.accent,
-              backgroundColor: T.border,
-            },
-          },
+          scrollbarOptions: { visible: false },
         }}
       >
         <For each={visibleTasks()}>

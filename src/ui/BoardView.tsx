@@ -90,19 +90,19 @@ function ColumnView(props: ColumnViewProps) {
         backgroundColor: props.active ? T.panelBgActive : T.panelBg,
         border: true,
         borderColor: props.active ? T.borderActive : T.border,
-        padding: 1,
       }}
     >
-      <text>
-        <span style={{ fg: props.active ? T.accent : T.text, attributes: ATTR.bold }}>
-          {props.column.name}
-        </span>
-        <span style={{ fg: T.textDim }}>{"  "}{openTasks().length}</span>
-        <Show when={doneTasks().length > 0}>
-          <span style={{ fg: T.textDone }}>{"  ✓"}{doneTasks().length}</span>
-        </Show>
-      </text>
-      <box style={{ height: 1 }} />
+      <box style={{ paddingLeft: 1, paddingRight: 1 }}>
+        <text wrapMode="none" truncate>
+          <span style={{ fg: props.active ? T.accent : T.text, attributes: ATTR.bold }}>
+            {props.column.name}
+          </span>
+          <span style={{ fg: T.textDim }}>{"  "}{openTasks().length}</span>
+          <Show when={doneTasks().length > 0}>
+            <span style={{ fg: T.textDone }}>{"  ✓"}{doneTasks().length}</span>
+          </Show>
+        </text>
+      </box>
 
       <scrollbox
         style={{
@@ -134,12 +134,11 @@ function ColumnView(props: ColumnViewProps) {
               paddingLeft: 1,
               paddingRight: 1,
               marginTop: 1,
-              backgroundColor: T.cardBgDone,
             }}
           >
-            <text>
+            <text wrapMode="none" truncate>
               <span style={{ fg: T.textDim }}>
-                {"  ▸ Done ["}{doneTasks().length}{"]   press z to expand"}
+                {"▸ Done ["}{doneTasks().length}{"]  z to expand"}
               </span>
             </text>
           </box>

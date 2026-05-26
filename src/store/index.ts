@@ -176,14 +176,26 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     return col.children.filter(isTask);
   }
 
+  let bannerTimer: ReturnType<typeof setTimeout> | undefined;
   function flashBanner(
     kind: "info" | "warn" | "error",
     text: string,
   ): void {
-    setState("ui", "banner", { kind, text, ts: Date.now() });
+    const ts = Date.now();
+    setState("ui", "banner", { kind, text, ts });
+    if (bannerTimer) clearTimeout(bannerTimer);
+    // Auto-dismiss after a few seconds so the keybar isn't permanently
+    // crowded by stale messages. Errors linger a bit longer.
+    const ttl = kind === "error" ? 6000 : 3000;
+    bannerTimer = setTimeout(() => {
+      if (state.ui.banner?.ts === ts) {
+        setState("ui", "banner", undefined);
+      }
+    }, ttl);
   }
 
   function clearBanner(): void {
+    if (bannerTimer) clearTimeout(bannerTimer);
     setState("ui", "banner", undefined);
   }
 

@@ -83,8 +83,8 @@ function App() {
         </Show>
       </box>
 
-      <BottomBar store={store} />
       <ModalLayer store={store} />
+      <BottomBar store={store} />
     </box>
   );
 }
@@ -111,30 +111,41 @@ function TopBar(props: { store: TuiStore }) {
 function BottomBar(props: { store: TuiStore }) {
   const banner = () => props.store.state.ui.banner;
   return (
-    <box style={{ flexDirection: "column" }}>
-      <Show when={banner()}>
-        {(b: () => NonNullable<ReturnType<typeof banner>>) => (
-          <text>
-            <span
-              style={{
-                fg:
-                  b().kind === "error"
-                    ? T.bannerError
-                    : b().kind === "warn"
-                      ? T.bannerWarn
-                      : T.bannerInfo,
-              }}
-            >
-              {"⚑ "}{b().text}
-            </span>
-          </text>
-        )}
-      </Show>
-      <text>
-        <span style={{ fg: T.textDim }}>
-          {"hjkl move · Tab/1-9 board · v panel · Enter done · n new · e edit · s sched · b time · a assign · d del · z exp · ? help · ⌃Z undo · q quit"}
-        </span>
-      </text>
+    <box style={{ flexDirection: "column", marginTop: 1 }}>
+      <box style={{ height: 1, flexDirection: "row" }}>
+        <Show
+          when={banner()}
+          fallback={
+            <text>
+              <span style={{ fg: T.textDim }}>{" "}</span>
+            </text>
+          }
+        >
+          {(b: () => NonNullable<ReturnType<typeof banner>>) => (
+            <text>
+              <span
+                style={{
+                  fg:
+                    b().kind === "error"
+                      ? T.bannerError
+                      : b().kind === "warn"
+                        ? T.bannerWarn
+                        : T.bannerInfo,
+                }}
+              >
+                {"⚑ "}{b().text}
+              </span>
+            </text>
+          )}
+        </Show>
+      </box>
+      <box style={{ height: 1, flexDirection: "row" }}>
+        <text>
+          <span style={{ fg: T.textDim }}>
+            {"hjkl move · Tab/1-9 board · v panel · Enter done · n new · e edit · s sched · b time · a assign · d del · z exp · ? help · ⌃Z undo · q quit"}
+          </span>
+        </text>
+      </box>
     </box>
   );
 }
@@ -285,28 +296,36 @@ function handleKey(
     if (cursorRef) store.toggleDone(cursorRef);
     return;
   }
+
+  // Defer modal opens by one macrotask so the OpenTUI <input> mounts after
+  // the current key event has been fully dispatched. Without this, the
+  // trigger letter (n/e/s/b/a/d) ends up auto-typed into the new input field.
+  const openLater = (m: Parameters<typeof store.openModal>[0]) => {
+    setTimeout(() => store.openModal(m), 0);
+  };
+
   if (key.name === "n") {
-    store.openModal({ kind: "add", targetColumnIndex: ui.col });
+    openLater({ kind: "add", targetColumnIndex: ui.col });
     return;
   }
   if (key.name === "e" && cursorRef) {
-    store.openModal({ kind: "edit", ref: cursorRef });
+    openLater({ kind: "edit", ref: cursorRef });
     return;
   }
   if (key.name === "s" && cursorRef) {
-    store.openModal({ kind: "schedule", ref: cursorRef });
+    openLater({ kind: "schedule", ref: cursorRef });
     return;
   }
   if (key.name === "b" && cursorRef) {
-    store.openModal({ kind: "timeblock", ref: cursorRef });
+    openLater({ kind: "timeblock", ref: cursorRef });
     return;
   }
   if (key.name === "a" && cursorRef) {
-    store.openModal({ kind: "assign", ref: cursorRef });
+    openLater({ kind: "assign", ref: cursorRef });
     return;
   }
   if (key.name === "d" && cursorRef) {
-    store.openModal({ kind: "confirm-delete", ref: cursorRef });
+    openLater({ kind: "confirm-delete", ref: cursorRef });
     return;
   }
 }

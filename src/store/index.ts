@@ -66,13 +66,16 @@ export type ModalKind =
   | { kind: "detail"; ref: TaskRef }
   | { kind: "help" };
 
+/** Which dashboard zone owns the keyboard cursor. */
+export type ActiveZone = "virtual" | "board" | "timeline" | "agents";
+
 export interface UIState {
   activeBoardIndex: number;
-  /** True when the cursor is inside the cross-board Today/Tomorrow virtual panel. */
-  inVirtual: boolean;
-  /** Column index (within active board) — meaningful only when `inVirtual` is false. */
+  /** Which dashboard zone owns the keyboard cursor right now. */
+  activeZone: ActiveZone;
+  /** Column index (within active board) — meaningful only when `activeZone === "board"`. */
   col: number;
-  /** Row index inside the active column or virtual panel. */
+  /** Row index inside the active zone. */
   row: number;
   /**
    * Zoom mode: when true, only the active column is rendered, taking the
@@ -123,7 +126,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     boards: initialBoards,
     ui: {
       activeBoardIndex: 0,
-      inVirtual: false,
+      activeZone: "board",
       col: 0,
       row: 0,
       zoomed: false,
@@ -624,7 +627,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "activeBoardIndex", ((idx % len) + len) % len);
     setState("ui", "col", 0);
     setState("ui", "row", 0);
-    setState("ui", "inVirtual", false);
+    setState("ui", "activeZone", "board");
   }
 
   function setCursor(col: number, row: number): void {
@@ -632,9 +635,11 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "row", Math.max(0, row));
   }
 
-  function setInVirtual(v: boolean): void {
-    setState("ui", "inVirtual", v);
-    if (v) setState("ui", "row", 0);
+  function setActiveZone(zone: ActiveZone): void {
+    setState("ui", "activeZone", zone);
+    // Moving to a vertical-list zone (virtual / agents / timeline) resets
+    // the row cursor to the top so the user always lands somewhere sensible.
+    if (zone !== "board") setState("ui", "row", 0);
   }
 
   function toggleZoom(): void {
@@ -812,7 +817,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     // ui
     setActiveBoard,
     setCursor,
-    setInVirtual,
+    setActiveZone,
     toggleZoom,
     setZoomed,
     toggleMark,

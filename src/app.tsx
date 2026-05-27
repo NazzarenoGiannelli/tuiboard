@@ -80,14 +80,14 @@ function App() {
       <box style={{ flexDirection: "row", flexGrow: 1 }}>
         {/*
           Zoom layout:
-            - zoomed + inVirtual  → only VirtualPanel, full width
-            - zoomed + !inVirtual → only BoardView, full width
-            - not zoomed           → both side-by-side
+            - zoomed + activeZone=virtual  → only VirtualPanel, full width
+            - zoomed + activeZone≠virtual  → only BoardView, full width
+            - not zoomed                    → both side-by-side
         */}
-        <Show when={!ui().zoomed || ui().inVirtual}>
+        <Show when={!ui().zoomed || ui().activeZone === "virtual"}>
           <VirtualPanel store={store} />
         </Show>
-        <Show when={(!ui().zoomed || !ui().inVirtual) && activeBoard()}>
+        <Show when={(!ui().zoomed || ui().activeZone !== "virtual") && activeBoard()}>
           <BoardView store={store} board={activeBoard()!} />
         </Show>
       </box>
@@ -284,7 +284,7 @@ function handleKey(
 
   // Switch in/out of virtual panel with `v`
   if (key.name === "v") {
-    store.setInVirtual(!ui.inVirtual);
+    store.setActiveZone(ui.activeZone === "virtual" ? "board" : "virtual");
     return;
   }
 
@@ -302,14 +302,14 @@ function handleKey(
   }
 
   // Navigation
-  if (ui.inVirtual) {
+  if (ui.activeZone === "virtual") {
     if (key.name === "j" || key.name === "down") {
       store.setCursor(ui.col, Math.min(virtualCount - 1, ui.row + 1));
     } else if (key.name === "k" || key.name === "up") {
       store.setCursor(ui.col, Math.max(0, ui.row - 1));
     } else if (key.name === "l" || key.name === "right") {
       // jump out into the board's column 0
-      store.setInVirtual(false);
+      store.setActiveZone("board");
     } else if (key.name === "enter" || key.name === "return") {
       // Toggle done on the virtual cursor's target (cross-board).
       const items = buildVirtualItems(
@@ -344,7 +344,7 @@ function handleKey(
   }
   if (key.name === "h" || key.name === "left") {
     if (ui.col === 0) {
-      store.setInVirtual(true);
+      store.setActiveZone("virtual");
     } else {
       store.setCursor(ui.col - 1, 0);
     }

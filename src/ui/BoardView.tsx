@@ -49,7 +49,7 @@ export function BoardView(props: BoardViewProps) {
   // handles both axes automatically based on where the child sits.
   createEffect(() => {
     const colIdx = ui().col;
-    if (ui().inVirtual || ui().zoomed || !scrollBoxRef) return;
+    if (ui().activeZone === "virtual" || ui().zoomed || !scrollBoxRef) return;
     // setTimeout(0) — full event-loop tick — is the only timing that
     // reliably waits for OpenTUI to recompute child layout before
     // requesting a scroll. queueMicrotask was too eager.
@@ -78,7 +78,7 @@ export function BoardView(props: BoardViewProps) {
    * (Python kanban `z`).
    */
   const renderedColumns = createMemo(() => {
-    if (!ui().zoomed || ui().inVirtual) return visibleColumns();
+    if (!ui().zoomed || ui().activeZone === "virtual") return visibleColumns();
     const cols = visibleColumns();
     const idx = Math.min(ui().col, cols.length - 1);
     return idx >= 0 ? [cols[idx]!] : cols;
@@ -106,7 +106,7 @@ export function BoardView(props: BoardViewProps) {
           {(col) => {
             const originalIndex = props.board.columns.indexOf(col);
             const isActive = () =>
-              !ui().inVirtual && ui().col === originalIndex;
+              ui().activeZone === "board" && ui().col === originalIndex;
             return (
               <ColumnView
                 store={props.store}
@@ -212,7 +212,7 @@ function ColumnView(props: ColumnViewProps) {
                 marked={props.store.isMarked(ref)}
                 titleMaxChars={props.zoomed ? 68 : 28}
                 onClick={() => {
-                  props.store.setInVirtual(false);
+                  props.store.setActiveZone("board");
                   props.store.setCursor(props.columnIndex, ri());
                 }}
               />

@@ -28,9 +28,9 @@ export function VirtualPanel(props: { store: TuiStore }) {
     return buildVirtualItems(props.store.state.boards.map((b) => b.board));
   });
   const groups = createMemo(() => groupVirtualItems(items()));
-  const isActive = createMemo(() => props.store.state.ui.inVirtual);
+  const isActive = createMemo(() => props.store.state.ui.activeZone === "virtual");
   const isZoomed = createMemo(
-    () => props.store.state.ui.zoomed && props.store.state.ui.inVirtual,
+    () => props.store.state.ui.zoomed && props.store.state.ui.activeZone === "virtual",
   );
   const cursorRow = createMemo(() => props.store.state.ui.row);
 
@@ -84,7 +84,7 @@ export function VirtualPanel(props: { store: TuiStore }) {
             titleMaxChars={isZoomed() ? 84 : 28}
             isMarkedFn={(r) => props.store.isMarked(r)}
             onClickItem={(flatIndex) => {
-              props.store.setInVirtual(true);
+              props.store.setActiveZone("virtual");
               props.store.setCursor(0, flatIndex);
             }}
           />

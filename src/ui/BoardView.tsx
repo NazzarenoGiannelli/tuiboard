@@ -214,7 +214,7 @@ function ColumnView(props: ColumnViewProps) {
                   ri() === cursorRow() &&
                   props.store.state.ui.grabbing
                 }
-                titleMaxChars={props.zoomed ? 68 : 28}
+                titleMaxChars={props.zoomed ? 64 : 22}
                 onClick={() => {
                   props.store.setActiveZone("board");
                   props.store.setCursor(props.columnIndex, ri());

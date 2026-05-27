@@ -38,12 +38,12 @@ export function TaskRow(props: TaskRowProps) {
   const suffix = createMemo(() => buildSuffix(props.task, props.hideDateSuffix));
   const titleColor = createMemo(() => titleColorFor(props.task, status()));
   const suffixColor = createMemo(() => suffixColorFor(props.task, status()));
-  // Middle-truncate so the descriptive head AND the differentiating tail
-  // remain visible (Python kanban shows tail-truncated; we go a step
-  // further with `head…tail` to disambiguate near-duplicate tasks that
-  // share a long common prefix).
+  // Tail-truncate so the descriptive head of the title is fully visible —
+  // mirrors Python kanban behavior. Readability beat the earlier "middle
+  // truncate" attempt at disambiguating common prefixes, which left tasks
+  // looking like "Foo b…s 3" with the meaning chopped out of the middle.
   const visibleTitle = createMemo(() =>
-    middleTruncate(props.task.displayTitle || "(empty)", props.titleMaxChars ?? 22),
+    tailTruncate(props.task.displayTitle || "(empty)", props.titleMaxChars ?? 22),
   );
 
   return (
@@ -161,18 +161,19 @@ function suffixColorFor(task: Task, status: TaskStatus): string | undefined {
 }
 
 /**
- * Truncate to `max` chars, but keep BOTH a head and a tail with `…` in the
- * middle when the string is too long. The head gets ~70% of the budget
- * because that's the most descriptive portion of a task title.
+ * Truncate to `max` chars, preserving as much of the head as possible.
+ * When the string fits, return it untouched. Otherwise show the first
+ * `max - 1` characters followed by an ellipsis.
  *
  *   "Founder outreach LinkedIn — kickoff: estrai 5-15 paying users"
- *   middleTruncate(s, 22)  →  "Founder outreac…users"
+ *   tailTruncate(s, 22)  →  "Founder outreach Link…"
+ *
+ * The ellipsis counts toward `max`, so the visible glyph width never
+ * exceeds the available column budget.
  */
-function middleTruncate(s: string, max: number): string {
-  if (max < 4) return s.slice(0, Math.max(0, max));
+function tailTruncate(s: string, max: number): string {
+  if (max <= 0) return "";
   if (s.length <= max) return s;
-  const budget = max - 1; // reserve 1 for ellipsis
-  const head = Math.max(1, Math.ceil(budget * 0.7));
-  const tail = Math.max(1, budget - head);
-  return s.slice(0, head) + "…" + s.slice(s.length - tail);
+  if (max < 2) return s.slice(0, max);
+  return s.slice(0, max - 1) + "…";
 }

@@ -1,4 +1,12 @@
-/** Kanban board view — masonry-style flex-wrap layout with zoom mode. */
+/**
+ * Kanban board view — horizontal scrolling row of full-height columns.
+ *
+ * Mirrors the Today/Tomorrow virtual panel: each column has a fixed width
+ * and stretches vertically to fill the board area. Columns that don't fit
+ * the available horizontal space are reached via horizontal scroll. Zoom
+ * mode collapses everything down to the single active column at full
+ * board width.
+ */
 
 import { For, Show, createEffect, createMemo } from "solid-js";
 
@@ -14,18 +22,10 @@ interface ScrollBoxLike {
   scrollChildIntoView(id: string): void;
 }
 
-/**
- * Preferred column width for layout. Columns try to be at least this wide;
- * when the row has spare width they grow to fill it (flex-grow). When the
- * row can't fit another column at this width, masonry wraps to a new row.
- */
-const COL_BASIS = 42;
-/** Hard minimum — never shrink below this even with flex-shrink. */
-const COL_MIN_WIDTH = 32;
-/** Gap between columns (also between rows when wrapped). */
+/** Fixed column width when not zoomed. Single source of truth for layout. */
+const COL_WIDTH = 42;
+/** Horizontal gap between adjacent columns. */
 const COL_GAP = 1;
-/** Min usable column height (avoid postage-stamp columns on tiny terminals). */
-const MIN_COL_HEIGHT = 10;
 
 interface BoardViewProps {
   store: TuiStore;
@@ -44,15 +44,9 @@ export function BoardView(props: BoardViewProps) {
   const archiveName = () => props.store.config.archiveColumn;
   let scrollBoxRef: ScrollBoxLike | undefined;
 
-  // Fixed masonry row height — half of a typical 50-row terminal. Two
-  // visible rows of columns at once, anything beyond that scrolls
-  // vertically. (TODO: react to live terminal dimensions once the
-  // useTerminalDimensions integration stops crashing the renderer.)
-  const colHeight = createMemo(() => 24);
-
-  // Auto-scroll the masonry so the active column is always visible. Now
-  // the scroll is vertical (because we wrap rows) — scrollChildIntoView
-  // handles both axes automatically based on where the child sits.
+  // Auto-scroll horizontally so the active column is always visible.
+  // scrollChildIntoView handles the axis automatically based on the
+  // scroll direction declared on the scrollbox.
   createEffect(() => {
     const colIdx = ui().col;
     if (ui().activeZone === "virtual" || ui().zoomed || !scrollBoxRef) return;
@@ -97,13 +91,14 @@ export function BoardView(props: BoardViewProps) {
         style={{
           width: "100%",
           flexGrow: 1,
-          scrollX: false,
-          scrollY: true,
+          scrollX: true,
+          scrollY: false,
           rootOptions: {},
           contentOptions: {
             flexDirection: "row",
-            flexWrap: "wrap",
-            alignItems: "flex-start",
+            // alignItems defaults to "stretch" in Yoga, which is exactly
+            // what we want: every column auto-fills the row's height,
+            // matching the Today/Tomorrow virtual panel.
           },
           scrollbarOptions: { visible: false },
         }}
@@ -122,7 +117,6 @@ export function BoardView(props: BoardViewProps) {
                 active={isActive()}
                 zoomed={ui().zoomed && isActive()}
                 boxId={columnId(props.board.filepath, originalIndex)}
-                height={ui().zoomed ? undefined : colHeight()}
               />
             );
           }}
@@ -145,11 +139,6 @@ interface ColumnViewProps {
   zoomed: boolean;
   /** Stable DOM-equivalent id used by `scrollChildIntoView`. */
   boxId: string;
-  /**
-   * Explicit row height for masonry layout. Undefined when zoomed (the
-   * single zoomed column should fill all available vertical space).
-   */
-  height?: number;
 }
 
 function ColumnView(props: ColumnViewProps) {
@@ -178,19 +167,16 @@ function ColumnView(props: ColumnViewProps) {
       id={props.boxId}
       style={{
         flexDirection: "column",
-        // Flex-basis sets the preferred width; flex-grow:1 lets columns
-        // share the row's remaining space (e.g. 3 cols on a 120-wide
-        // board area each become ~40 wide instead of 42+42+empty).
-        // flex-shrink:0 + minWidth keeps them readable on narrow rows.
-        flexBasis: props.zoomed ? undefined : COL_BASIS,
-        minWidth: props.zoomed ? undefined : COL_MIN_WIDTH,
-        flexGrow: 1,
+        // Fixed width when not zoomed; the zoomed column grows to fill
+        // whatever horizontal space the board zone has been given.
+        width: props.zoomed ? undefined : COL_WIDTH,
+        minWidth: props.zoomed ? undefined : COL_WIDTH,
+        flexGrow: props.zoomed ? 1 : 0,
         flexShrink: 0,
-        // Explicit height needed inside a flex-wrap container — otherwise
-        // children with flexGrow would inflate the column infinitely.
-        height: props.zoomed ? undefined : props.height,
+        // No explicit height — Yoga stretches us along the row's cross
+        // axis, so the column always fills the full board height. Same
+        // contract as the Today/Tomorrow virtual panel next door.
         marginRight: COL_GAP,
-        marginBottom: COL_GAP,
         border: true,
         borderStyle: "rounded",
         borderColor: props.active ? T.borderActive : T.border,

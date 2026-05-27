@@ -15,7 +15,9 @@ import {
   type TaskRef,
   type TuiStore,
 } from "~/store/index";
+import { buildTimelineEntries } from "~/store/timeline";
 import { buildVirtualItems } from "~/store/virtual-panel";
+import { jumpToKanban } from "~/ui/TimelineView";
 
 export function handleKey(
   store: TuiStore,
@@ -147,6 +149,29 @@ export function handleKey(
       );
       const target = items[ui.row];
       if (target) store.toggleDone(target.ref);
+    }
+    return;
+  }
+
+  // Timeline zone navigation. j/k walks the entry list in chronological
+  // order; Enter bounces the kanban cursor to the underlying task.
+  if (ui.activeZone === "timeline") {
+    const entries = buildTimelineEntries(
+      store.state.boards.map((b) => b.board),
+      isoToday(),
+    );
+    if (key.name === "j" || key.name === "down") {
+      store.setCursor(0, Math.min(entries.length - 1, ui.row + 1));
+    } else if (key.name === "k" || key.name === "up") {
+      store.setCursor(0, Math.max(0, ui.row - 1));
+    } else if (
+      key.name === "enter" ||
+      key.name === "return"
+    ) {
+      const target = entries[ui.row];
+      if (target) jumpToKanban(store, target.ref);
+    } else if (key.name === "h" || key.name === "left") {
+      store.setActiveZone("board");
     }
     return;
   }

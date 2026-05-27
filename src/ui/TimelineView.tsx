@@ -95,7 +95,55 @@ export function TimelineView(props: TimelineViewProps) {
 
   // Recompute the row map every minute so the "now" marker stays current.
   const nowMin = useNowMin();
-  const rowMap = createMemo(() => buildRowMap(entries(), nowMin()));
+  const fullRowMap = createMemo(() => buildRowMap(entries(), nowMin()));
+
+  /**
+   * Rows the sticky section consumes in the parent's vertical space.
+   * Header (1) + scrollbox-of-N (min items, UNSCHED_VISIBLE) + divider (1)
+   * + outer marginBottom (1). When the sticky isn't rendered, 0.
+   */
+  const stickyConsumedRows = createMemo(() => {
+    const n = unscheduled().length;
+    if (n === 0) return 0;
+    return Math.min(n, UNSCHED_VISIBLE) + 3;
+  });
+
+  /**
+   * The visible row map for the grid scrollbox. OpenTUI's flex layout
+   * doesn't strictly clip the scrollbox's content to its allocated space,
+   * so when the sticky section is present, the grid's first rows would
+   * render at the SAME screen rows as the sticky — visible as `07`,
+   * `······` bleed-through behind the sticky tasks.
+   *
+   * Fix: slice off the first `stickyConsumedRows` rows of the rowMap when
+   * the sticky is showing. Those rows wouldn't be readable anyway (covered
+   * by the sticky), and dropping them lets the grid's remaining content
+   * start exactly where the sticky ends — no visual overlap, no need for
+   * an opaque sticky background.
+   *
+   * The trade-off: the earliest few 15-min slots of the day (07:00 ish)
+   * disappear from the grid when there are unscheduled tasks. They're
+   * empty hours for most workdays, so this is acceptable. If you have a
+   * time-blocked task in that range, it stays in the row map (we never
+   * drop hours with block content — see the clamp below).
+   */
+  const rowMap = createMemo(() => {
+    const full = fullRowMap();
+    let skip = stickyConsumedRows();
+    if (skip === 0) return full;
+    // Don't drop any row that has block content (head/body/fill on either
+    // lane) or is the now marker — only drop pure empty/hour rows.
+    let safeSkip = 0;
+    for (let i = 0; i < skip && i < full.rows.length; i++) {
+      const r = full.rows[i]!;
+      const droppable =
+        (r.left.kind === "empty" || r.left.kind === "hour") &&
+        (r.right.kind === "empty" || r.right.kind === "hour");
+      if (!droppable) break;
+      safeSkip = i + 1;
+    }
+    return { rows: full.rows.slice(safeSkip), overflow: full.overflow };
+  });
 
   /** Find the armed entry in the current entries list (if still present). */
   const armedEntry = createMemo<TimelineEntry | undefined>(() => {
@@ -334,6 +382,11 @@ export function TimelineView(props: TimelineViewProps) {
           rootOptions: {},
           contentOptions: {},
           scrollbarOptions: { visible: false },
+          // Ask OpenTUI to skip rendering rows that fall outside the
+          // scrollbox viewport. Combined with the rowMap slicing above
+          // (when a sticky section is present), this stops the grid
+          // from painting `07` / `······` content behind the sticky.
+          viewportCulling: true,
         }}
       >
         <For each={rowMap().rows}>
@@ -631,19 +684,8 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
   };
 
   return (
-    // Opaque background on the whole sticky block so the timeline grid
-    // behind (hour numbers, 15-min dots) doesn't bleed through the
-    // transparent gaps between text spans. Without this, OpenTUI renders
-    // the grid scrollbox below this section and any pixel not painted by
-    // the sticky shows the grid's underlying content.
-    <box
-      style={{
-        flexDirection: "column",
-        marginBottom: 1,
-        backgroundColor: T.cardBlockBg,
-      }}
-    >
-      <box style={{ flexDirection: "row", height: 1, backgroundColor: T.cardBlockBg }}>
+    <box style={{ flexDirection: "column", marginBottom: 1 }}>
+      <box style={{ flexDirection: "row", height: 1 }}>
         <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
           <span style={{ fg: T.textDim, attributes: ATTR.bold }}>
             {"◦ Unscheduled · "}{props.items.length}
@@ -662,7 +704,7 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
           scrollX: false,
           scrollY: true,
           rootOptions: {},
-          contentOptions: { backgroundColor: T.cardBlockBg },
+          contentOptions: {},
           scrollbarOptions: { visible: false },
         }}
       >
@@ -680,9 +722,7 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
                   height: 1,
                   paddingLeft: 1,
                   paddingRight: 1,
-                  // Each row needs its own opaque bg too — the scrollbox
-                  // viewport may not paint its content's bg per row.
-                  backgroundColor: armed() ? T.warmDim : T.cardBlockBg,
+                  backgroundColor: armed() ? T.warmDim : undefined,
                 }}
                 onMouseDown={() => props.onClick(item)}
               >
@@ -704,7 +744,7 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
           }}
         </For>
       </scrollbox>
-      <box style={{ flexDirection: "row", height: 1, backgroundColor: T.cardBlockBg }}>
+      <box style={{ flexDirection: "row", height: 1 }}>
         <text wrapMode="none">
           <span style={{ fg: T.border }}>{"─".repeat(120)}</span>
         </text>

@@ -20,9 +20,11 @@ interface TaskRowProps {
   task: Task;
   cursor?: boolean;
   marked?: boolean;
-  /** Optional `[board·col]` tag rendered as a separate small suffix. Used when
+  /** Optional `[board]` tag rendered as a separate small suffix. Used when
       the row is not already grouped under a `— board · col —` header. */
   contextTag?: string;
+  /** Custom fg color for the contextTag. Defaults to muted gray. */
+  contextColor?: string;
   /** If true, hide the date suffix (used when group header already conveys date). */
   hideDateSuffix?: boolean;
   /** Max characters shown for the title before middle-truncation kicks in. */
@@ -85,8 +87,16 @@ export function TaskRow(props: TaskRowProps) {
       </Show>
 
       <Show when={props.contextTag}>
-        <text style={{ flexShrink: 0 }} wrapMode="none">
-          <span style={{ fg: T.textDim }}>{" ["}{props.contextTag}{"]"}</span>
+        {/*
+          flexShrink 5 (vs 1 on the title) — when the row is tight, the
+          contextTag truncates aggressively while the title keeps as much
+          space as possible. Truncate + wrapMode none guarantee we never
+          wrap to a second line.
+        */}
+        <text style={{ flexShrink: 5 }} wrapMode="none" truncate>
+          <span style={{ fg: props.contextColor ?? T.textDim }}>
+            {" ["}{props.contextTag}{"]"}
+          </span>
         </text>
       </Show>
     </box>

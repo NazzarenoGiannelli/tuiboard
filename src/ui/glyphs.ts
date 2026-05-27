@@ -104,3 +104,21 @@ export function fmtMin(m: number): string {
   const mm = (m % 60).toString().padStart(2, "0");
   return `${h}:${mm}`;
 }
+
+/**
+ * Per-board accent palette. Used by the virtual panel to color-code the
+ * source-board tag on priority/agenda items, so the user can recognize
+ * which board a cross-cutting item came from at a glance.
+ *
+ * Cycles by board index when there are more boards than colors.
+ */
+const BOARD_PALETTE: string[] = [
+  "#e8a05c", // warm orange (board 0 — typically the work board)
+  "#7eb6d6", // cyan-blue   (board 1)
+  "#a4c98a", // sage green  (board 2)
+  "#b3a3d8", // soft violet (board 3)
+];
+
+export function boardColor(idx: number): string {
+  return BOARD_PALETTE[((idx % BOARD_PALETTE.length) + BOARD_PALETTE.length) % BOARD_PALETTE.length]!;
+}

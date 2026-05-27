@@ -2,7 +2,7 @@
 
 import { For, Show, createMemo } from "solid-js";
 
-import { ATTR, T } from "~/ui/glyphs";
+import { ATTR, T, boardColor } from "~/ui/glyphs";
 import { TaskRow } from "~/ui/TaskRow";
 import {
   buildVirtualItems,
@@ -130,20 +130,21 @@ function RenderGroups(props: {
               when={group.subgroups && group.subgroups.length > 0}
               fallback={
                 <For each={group.items}>
-                  {(item) => (
-                    <TaskRow
-                      task={item.task}
-                      cursor={props.isActive && item.flatIndex === props.cursorRow}
-                      marked={props.isMarkedFn(item.ref)}
-                      titleMaxChars={props.titleMaxChars}
-                      contextTag={
-                        group.bucket === "agenda" || group.bucket === "priority"
-                          ? `${item.boardName}·${item.columnName}`
-                          : undefined
-                      }
-                      onClick={() => props.onClickItem(item.flatIndex)}
-                    />
-                  )}
+                  {(item) => {
+                    const showTag =
+                      group.bucket === "agenda" || group.bucket === "priority";
+                    return (
+                      <TaskRow
+                        task={item.task}
+                        cursor={props.isActive && item.flatIndex === props.cursorRow}
+                        marked={props.isMarkedFn(item.ref)}
+                        titleMaxChars={props.titleMaxChars}
+                        contextTag={showTag ? item.boardName : undefined}
+                        contextColor={showTag ? boardColor(item.boardIndex) : undefined}
+                        onClick={() => props.onClickItem(item.flatIndex)}
+                      />
+                    );
+                  }}
                 </For>
               }
             >

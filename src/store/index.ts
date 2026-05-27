@@ -73,6 +73,8 @@ export interface UIState {
   activeBoardIndex: number;
   /** Which dashboard zone owns the keyboard cursor right now. */
   activeZone: ActiveZone;
+  /** Which zones are currently rendered. `board` cannot be hidden (load-bearing). */
+  visibleZones: Record<ActiveZone, boolean>;
   /** Column index (within active board) — meaningful only when `activeZone === "board"`. */
   col: number;
   /** Row index inside the active zone. */
@@ -127,6 +129,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     ui: {
       activeBoardIndex: 0,
       activeZone: "board",
+      visibleZones: { virtual: true, board: true, timeline: true, agents: true },
       col: 0,
       row: 0,
       zoomed: false,
@@ -642,6 +645,16 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     if (zone !== "board") setState("ui", "row", 0);
   }
 
+  function setZoneVisible(zone: ActiveZone, visible: boolean): void {
+    // Board is the load-bearing zone — never allow it to be hidden.
+    if (zone === "board" && !visible) return;
+    setState("ui", "visibleZones", zone, visible);
+    // If we just hid the active zone, bounce the cursor to "board".
+    if (!visible && state.ui.activeZone === zone) {
+      setActiveZone("board");
+    }
+  }
+
   function toggleZoom(): void {
     setState("ui", "zoomed", (z: boolean) => !z);
   }
@@ -818,6 +831,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setActiveBoard,
     setCursor,
     setActiveZone,
+    setZoneVisible,
     toggleZoom,
     setZoomed,
     toggleMark,

@@ -42,3 +42,37 @@ describe("UI activeZone", () => {
     expect(store.state.ui.row).toBe(0);
   });
 });
+
+describe("UI visibleZones", () => {
+  it("defaults to all four zones visible", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    expect(store.state.ui.visibleZones).toEqual({
+      virtual: true,
+      board: true,
+      timeline: true,
+      agents: true,
+    });
+  });
+
+  it("setZoneVisible flips one zone without touching others", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setZoneVisible("timeline", false);
+    expect(store.state.ui.visibleZones.timeline).toBe(false);
+    expect(store.state.ui.visibleZones.virtual).toBe(true);
+    expect(store.state.ui.visibleZones.board).toBe(true);
+    expect(store.state.ui.visibleZones.agents).toBe(true);
+  });
+
+  it("setZoneVisible('board', false) is ignored — board is load-bearing", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setZoneVisible("board", false);
+    expect(store.state.ui.visibleZones.board).toBe(true);
+  });
+
+  it("hiding the active zone moves activeZone to 'board'", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setActiveZone("timeline");
+    store.setZoneVisible("timeline", false);
+    expect(store.state.ui.activeZone).toBe("board");
+  });
+});

@@ -41,7 +41,9 @@ export function handleKey(
       }
       return;
     }
-    if ((ui.modal.kind === "help" || ui.modal.kind === "detail") &&
+    if ((ui.modal.kind === "help" ||
+         ui.modal.kind === "detail" ||
+         ui.modal.kind === "agent-detail") &&
         (key.name === "?" || key.sequence === "?" || key.name === "o")) {
       store.closeModal();
       return;
@@ -145,6 +147,33 @@ export function handleKey(
       );
       const target = items[ui.row];
       if (target) store.toggleDone(target.ref);
+    }
+    return;
+  }
+
+  // Agents zone navigation. Must come BEFORE the `if (!board)` guard so
+  // it works even when there are no kanban boards loaded.
+  if (ui.activeZone === "agents") {
+    const sessions = store.agents.sessions();
+    if (key.name === "j" || key.name === "down") {
+      store.setCursor(0, Math.min(sessions.length - 1, ui.row + 1));
+    } else if (key.name === "k" || key.name === "up") {
+      store.setCursor(0, Math.max(0, ui.row - 1));
+    } else if (
+      key.name === "enter" ||
+      key.name === "return" ||
+      key.name === "o"
+    ) {
+      const target = sessions[ui.row];
+      if (target) {
+        setTimeout(
+          () => store.openModal({ kind: "agent-detail", sessionId: target.sessionId }),
+          0,
+        );
+      }
+    } else if (key.name === "h" || key.name === "left") {
+      // Bounce back to board
+      store.setActiveZone("board");
     }
     return;
   }

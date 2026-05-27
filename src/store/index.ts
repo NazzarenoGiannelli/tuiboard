@@ -65,6 +65,7 @@ export type ModalKind =
   | { kind: "assign"; ref: TaskRef }
   | { kind: "confirm-delete"; ref: TaskRef }
   | { kind: "detail"; ref: TaskRef }
+  | { kind: "agent-detail"; sessionId: string }
   | { kind: "help" };
 
 /** Which dashboard zone owns the keyboard cursor. */

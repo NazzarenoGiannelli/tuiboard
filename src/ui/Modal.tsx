@@ -52,6 +52,7 @@ function ModalRouter(props: { store: TuiStore; modal: NonNullable<TuiStore["stat
     case "assign":   return <AssignModal store={props.store} modal={m} />;
     case "confirm-delete": return <ConfirmDeleteModal store={props.store} modal={m} />;
     case "detail":   return <DetailModal store={props.store} modal={m} />;
+    case "agent-detail": return <AgentDetailModal store={props.store} modal={m} />;
     case "help":     return <HelpModal store={props.store} />;
   }
 }
@@ -363,6 +364,110 @@ function DetailModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiSto
       </Show>
     </DialogShell>
   );
+}
+
+// ─── Agent detail ────────────────────────────────────────────────────────────
+
+function AgentDetailModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiStore["state"]["ui"]["modal"]>, { kind: "agent-detail" }> }) {
+  const session = createMemo(() =>
+    props.store.agents.sessions().find((s) => s.sessionId === props.modal.sessionId),
+  );
+  return (
+    <DialogShell title="Agent session detail" hint="Esc/o to close" width={100}>
+      <Show
+        when={session()}
+        fallback={
+          <text>
+            <span style={{ fg: T.textDim }}>Session no longer present.</span>
+          </text>
+        }
+      >
+        {(s: () => NonNullable<ReturnType<typeof session>>) => (
+          <box style={{ flexDirection: "column" }}>
+            <text wrapMode="word">
+              <span style={{ fg: T.text, attributes: ATTR.bold }}>
+                {s().displayName}
+              </span>
+            </text>
+            <box style={{ height: 1 }} />
+            <text>
+              <span style={{ fg: T.textDim }}>session   </span>
+              <span style={{ fg: T.accent }}>{s().sessionId}</span>
+            </text>
+            <text>
+              <span style={{ fg: T.textDim }}>status    </span>
+              <span style={{ fg: T.text }}>{s().status}</span>
+            </text>
+            <text>
+              <span style={{ fg: T.textDim }}>cwd       </span>
+              <span style={{ fg: T.text }}>{s().cwd}</span>
+            </text>
+            <Show when={s().gitBranch}>
+              <text>
+                <span style={{ fg: T.textDim }}>branch    </span>
+                <span style={{ fg: T.warm }}>{s().gitBranch}</span>
+              </text>
+            </Show>
+            <text>
+              <span style={{ fg: T.textDim }}>messages  </span>
+              <span style={{ fg: T.text }}>
+                {s().messageCount} ({s().toolCount} tool uses)
+              </span>
+            </text>
+            <Show when={s().customTitle}>
+              <text>
+                <span style={{ fg: T.textDim }}>★ name    </span>
+                <span style={{ fg: T.warm }}>{s().customTitle}</span>
+              </text>
+            </Show>
+            <Show when={s().aiTitle && s().aiTitle !== s().customTitle}>
+              <text>
+                <span style={{ fg: T.textDim }}>ai title  </span>
+                <span style={{ fg: T.text }}>{s().aiTitle}</span>
+              </text>
+            </Show>
+            <Show when={s().lastUser}>
+              <box style={{ height: 1 }} />
+              <text>
+                <span style={{ fg: T.textDim }}>last user prompt:</span>
+              </text>
+              <text wrapMode="word">
+                <span style={{ fg: T.text }}>
+                  {truncate(s().lastUser ?? "", 400)}
+                </span>
+              </text>
+            </Show>
+            <Show when={s().lastAssistant}>
+              <box style={{ height: 1 }} />
+              <text>
+                <span style={{ fg: T.textDim }}>last assistant reply:</span>
+              </text>
+              <text wrapMode="word">
+                <span style={{ fg: T.text }}>
+                  {truncate(s().lastAssistant ?? "", 400)}
+                </span>
+              </text>
+            </Show>
+            <box style={{ height: 1 }} />
+            <text>
+              <span style={{ fg: T.textDim }}>resume command (copy by hand for now):</span>
+            </text>
+            <text wrapMode="word">
+              <span style={{ fg: T.scheduled }}>
+                claude --resume {s().sessionId}
+              </span>
+            </text>
+          </box>
+        )}
+      </Show>
+    </DialogShell>
+  );
+}
+
+function truncate(s: string, n: number): string {
+  const trimmed = s.trim();
+  if (trimmed.length <= n) return trimmed;
+  return trimmed.slice(0, n) + "…";
 }
 
 // ─── Help ────────────────────────────────────────────────────────────────────

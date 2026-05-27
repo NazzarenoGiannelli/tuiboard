@@ -27,6 +27,7 @@ import {
   createBoardWatcher,
   type BoardWatcher,
 } from "~/io/watcher";
+import { createAgentsStore, type AgentsStore } from "./agents";
 import { ConflictError, statMtime, writeBoardFile } from "~/io/writer";
 import { isTask, parseBoard } from "~/parser/markdown";
 import { serializeBoard } from "~/parser/serialize";
@@ -147,6 +148,10 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   const watcher: BoardWatcher = createBoardWatcher(
     initialBoards.map((b) => b.board.filepath),
   );
+
+  // Agents store has its own lifecycle (chokidar watcher on ~/.claude).
+  // Shared dispose() boundary below so SIGINT cleans both.
+  const agentsStore: AgentsStore = createAgentsStore();
   watcher.onChange((filepath) => {
     // External edit. Re-read this board from disk.
     try {
@@ -818,12 +823,14 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   async function dispose(): Promise<void> {
     await watcher.stop();
+    await agentsStore.dispose();
   }
 
   return {
     state,
     config,
     activeBoard,
+    agents: agentsStore,
     // queries
     getBoardByPath,
     getTask,

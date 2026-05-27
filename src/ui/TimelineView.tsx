@@ -102,12 +102,14 @@ export function TimelineView(props: TimelineViewProps) {
   /**
    * Rows the sticky section consumes in the parent's vertical space.
    * Header (1) + scrollbox-of-N (min items, UNSCHED_VISIBLE) + divider (1)
-   * + outer marginBottom (1). When the sticky isn't rendered, 0.
+   * + outer marginBottom (1) + 1 row safety buffer (OpenTUI's flex layout
+   * in practice leaves us 1 row of grid bleed even with the math nominally
+   * matching the visual height). When the sticky isn't rendered, 0.
    */
   const stickyConsumedRows = createMemo(() => {
     const n = unscheduled().length;
     if (n === 0) return 0;
-    return Math.min(n, UNSCHED_VISIBLE) + 3;
+    return Math.min(n, UNSCHED_VISIBLE) + 4;
   });
 
   /**

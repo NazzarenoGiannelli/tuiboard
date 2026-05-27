@@ -1,5 +1,5 @@
 /**
- * Vertical 24h timeline column with mouse drag-to-schedule.
+ * Vertical 24h timeline column with click-to-arm scheduling.
  *
  * Renders today's time-blocked tasks as bands stacked on a per-15-minute
  * grid. Hour rows show their hour label on the left margin; the current
@@ -7,20 +7,23 @@
  * rendered side-by-side via a 2-lane split row; a 3rd overlapping block
  * is dropped and reported as overflow via a banner.
  *
- * Interaction:
- *   - hjkl / j-k:  cursor between time blocks (chronological)
- *   - Enter:        bounce kanban cursor to the underlying task
- *   - Click on band: same as Enter (one-tap jump)
- *   - Drag band:    move the block (mouse y delta × 15 min)
- *   - Drag bottom edge of band: resize (extend / shrink duration)
+ * Mouse interaction (click-to-arm + click-to-place, like Python timeline.py):
  *
- * Each timeline row is exactly 1 terminal line tall, so the mouse Δy in
- * terminal coords maps 1:1 to row count, which maps 1:1 to MINS_PER_ROW
- * minutes. No snap math needed beyond integer Δy.
+ *   Click on a band      → ARM that block (warm highlight)
+ *   Click on empty row   → if armed, MOVE the armed block's start there
+ *   Shift+click empty    → if armed, RESIZE the armed block's end there
+ *   Click again on band  → toggle: re-arms (or disarms if same block)
  *
- * Scrolling: a scrollbox wraps the grid so all 64 rows can be reached even
- * in a 30-row terminal. On mount we scrollChildIntoView the now-row so the
- * user lands at the current time without scrolling.
+ * Keyboard interaction (handled in handleKey when activeZone === "timeline"):
+ *
+ *   j/k                  → cursor between blocks (chronological order)
+ *   Enter                → bounce kanban cursor to the underlying task
+ *   j/k while armed      → nudge armed block ±15 min (move)
+ *   +/- while armed      → resize armed block end ±15 min
+ *   Esc                  → disarm
+ *
+ * Each timeline row is exactly 1 terminal line tall, so row index maps
+ * 1:1 to MINS_PER_ROW (15) minute offsets from DAY_START_HOUR.
  */
 
 import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
@@ -29,6 +32,7 @@ import { isoToday, type TaskRef } from "~/store/index";
 import {
   DAY_START_HOUR,
   MINS_PER_ROW,
+  TOTAL_ROWS,
   buildRowMap,
   buildTimelineEntries,
   formatHm,
@@ -43,27 +47,16 @@ interface ScrollBoxLike {
   scrollChildIntoView(id: string): void;
 }
 
-/** Minimal OpenTUI MouseEvent shape we touch. We only need x/y. */
+/** Minimal OpenTUI MouseEvent shape we touch (x, y, modifiers). */
 interface MouseEventLike {
   x: number;
   y: number;
+  modifiers?: { shift?: boolean; alt?: boolean; ctrl?: boolean };
 }
 
 interface TimelineViewProps {
   store: TuiStore;
   width?: number;
-}
-
-type DragMode = "move" | "resize";
-
-interface DragState {
-  mode: DragMode;
-  entry: TimelineEntry;
-  origStartMin: number;
-  origEndMin: number;
-  startY: number;
-  /** Current Y position during drag. Updated by onMouseDrag. */
-  currentY: number;
 }
 
 const ROW_ID_PREFIX = "tuiboard-tl-row-";
@@ -73,6 +66,7 @@ const MIN_BLOCK_MIN = 15;
 export function TimelineView(props: TimelineViewProps) {
   const isActive = () => props.store.state.ui.activeZone === "timeline";
   const cursor = () => props.store.state.ui.row;
+  const armedRef = () => props.store.state.ui.armedTimelineRef;
 
   const entries = createMemo(() =>
     buildTimelineEntries(
@@ -85,27 +79,16 @@ export function TimelineView(props: TimelineViewProps) {
   const nowMin = useNowMin();
   const rowMap = createMemo(() => buildRowMap(entries(), nowMin()));
 
-  // Drag state.
-  const [drag, setDrag] = createSignal<DragState | undefined>();
-
-  // Preview new time block during drag, snapped to 15-min slots.
-  const dragPreview = createMemo<{ startMin: number; endMin: number } | undefined>(() => {
-    const d = drag();
-    if (!d) return undefined;
-    const dy = d.currentY - d.startY;
-    const dMin = dy * MINS_PER_ROW;
-    if (d.mode === "move") {
-      return {
-        startMin: Math.max(0, d.origStartMin + dMin),
-        endMin: Math.min(24 * 60 - 1, d.origEndMin + dMin),
-      };
-    }
-    // resize: pin start, push end
-    const newEnd = Math.max(d.origStartMin + MIN_BLOCK_MIN, d.origEndMin + dMin);
-    return {
-      startMin: d.origStartMin,
-      endMin: Math.min(24 * 60 - 1, newEnd),
-    };
+  /** Find the armed entry in the current entries list (if still present). */
+  const armedEntry = createMemo<TimelineEntry | undefined>(() => {
+    const ref = armedRef();
+    if (!ref) return undefined;
+    return entries().find(
+      (e) =>
+        e.ref.boardPath === ref.boardPath &&
+        e.ref.columnIndex === ref.columnIndex &&
+        e.ref.taskIndex === ref.taskIndex,
+    );
   });
 
   let scrollBoxRef: ScrollBoxLike | undefined;
@@ -139,70 +122,68 @@ export function TimelineView(props: TimelineViewProps) {
 
   const cursorEntry = createMemo(() => entries()[cursor()]);
 
-  const onClickEntry = (entry: TimelineEntry) => {
+  /**
+   * Click on a block band. Two behaviors:
+   *   - No armed block → arm this one (focus into timeline, set cursor).
+   *   - Same block armed → disarm.
+   *   - Different block armed → re-arm to this one.
+   */
+  const onBlockClick = (entry: TimelineEntry) => {
+    props.store.setActiveZone("timeline");
     const idx = entries().indexOf(entry);
-    if (idx >= 0) {
-      props.store.setActiveZone("timeline");
-      props.store.setCursor(0, idx);
-    }
-    jumpToKanban(props.store, entry.ref);
-  };
+    if (idx >= 0) props.store.setCursor(0, idx);
 
-  const onBlockMouseDown = (
-    entry: TimelineEntry,
-    rowIndex: number,
-    event: MouseEventLike,
-  ) => {
-    // Resize when the user grabs the BOTTOM row of a multi-row block.
-    // Single-row blocks (shouldn't exist post-clip — min is 2 rows) fall
-    // back to move.
-    const span = entry.endRow - entry.startRow;
-    const isLastRow = span >= 2 && rowIndex === entry.endRow - 1;
-    setDrag({
-      mode: isLastRow ? "resize" : "move",
-      entry,
-      origStartMin: entry.startMin,
-      origEndMin: entry.endMin,
-      startY: event.y,
-      currentY: event.y,
-    });
-  };
-
-  const onMouseDragGlobal = (event: MouseEventLike) => {
-    setDrag((d) => (d ? { ...d, currentY: event.y } : d));
-  };
-
-  const onMouseDragEndGlobal = (event: MouseEventLike) => {
-    const d = drag();
-    if (!d) return;
-    // Use the event's final Y so we don't miss a last-frame movement.
-    const dy = event.y - d.startY;
-    if (dy === 0) {
-      // No real drag — let the click handler do its thing (already fired
-      // on mousedown).
-      setDrag(undefined);
-      return;
-    }
-    const dMin = dy * MINS_PER_ROW;
-    let newStart = d.origStartMin;
-    let newEnd = d.origEndMin;
-    if (d.mode === "move") {
-      newStart = Math.max(0, d.origStartMin + dMin);
-      newEnd = Math.min(24 * 60 - 1, d.origEndMin + dMin);
+    const arm = armedRef();
+    const same =
+      arm &&
+      arm.boardPath === entry.ref.boardPath &&
+      arm.columnIndex === entry.ref.columnIndex &&
+      arm.taskIndex === entry.ref.taskIndex;
+    if (same) {
+      props.store.armTimeline(undefined);
+      props.store.flashBanner("info", "Disarmed");
     } else {
-      newEnd = Math.max(
-        d.origStartMin + MIN_BLOCK_MIN,
-        Math.min(24 * 60 - 1, d.origEndMin + dMin),
+      props.store.armTimeline(entry.ref);
+      props.store.flashBanner(
+        "info",
+        `Armed ⌚${formatHm(entry.startMin)}-${formatHm(entry.endMin)} · click empty row to move, shift+click to resize, Esc to cancel`,
       );
     }
-    props.store.setTimeBlock(d.entry.ref, { startMin: newStart, endMin: newEnd });
-    props.store.flashBanner(
-      "info",
-      d.mode === "move"
-        ? `⌚ Moved → ${formatHm(newStart)}-${formatHm(newEnd)}`
-        : `↕ Resized → ${formatHm(newStart)}-${formatHm(newEnd)}`,
-    );
-    setDrag(undefined);
+  };
+
+  /**
+   * Click on an empty / hour row when a block is armed. Plain click moves
+   * the block's start to that row's time (preserving duration). Shift+click
+   * resizes the end to that row's time.
+   */
+  const onEmptyRowClick = (rowIndex: number, event: MouseEventLike) => {
+    const armed = armedEntry();
+    if (!armed) return;
+    const targetMin = DAY_START_HOUR * 60 + rowIndex * MINS_PER_ROW;
+    const shift = !!event.modifiers?.shift;
+    if (shift) {
+      // Resize: keep start, set new end. Must stay > start + MIN.
+      const newEnd = Math.max(armed.startMin + MIN_BLOCK_MIN, targetMin);
+      props.store.setTimeBlock(armed.ref, {
+        startMin: armed.startMin,
+        endMin: Math.min(24 * 60 - 1, newEnd),
+      });
+      props.store.flashBanner(
+        "info",
+        `↕ Resized → ${formatHm(armed.startMin)}-${formatHm(newEnd)}`,
+      );
+    } else {
+      // Move: keep duration, slide so start = target.
+      const duration = armed.endMin - armed.startMin;
+      const newStart = Math.max(0, targetMin);
+      const newEnd = Math.min(24 * 60 - 1, newStart + duration);
+      props.store.setTimeBlock(armed.ref, { startMin: newStart, endMin: newEnd });
+      props.store.flashBanner(
+        "info",
+        `✋ Moved → ${formatHm(newStart)}-${formatHm(newEnd)}`,
+      );
+    }
+    // Keep armed so the user can chain adjustments. Esc to release.
   };
 
   return (
@@ -221,25 +202,19 @@ export function TimelineView(props: TimelineViewProps) {
       }}
       title={`┤ Timeline · ${entries().length} ├`}
       titleAlignment="left"
-      // Catch drag motion + release at the container level so the events
-      // keep flowing even when the cursor moves off the originating row.
-      onMouseDrag={onMouseDragGlobal}
-      onMouseDragEnd={onMouseDragEndGlobal}
     >
-      <Show when={drag()}>
+      <Show when={armedEntry()}>
         <text wrapMode="none" truncate>
           <span style={{ fg: T.warm, attributes: ATTR.bold }}>
-            {drag()!.mode === "move" ? "✋ " : "↕ "}
-            {dragPreview()
-              ? `${formatHm(dragPreview()!.startMin)}-${formatHm(dragPreview()!.endMin)}`
-              : ""}
+            {"⤤ Armed: "}
+            {formatHm(armedEntry()!.startMin)}-{formatHm(armedEntry()!.endMin)}
           </span>
           <span style={{ fg: T.textDim }}>
-            {drag()!.mode === "move" ? "  drag to move · release to commit" : "  drag bottom · release to commit"}
+            {"  click row to move · shift+click to resize · Esc to cancel"}
           </span>
         </text>
       </Show>
-      <Show when={rowMap().overflow > 0 && !drag()}>
+      <Show when={!armedEntry() && rowMap().overflow > 0}>
         <text wrapMode="none" truncate>
           <span style={{ fg: T.bannerWarn }}>
             {`⚠ ${rowMap().overflow} block${rowMap().overflow === 1 ? "" : "s"} hidden by 3-way overlap`}
@@ -265,9 +240,9 @@ export function TimelineView(props: TimelineViewProps) {
                 pair={pair}
                 rowIndex={i()}
                 cursorEntry={isActive() ? cursorEntry() : undefined}
-                draggingEntry={drag()?.entry}
-                onClickEntry={onClickEntry}
-                onBlockMouseDown={onBlockMouseDown}
+                armedEntry={armedEntry()}
+                onBlockClick={onBlockClick}
+                onEmptyRowClick={onEmptyRowClick}
               />
             </box>
           )}
@@ -278,8 +253,9 @@ export function TimelineView(props: TimelineViewProps) {
 }
 
 /**
- * Bounce the kanban cursor to a specific task. Used by both the click and
- * the Enter handler in handleKey.
+ * Bounce the kanban cursor to a specific task. Called from handleKey when
+ * Enter is pressed in the timeline zone — moved out of the click handler
+ * so single-click stays inside the timeline (arm only).
  */
 export function jumpToKanban(store: TuiStore, ref: TaskRef): void {
   const boardIdx = store.state.boards.findIndex(
@@ -309,14 +285,10 @@ interface TimelineRowProps {
   rowIndex: number;
   /** When set, the cursor task — used to highlight whichever lane owns it. */
   cursorEntry: TimelineEntry | undefined;
-  /** When set, the entry currently being dragged — used to tint its rows. */
-  draggingEntry: TimelineEntry | undefined;
-  onClickEntry: (entry: TimelineEntry) => void;
-  onBlockMouseDown: (
-    entry: TimelineEntry,
-    rowIndex: number,
-    event: MouseEventLike,
-  ) => void;
+  /** When set, the armed entry — used to tint its rows warm. */
+  armedEntry: TimelineEntry | undefined;
+  onBlockClick: (entry: TimelineEntry) => void;
+  onEmptyRowClick: (rowIndex: number, event: MouseEventLike) => void;
 }
 
 function TimelineRow(props: TimelineRowProps) {
@@ -340,10 +312,22 @@ function TimelineRow(props: TimelineRowProps) {
   const leftIsBlock = () => isBlockKind(left().kind);
   const rightIsBlock = () => isBlockKind(right().kind);
 
-  const leftIsDragging = () =>
-    !!props.draggingEntry && left().entry === props.draggingEntry;
-  const rightIsDragging = () =>
-    !!props.draggingEntry && right().entry === props.draggingEntry;
+  const leftIsArmed = () =>
+    !!props.armedEntry && left().entry === props.armedEntry;
+  const rightIsArmed = () =>
+    !!props.armedEntry && right().entry === props.armedEntry;
+
+  /** Mouse handler factory for a lane cell. */
+  const cellMouseDown = (cellEntry: TimelineEntry | undefined) => {
+    return (event: MouseEventLike) => {
+      if (cellEntry) {
+        props.onBlockClick(cellEntry);
+      } else {
+        // Empty / hour / now row — placement target when armed.
+        props.onEmptyRowClick(props.rowIndex, event);
+      }
+    };
+  };
 
   return (
     <Show
@@ -356,18 +340,11 @@ function TimelineRow(props: TimelineRowProps) {
             height: 1,
             backgroundColor: laneBg(
               leftIsCursor(),
-              leftIsDragging(),
+              leftIsArmed(),
               leftIsBlock(),
             ),
           }}
-          onMouseDown={
-            left().entry
-              ? ((event: MouseEventLike) => {
-                  props.onBlockMouseDown(left().entry!, props.rowIndex, event);
-                  props.onClickEntry(left().entry!);
-                })
-              : undefined
-          }
+          onMouseDown={cellMouseDown(left().entry)}
         >
           <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
             <RowContent row={left()} rowIndex={props.rowIndex} />
@@ -390,18 +367,11 @@ function TimelineRow(props: TimelineRowProps) {
             flexBasis: 0,
             backgroundColor: laneBg(
               leftIsCursor(),
-              leftIsDragging(),
+              leftIsArmed(),
               leftIsBlock(),
             ),
           }}
-          onMouseDown={
-            left().entry
-              ? ((event: MouseEventLike) => {
-                  props.onBlockMouseDown(left().entry!, props.rowIndex, event);
-                  props.onClickEntry(left().entry!);
-                })
-              : undefined
-          }
+          onMouseDown={cellMouseDown(left().entry)}
         >
           <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
             <RowContent row={left()} rowIndex={props.rowIndex} />
@@ -418,18 +388,11 @@ function TimelineRow(props: TimelineRowProps) {
             flexBasis: 0,
             backgroundColor: laneBg(
               rightIsCursor(),
-              rightIsDragging(),
+              rightIsArmed(),
               rightIsBlock(),
             ),
           }}
-          onMouseDown={
-            right().entry
-              ? ((event: MouseEventLike) => {
-                  props.onBlockMouseDown(right().entry!, props.rowIndex, event);
-                  props.onClickEntry(right().entry!);
-                })
-              : undefined
-          }
+          onMouseDown={cellMouseDown(right().entry)}
         >
           <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
             {/* Right lane skips the 3-char hour prefix that's already on the row. */}
@@ -525,9 +488,8 @@ function RowContent(props: RowContentProps) {
         <span style={{ fg: T.textDim }}>{prefix}</span>
         <span style={{ fg: bColor }}>{isLast ? "╰" : "│"}</span>
         <Show when={isLast}>
-          {/* Bottom edge of the block — visible resize handle. Drag this
-              row to extend/shrink the block. */}
-          <span style={{ fg: bColor, attributes: ATTR.bold }}>{"═".repeat(120)}</span>
+          {/* Bottom edge of the block — clear visual cap. */}
+          <span style={{ fg: bColor }}>{"─".repeat(120)}</span>
         </Show>
       </>
     );
@@ -554,16 +516,16 @@ function isBlockKind(k: RowMapEntry["kind"]): boolean {
 
 /**
  * Pick the background color for a lane cell based on its state. Cursor wins
- * over drag, drag wins over plain "is a block row", and a non-block (hour /
- * empty / now) gets the terminal default.
+ * over armed, armed wins over plain "is a block row", and a non-block (hour
+ * / empty / now) gets the terminal default.
  */
 function laneBg(
   isCursor: boolean,
-  isDragging: boolean,
+  isArmed: boolean,
   isBlock: boolean,
 ): string | undefined {
+  if (isArmed) return T.warmDim;
   if (isCursor) return T.cardBgCursor;
-  if (isDragging) return T.warmDim;
   if (isBlock) return T.cardBlockBg;
   return undefined;
 }
@@ -587,3 +549,4 @@ function getNowMin(): number {
 // Imports used implicitly inside the JSX above (silence dead-import warnings).
 void DAY_START_HOUR;
 void MINS_PER_ROW;
+void TOTAL_ROWS;

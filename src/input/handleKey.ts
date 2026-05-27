@@ -73,8 +73,13 @@ export function handleKey(
     return;
   }
 
-  // Escape exits grab mode first (most disruptive), then clears marks.
+  // Escape priority: timeline arm → grab mode → marks. Most disruptive first.
   if (key.name === "escape") {
+    if (ui.armedTimelineRef) {
+      store.armTimeline(undefined);
+      store.flashBanner("info", "Disarmed");
+      return;
+    }
     if (ui.grabbing) {
       store.exitGrab();
       store.flashBanner("info", "Grab released");
@@ -243,7 +248,56 @@ function handleTimelineZone(
   );
   const target = entries[ui.row];
 
-  // Navigation
+  // Armed-block adjustments take priority over navigation. While a block
+  // is armed, j/k nudge its start time and +/- nudge its end.
+  const armedRef = ui.armedTimelineRef;
+  const armed = armedRef
+    ? entries.find(
+        (e) =>
+          e.ref.boardPath === armedRef.boardPath &&
+          e.ref.columnIndex === armedRef.columnIndex &&
+          e.ref.taskIndex === armedRef.taskIndex,
+      )
+    : undefined;
+
+  if (armed) {
+    const NUDGE = 15; // minutes
+    if (key.name === "j" || key.name === "down") {
+      const newStart = Math.min(24 * 60 - 1 - (armed.endMin - armed.startMin), armed.startMin + NUDGE);
+      const newEnd = newStart + (armed.endMin - armed.startMin);
+      store.setTimeBlock(armed.ref, { startMin: newStart, endMin: newEnd });
+      store.flashBanner("info", `✋ ${fmtHm(newStart)}-${fmtHm(newEnd)}`);
+      return;
+    }
+    if (key.name === "k" || key.name === "up") {
+      const newStart = Math.max(0, armed.startMin - NUDGE);
+      const newEnd = newStart + (armed.endMin - armed.startMin);
+      store.setTimeBlock(armed.ref, { startMin: newStart, endMin: newEnd });
+      store.flashBanner("info", `✋ ${fmtHm(newStart)}-${fmtHm(newEnd)}`);
+      return;
+    }
+    if (key.name === "+" || key.name === "=" || key.sequence === "+") {
+      const newEnd = Math.min(24 * 60 - 1, armed.endMin + NUDGE);
+      store.setTimeBlock(armed.ref, { startMin: armed.startMin, endMin: newEnd });
+      store.flashBanner("info", `↕ ${fmtHm(armed.startMin)}-${fmtHm(newEnd)}`);
+      return;
+    }
+    if (key.name === "-" || key.name === "_" || key.sequence === "-") {
+      const newEnd = Math.max(armed.startMin + 15, armed.endMin - NUDGE);
+      store.setTimeBlock(armed.ref, { startMin: armed.startMin, endMin: newEnd });
+      store.flashBanner("info", `↕ ${fmtHm(armed.startMin)}-${fmtHm(newEnd)}`);
+      return;
+    }
+    if (key.name === "enter" || key.name === "return") {
+      // Commit + jump to kanban + disarm.
+      store.armTimeline(undefined);
+      jumpToKanban(store, armed.ref);
+      return;
+    }
+    // Fall through for other keys (Esc handled globally, task actions below).
+  }
+
+  // Plain navigation (no armed block, or non-adjustment key while armed).
   if (key.name === "j" || key.name === "down") {
     store.setCursor(0, Math.min(entries.length - 1, ui.row + 1));
     return;

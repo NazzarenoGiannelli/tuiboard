@@ -98,6 +98,14 @@ export interface UIState {
    * with `g` again or `Esc`. Mirrors Python kanban `toggle_move`.
    */
   grabbing: boolean;
+  /**
+   * Currently-armed timeline block. Click-to-arm + click-to-place pattern
+   * (mirrors Python timeline.py): first click arms; second click on an
+   * empty row moves the armed block's start there; shift+click resizes
+   * end. `j`/`k`/`+`/`-` while armed nudge the block by 15 min. `Esc`
+   * cancels.
+   */
+  armedTimelineRef?: TaskRef;
   view: ViewMode;
   /**
    * Tasks marked for bulk ops (`Space`). Key format:
@@ -726,6 +734,10 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "grabbing", false);
   }
 
+  function armTimeline(ref: TaskRef | undefined): void {
+    setState("ui", "armedTimelineRef", ref);
+  }
+
   // ─── Multi-select ────────────────────────────────────────────────────────
 
   function markKey(ref: TaskRef): string {
@@ -901,6 +913,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     toggleZoom,
     toggleGrab,
     exitGrab,
+    armTimeline,
     setFilter,
     applyBoardFilter,
     setZoomed,

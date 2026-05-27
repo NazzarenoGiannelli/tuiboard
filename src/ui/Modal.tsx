@@ -574,6 +574,14 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  d                 Delete task (with confirm)\n"}</span>
         <span style={{ fg: T.text }}>{"  X                 Archive task → moves to Archive column\n"}</span>
         <span style={{ fg: T.text }}>{"  c                 Copy task to clipboard (markdown line)\n"}</span>
+        <span style={{ fg: T.textDim }}>{"\nTimeline-specific (click-to-arm scheduling)\n"}</span>
+        <span style={{ fg: T.text }}>{"  click band         Arm the block (warm highlight)\n"}</span>
+        <span style={{ fg: T.text }}>{"  click empty row    While armed: move block start to that row's time\n"}</span>
+        <span style={{ fg: T.text }}>{"  shift+click row    While armed: resize block end to that row's time\n"}</span>
+        <span style={{ fg: T.text }}>{"  j / k              While armed: nudge block ±15 min\n"}</span>
+        <span style={{ fg: T.text }}>{"  + / -              While armed: resize block end ±15 min\n"}</span>
+        <span style={{ fg: T.text }}>{"  Enter              While armed: commit + jump to source task\n"}</span>
+        <span style={{ fg: T.text }}>{"  Esc                Disarm\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nBoard-only actions\n"}</span>
         <span style={{ fg: T.text }}>{"  n                 New task in current column (quick-add syntax)\n"}</span>
         <span style={{ fg: T.text }}>{"  g                 Grab task — h/l then moves it between columns; g/Esc to drop\n"}</span>

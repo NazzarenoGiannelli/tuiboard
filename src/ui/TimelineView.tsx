@@ -382,28 +382,23 @@ export function TimelineView(props: TimelineViewProps) {
 
       {/* Sticky "unscheduled today" section — tasks scheduled for today
           that don't have a time block yet. Click to arm, then click a
-          row in the grid below to drop them at that time (30min default).
-          flexShrink: 0 ensures the sticky takes its natural height first
-          and the grid below gets only the remaining space. */}
+          row in the grid below to drop them at that time (30min default). */}
       <Show when={unscheduled().length > 0}>
-        <box style={{ flexShrink: 0, flexDirection: "column" }}>
-          <UnscheduledSticky
-            items={unscheduled()}
-            armedRef={armedRef()}
-            onClick={onUnscheduledClick}
-          />
-        </box>
+        <UnscheduledSticky
+          items={unscheduled()}
+          armedRef={armedRef()}
+          onClick={onUnscheduledClick}
+        />
       </Show>
       {/* Wrapper box with flexGrow:1 + minHeight:0 forces OpenTUI/Yoga to
           confine the scrollbox to the parent's REMAINING height. Without
           minHeight:0 the scrollbox could blow past its allocation and the
           grid would visually overlap the preceding sticky sibling. */}
-      <box style={{ flexGrow: 1, flexShrink: 1, minHeight: 0, flexDirection: "column" }}>
+      <box style={{ flexGrow: 1, minHeight: 0, flexDirection: "column" }}>
         <scrollbox
           ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}
           style={{
             width: "100%",
-            height: "100%",
             flexGrow: 1,
             scrollX: false,
             scrollY: true,

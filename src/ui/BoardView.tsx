@@ -214,7 +214,11 @@ function ColumnView(props: ColumnViewProps) {
                   ri() === cursorRow() &&
                   props.store.state.ui.grabbing
                 }
-                titleMaxChars={props.zoomed ? 64 : 22}
+                // Column inner cell width for a TaskRow: COL_WIDTH 42 −
+                // border 2 − col padding 2 − TaskRow padding 2 = 36 cols
+                // (when not zoomed). Zoomed → column grows to fill, so
+                // ~terminal width − some chrome.
+                availableWidth={props.zoomed ? 100 : 36}
                 onClick={() => {
                   props.store.setActiveZone("board");
                   props.store.setCursor(props.columnIndex, ri());

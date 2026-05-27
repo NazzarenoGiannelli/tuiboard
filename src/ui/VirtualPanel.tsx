@@ -81,7 +81,12 @@ export function VirtualPanel(props: { store: TuiStore }) {
             groups={groups()}
             isActive={isActive()}
             cursorRow={cursorRow()}
-            titleMaxChars={isZoomed() ? 84 : 28}
+            // Panel inner cell width seen by a TaskRow: panel 38 col
+            // (or full width in zoom) − border 2 − panel padding 2 −
+            // TaskRow padding 2 = 32 cols normal, ~terminal width − 6
+            // when zoomed. Pass that so TaskRow can budget the title
+            // dynamically against the row's actual overhead.
+            availableWidth={isZoomed() ? 100 : 32}
             isMarkedFn={(r) => props.store.isMarked(r)}
             onClickItem={(flatIndex) => {
               props.store.setActiveZone("virtual");
@@ -98,7 +103,7 @@ function RenderGroups(props: {
   groups: VirtualGroup[];
   isActive: boolean;
   cursorRow: number;
-  titleMaxChars: number;
+  availableWidth: number;
   isMarkedFn: (ref: import("~/store/index").TaskRef) => boolean;
   onClickItem: (flatIndex: number) => void;
 }) {
@@ -138,7 +143,7 @@ function RenderGroups(props: {
                         task={item.task}
                         cursor={props.isActive && item.flatIndex === props.cursorRow}
                         marked={props.isMarkedFn(item.ref)}
-                        titleMaxChars={props.titleMaxChars}
+                        availableWidth={props.availableWidth}
                         contextTag={showTag ? item.boardName : undefined}
                         contextColor={showTag ? boardColor(item.boardIndex) : undefined}
                         onClick={() => props.onClickItem(item.flatIndex)}
@@ -164,7 +169,7 @@ function RenderGroups(props: {
                           task={item.task}
                           cursor={props.isActive && item.flatIndex === props.cursorRow}
                           marked={props.isMarkedFn(item.ref)}
-                          titleMaxChars={props.titleMaxChars}
+                          availableWidth={props.availableWidth}
                           onClick={() => props.onClickItem(item.flatIndex)}
                         />
                       )}

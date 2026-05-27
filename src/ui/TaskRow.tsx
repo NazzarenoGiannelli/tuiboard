@@ -29,7 +29,15 @@ interface TaskRowProps {
   contextColor?: string;
   /** If true, hide the date suffix (used when group header already conveys date). */
   hideDateSuffix?: boolean;
-  /** Max characters shown for the title before middle-truncation kicks in. */
+  /**
+   * Total cell width available to this row, in terminal columns. When set,
+   * TaskRow computes the exact title budget from this width minus the row's
+   * actual overhead (cursor, marked dot, done check, priority emoji, context
+   * tag, suffix). This guarantees the tail-truncate `…` is always visible
+   * inside the cell — OpenTUI never needs to chop the row further.
+   */
+  availableWidth?: number;
+  /** Hard cap on title chars regardless of availableWidth. Defaults to 60. */
   titleMaxChars?: number;
   /** Mouse click callback — called on left button down. */
   onClick?: () => void;
@@ -40,12 +48,28 @@ export function TaskRow(props: TaskRowProps) {
   const suffix = createMemo(() => buildSuffix(props.task, props.hideDateSuffix));
   const titleColor = createMemo(() => titleColorFor(props.task, status()));
   const suffixColor = createMemo(() => suffixColorFor(props.task, status()));
-  // Tail-truncate so the descriptive head of the title is fully visible —
-  // mirrors Python kanban behavior. Readability beat the earlier "middle
-  // truncate" attempt at disambiguating common prefixes, which left tasks
-  // looking like "Foo b…s 3" with the meaning chopped out of the middle.
+
+  // Compute the title budget from availableWidth + this row's actual overhead
+  // so the tail-truncate `…` is always visible inside the cell. If the parent
+  // didn't pass a width, fall back to the legacy titleMaxChars-based behavior.
+  const titleBudget = createMemo(() => {
+    const hardCap = props.titleMaxChars ?? 60;
+    if (props.availableWidth === undefined) {
+      return hardCap;
+    }
+    let overhead = 2; // cursor "▶ " or "  "
+    if (props.marked) overhead += 2;
+    if (props.task.done) overhead += 2;
+    if (props.task.priority !== "none") overhead += 3; // emoji 2 cells + space
+    if (props.contextTag) overhead += props.contextTag.length + 3; // " [" + tag + "]"
+    const sfx = suffix();
+    if (sfx) overhead += sfx.length + 1; // leading space + suffix
+    const computed = props.availableWidth - overhead;
+    return Math.max(6, Math.min(hardCap, computed));
+  });
+
   const visibleTitle = createMemo(() =>
-    tailTruncate(props.task.displayTitle || "(empty)", props.titleMaxChars ?? 22),
+    tailTruncate(props.task.displayTitle || "(empty)", titleBudget()),
   );
 
   return (

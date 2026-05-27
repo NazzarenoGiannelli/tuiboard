@@ -68,10 +68,12 @@ const MIN_BLOCK_MIN = 15;
 /** Default duration applied when an unscheduled task is dropped on the grid. */
 const DEFAULT_BLOCK_MIN = 30;
 /** Max rows shown in the sticky unscheduled section before the inner
- *  scrollbox takes over. 6 rows feels right — short enough to leave
- *  most of the timeline visible, long enough to fit a typical morning's
- *  worth of pending tasks. */
-const UNSCHED_VISIBLE = 6;
+ *  scrollbox takes over. Kept at 4 because OpenTUI's flex doesn't
+ *  strictly clip the grid scrollbox below — beyond ~4 sticky rows the
+ *  grid starts bleeding 'hour numbers / dotted lines' into the
+ *  sticky's last task rows. The internal scrollbox covers any user
+ *  who has more pending tasks (mouse-wheel to scroll the list). */
+const UNSCHED_VISIBLE = 4;
 
 export function TimelineView(props: TimelineViewProps) {
   const isActive = () => props.store.state.ui.activeZone === "timeline";
@@ -706,6 +708,7 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
           rootOptions: {},
           contentOptions: {},
           scrollbarOptions: { visible: false },
+          viewportCulling: true,
         }}
       >
         <For each={props.items}>

@@ -3,7 +3,9 @@
  *
  * Renders today's time-blocked tasks as bands stacked on a per-15-minute
  * grid. Hour rows show their hour label on the left margin; the current
- * time is overlaid as a colored "now" line.
+ * time is overlaid as a colored "now" line. Overlapping blocks are
+ * rendered side-by-side via a 2-lane split row; a 3rd overlapping block
+ * is dropped and reported as overflow via a banner.
  *
  * The cursor (j/k navigation) walks the entry list in chronological order.
  * Pressing Enter on a block bounces the kanban cursor to its source task.
@@ -22,9 +24,9 @@ import {
   MINS_PER_ROW,
   buildRowMap,
   buildTimelineEntries,
-  countOverlaps,
   formatHm,
   type RowMapEntry,
+  type RowMapPair,
   type TimelineEntry,
 } from "~/store/timeline";
 import { ATTR, PRIORITY_COLOR, T, boardColor } from "~/ui/glyphs";
@@ -53,20 +55,16 @@ export function TimelineView(props: TimelineViewProps) {
   );
 
   // Recompute the row map every minute so the "now" marker stays current.
-  // We watch a signal that ticks every 60s.
   const nowMin = useNowMin();
   const rowMap = createMemo(() => buildRowMap(entries(), nowMin()));
-  const overlaps = createMemo(() => countOverlaps(entries()));
 
   let scrollBoxRef: ScrollBoxLike | undefined;
 
-  // Scroll-to-now on mount AND when the cursor moves to a row outside the
-  // viewport. setTimeout(0) waits for OpenTUI to commit layout before the
-  // scroll call (same pattern as BoardView).
+  // Scroll-to-now on mount.
   onMount(() => {
     setTimeout(() => {
       try {
-        const target = nowRowId(rowMap());
+        const target = nowRowId(rowMap().rows);
         if (target) scrollBoxRef?.scrollChildIntoView(target);
       } catch {
         // First-paint races — harmless.
@@ -74,6 +72,7 @@ export function TimelineView(props: TimelineViewProps) {
     }, 50);
   });
 
+  // Scroll-to-cursor when navigation moves the cursor entry off-screen.
   createEffect(() => {
     const c = cursor();
     if (!isActive() || !scrollBoxRef) return;
@@ -87,6 +86,17 @@ export function TimelineView(props: TimelineViewProps) {
       }
     }, 0);
   });
+
+  const cursorEntry = createMemo(() => entries()[cursor()]);
+
+  const onClickEntry = (entry: TimelineEntry) => {
+    const idx = entries().indexOf(entry);
+    if (idx >= 0) {
+      props.store.setActiveZone("timeline");
+      props.store.setCursor(0, idx);
+    }
+    jumpToKanban(props.store, entry.ref);
+  };
 
   return (
     <box
@@ -105,10 +115,10 @@ export function TimelineView(props: TimelineViewProps) {
       title={`┤ Timeline · ${entries().length} ├`}
       titleAlignment="left"
     >
-      <Show when={overlaps() > 0}>
+      <Show when={rowMap().overflow > 0}>
         <text wrapMode="none" truncate>
           <span style={{ fg: T.bannerWarn }}>
-            {`⚠ ${overlaps()} time-block overlap${overlaps() === 1 ? "" : "s"}`}
+            {`⚠ ${rowMap().overflow} block${rowMap().overflow === 1 ? "" : "s"} hidden by 3-way overlap`}
           </span>
         </text>
       </Show>
@@ -124,25 +134,13 @@ export function TimelineView(props: TimelineViewProps) {
           scrollbarOptions: { visible: false },
         }}
       >
-        <For each={rowMap()}>
-          {(row, i) => (
+        <For each={rowMap().rows}>
+          {(pair, i) => (
             <box id={rowIdFor(i())}>
               <TimelineRow
-                row={row}
-                rowIndex={i()}
-                isCursor={
-                  isActive() &&
-                  row.entry !== undefined &&
-                  entries().indexOf(row.entry) === cursor()
-                }
-                onClickEntry={(entry) => {
-                  const idx = entries().indexOf(entry);
-                  if (idx >= 0) {
-                    props.store.setActiveZone("timeline");
-                    props.store.setCursor(0, idx);
-                  }
-                  jumpToKanban(props.store, entry.ref);
-                }}
+                pair={pair}
+                cursorEntry={isActive() ? cursorEntry() : undefined}
+                onClickEntry={onClickEntry}
               />
             </box>
           )}
@@ -180,35 +178,115 @@ export function jumpToKanban(store: TuiStore, ref: TaskRef): void {
 }
 
 interface TimelineRowProps {
-  row: RowMapEntry;
-  rowIndex: number;
-  isCursor: boolean;
+  pair: RowMapPair;
+  /** When set, the cursor task — used to highlight whichever lane owns it. */
+  cursorEntry: TimelineEntry | undefined;
   onClickEntry: (entry: TimelineEntry) => void;
 }
 
 function TimelineRow(props: TimelineRowProps) {
+  const left = () => props.pair.left;
+  const right = () => props.pair.right;
+
+  // NOW marker: always full width.
+  const isNow = () => left().kind === "now";
+  // Right lane occupied → split row horizontally.
+  const isSplit = () => right().kind !== "empty";
+
+  const leftIsCursor = () =>
+    !!props.cursorEntry &&
+    left().entry !== undefined &&
+    left().entry === props.cursorEntry;
+  const rightIsCursor = () =>
+    !!props.cursorEntry &&
+    right().entry !== undefined &&
+    right().entry === props.cursorEntry;
+
   return (
-    <box
-      style={{
-        flexDirection: "row",
-        height: 1,
-        backgroundColor: props.isCursor ? T.cardBgCursor : undefined,
-      }}
-      onMouseDown={
-        props.row.entry
-          ? (() => props.onClickEntry(props.row.entry!))
-          : undefined
+    <Show
+      when={isSplit() && !isNow()}
+      fallback={
+        // Full-width single lane (covers empty / hour / now / single-block).
+        <box
+          style={{
+            flexDirection: "row",
+            height: 1,
+            backgroundColor: leftIsCursor() ? T.cardBgCursor : undefined,
+          }}
+          onMouseDown={
+            left().entry
+              ? (() => props.onClickEntry(left().entry!))
+              : undefined
+          }
+        >
+          <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
+            <RowContent row={left()} />
+          </text>
+        </box>
       }
     >
-      <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
-        <RowContent row={props.row} />
-      </text>
-    </box>
+      {/* Split row: hour prefix + left lane + separator + right lane. */}
+      <box
+        style={{
+          flexDirection: "row",
+          height: 1,
+        }}
+      >
+        <box
+          style={{
+            flexDirection: "row",
+            flexGrow: 1,
+            flexShrink: 1,
+            flexBasis: 0,
+            backgroundColor: leftIsCursor() ? T.cardBgCursor : undefined,
+          }}
+          onMouseDown={
+            left().entry
+              ? (() => props.onClickEntry(left().entry!))
+              : undefined
+          }
+        >
+          <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
+            <RowContent row={left()} />
+          </text>
+        </box>
+        <text style={{ width: 1, flexShrink: 0 }} wrapMode="none">
+          <span style={{ fg: T.border }}>{"╎"}</span>
+        </text>
+        <box
+          style={{
+            flexDirection: "row",
+            flexGrow: 1,
+            flexShrink: 1,
+            flexBasis: 0,
+            backgroundColor: rightIsCursor() ? T.cardBgCursor : undefined,
+          }}
+          onMouseDown={
+            right().entry
+              ? (() => props.onClickEntry(right().entry!))
+              : undefined
+          }
+        >
+          <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
+            {/* Right lane skips the 3-char hour prefix that's already on the row. */}
+            <RowContent row={right()} skipPrefix />
+          </text>
+        </box>
+      </box>
+    </Show>
   );
 }
 
-function RowContent(props: { row: RowMapEntry }) {
+interface RowContentProps {
+  row: RowMapEntry;
+  /** When true, omit the leading 3-char hour-gutter spacer. */
+  skipPrefix?: boolean;
+}
+
+function RowContent(props: RowContentProps) {
   const r = props.row;
+  const prefix = props.skipPrefix ? "" : "   ";
+
   if (r.kind === "now") {
     return (
       <>
@@ -233,7 +311,7 @@ function RowContent(props: { row: RowMapEntry }) {
   if (r.kind === "empty") {
     return (
       <>
-        <span style={{ fg: T.textDim }}>{"   "}</span>
+        <span style={{ fg: T.textDim }}>{prefix}</span>
         <span style={{ fg: T.border }}>{"·".repeat(120)}</span>
       </>
     );
@@ -245,7 +323,7 @@ function RowContent(props: { row: RowMapEntry }) {
       e.task.priority !== "none" ? "🔺 " : "";
     return (
       <>
-        <span style={{ fg: T.textDim }}>{"   "}</span>
+        <span style={{ fg: T.textDim }}>{prefix}</span>
         <span style={{ fg: bColor, attributes: ATTR.bold }}>
           {"┤ "}{formatHm(e.startMin)}{"-"}{formatHm(e.endMin)}{" "}
         </span>
@@ -265,7 +343,7 @@ function RowContent(props: { row: RowMapEntry }) {
     const bColor = boardColor(e.boardIndex);
     return (
       <>
-        <span style={{ fg: T.textDim }}>{"   "}</span>
+        <span style={{ fg: T.textDim }}>{prefix}</span>
         <span style={{ fg: bColor }}>{"│ "}</span>
         <span style={{ fg: e.task.done ? T.textDone : T.text }}>
           {e.task.displayTitle}
@@ -278,7 +356,7 @@ function RowContent(props: { row: RowMapEntry }) {
     const bColor = boardColor(e.boardIndex);
     return (
       <>
-        <span style={{ fg: T.textDim }}>{"   "}</span>
+        <span style={{ fg: T.textDim }}>{prefix}</span>
         <span style={{ fg: bColor }}>{"│"}</span>
       </>
     );
@@ -292,9 +370,9 @@ function rowIdFor(rowIndex: number): string {
   return `${ROW_ID_PREFIX}${rowIndex}`;
 }
 
-function nowRowId(rowMap: RowMapEntry[]): string | undefined {
-  for (let i = 0; i < rowMap.length; i++) {
-    if (rowMap[i]!.kind === "now") return rowIdFor(i);
+function nowRowId(rows: RowMapPair[]): string | undefined {
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i]!.left.kind === "now") return rowIdFor(i);
   }
   return undefined;
 }

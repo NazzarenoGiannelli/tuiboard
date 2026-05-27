@@ -52,6 +52,23 @@ export interface RowMapEntry {
 }
 
 /**
+ * A row of the timeline grid, paired by lane. The left lane carries the
+ * primary content (hour labels, single-lane blocks, the now marker); the
+ * right lane is set only when two blocks overlap, in which case the
+ * renderer splits the row horizontally into two side-by-side cells.
+ */
+export interface RowMapPair {
+  left: RowMapEntry;
+  right: RowMapEntry;
+}
+
+export interface BuildRowMapResult {
+  rows: RowMapPair[];
+  /** Number of entries that couldn't be placed (3rd+ block in an overlap). */
+  overflow: number;
+}
+
+/**
  * Build the flat list of time-blocked tasks for the given ISO date.
  * Tasks must be:
  *   - non-done
@@ -116,62 +133,81 @@ export function buildTimelineEntries(
 }
 
 /**
- * Place entries onto a TOTAL_ROWS grid.
+ * Place entries onto the TOTAL_ROWS grid, using up to 2 lanes to render
+ * overlapping blocks side-by-side. A third+ overlapping block on the same
+ * row is dropped and counted as `overflow` so the renderer can show a
+ * banner.
  *
- * MVP strategy: single lane, last-writer-wins on overlap. Callers can detect
- * overlaps via {@link countOverlaps} and surface a banner. Two-lane rendering
- * for honest side-by-side overlap is deferred to phase 5.3.x.
- *
- * The `now` marker overwrites whatever was on its row — it's a fleeting
- * indicator and a missed minute of a block is less important than visible
- * "where am I now".
+ * Placement strategy (mirrors timeline.py):
+ *   - Entries are processed in start-time order (already pre-sorted).
+ *   - Each entry tries lane 0 first; if that lane is still occupied by an
+ *     earlier block, it tries lane 1; otherwise it counts as overflow.
+ *   - The `now` marker always lands on lane 0 and clears lane 1 for that
+ *     row — it's the single most important visual cue and shouldn't be
+ *     half-hidden behind a block band.
  */
 export function buildRowMap(
   entries: TimelineEntry[],
   nowMin: number,
-): RowMapEntry[] {
-  const grid: RowMapEntry[] = Array.from(
-    { length: TOTAL_ROWS },
-    (_, i) => ({
-      kind: "empty",
-      hour: (i * MINS_PER_ROW) % 60 === 0
-        ? DAY_START_HOUR + Math.floor((i * MINS_PER_ROW) / 60)
-        : undefined,
-    }),
-  );
-  // Mark hour-anchor rows as "hour" so the renderer prints the label.
+): BuildRowMapResult {
+  const left: RowMapEntry[] = Array.from({ length: TOTAL_ROWS }, () => ({
+    kind: "empty",
+  }));
+  const right: RowMapEntry[] = Array.from({ length: TOTAL_ROWS }, () => ({
+    kind: "empty",
+  }));
+
+  // Hour labels live on the left lane only.
   for (let r = 0; r < TOTAL_ROWS; r++) {
-    if (grid[r]!.hour !== undefined) {
-      grid[r] = { kind: "hour", hour: grid[r]!.hour };
+    if ((r * MINS_PER_ROW) % 60 === 0) {
+      left[r] = {
+        kind: "hour",
+        hour: DAY_START_HOUR + Math.floor((r * MINS_PER_ROW) / 60),
+      };
     }
   }
+
+  // Per-lane "next free row" tracker. -1 means the lane has never held a
+  // block yet, so any startRow is admissible.
+  const laneEndRow: [number, number] = [-1, -1];
+  let overflow = 0;
 
   for (const entry of entries) {
     const start = Math.max(0, entry.startRow);
     const end = Math.min(TOTAL_ROWS, entry.endRow);
     if (end <= start) continue;
+
+    let lane: 0 | 1;
+    if (start >= laneEndRow[0]) lane = 0;
+    else if (start >= laneEndRow[1]) lane = 1;
+    else {
+      overflow++;
+      continue;
+    }
+
+    const target = lane === 0 ? left : right;
+    laneEndRow[lane] = end;
     for (let r = start; r < end; r++) {
-      if (r === start) {
-        grid[r] = { kind: "head", entry };
-      } else if (r === start + 1) {
-        grid[r] = { kind: "body", entry };
-      } else {
-        grid[r] = { kind: "fill", entry };
-      }
+      if (r === start) target[r] = { kind: "head", entry };
+      else if (r === start + 1) target[r] = { kind: "body", entry };
+      else target[r] = { kind: "fill", entry };
     }
   }
 
-  // Now marker (only when in the visible window).
+  // Now marker (only when in the visible window). Force both lanes so the
+  // renderer can treat it as a full-width row regardless of overlap state.
   const windowStart = DAY_START_HOUR * 60;
   const windowEnd = DAY_END_HOUR * 60;
   if (nowMin >= windowStart && nowMin < windowEnd) {
     const nowRow = Math.floor((nowMin - windowStart) / MINS_PER_ROW);
     if (nowRow >= 0 && nowRow < TOTAL_ROWS) {
-      grid[nowRow] = { kind: "now", nowMin };
+      left[nowRow] = { kind: "now", nowMin };
+      right[nowRow] = { kind: "empty" };
     }
   }
 
-  return grid;
+  const rows: RowMapPair[] = left.map((l, i) => ({ left: l, right: right[i]! }));
+  return { rows, overflow };
 }
 
 /**

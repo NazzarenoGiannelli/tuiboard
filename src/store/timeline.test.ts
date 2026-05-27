@@ -138,51 +138,99 @@ describe("buildTimelineEntries", () => {
 });
 
 describe("buildRowMap", () => {
-  it("returns TOTAL_ROWS entries", () => {
-    const map = buildRowMap([], 0);
-    expect(map.length).toBe(TOTAL_ROWS);
-  });
-
-  it("marks hour-anchor rows with kind=hour and the hour value", () => {
-    const map = buildRowMap([], 0);
-    // Row 0 = DAY_START_HOUR
-    expect(map[0]).toEqual({ kind: "hour", hour: DAY_START_HOUR });
-    // Row 4 = DAY_START_HOUR + 1
-    expect(map[4]).toEqual({ kind: "hour", hour: DAY_START_HOUR + 1 });
-    // Row 1 = 15min past hour, empty
-    expect(map[1]?.kind).toBe("empty");
-  });
-
-  it("places an entry as head/body/fill across its rows", () => {
-    const entry: TimelineEntry = {
+  function entryAt(startRow: number, endRow: number, title = "block"): TimelineEntry {
+    return {
       ref: { boardPath: "x", columnIndex: 0, taskIndex: 0 },
-      task: makeTask({ displayTitle: "block" }),
+      task: makeTask({ displayTitle: title }),
       boardName: "R3PLICA",
       boardIndex: 0,
       columnName: "Inbox",
-      startMin: 9 * 60,
-      endMin: 10 * 60 + 30,
-      startRow: 8,
-      endRow: 14,
+      startMin: 0,
+      endMin: 0,
+      startRow,
+      endRow,
     };
-    const map = buildRowMap([entry], 0);
-    expect(map[8]?.kind).toBe("head");
-    expect(map[9]?.kind).toBe("body");
-    expect(map[10]?.kind).toBe("fill");
-    expect(map[13]?.kind).toBe("fill");
-    expect(map[14]?.kind).not.toBe("fill"); // end exclusive
+  }
+
+  it("returns TOTAL_ROWS row pairs", () => {
+    const result = buildRowMap([], 0);
+    expect(result.rows.length).toBe(TOTAL_ROWS);
+    expect(result.overflow).toBe(0);
   });
 
-  it("overlays a now marker at the current minute", () => {
+  it("marks hour-anchor rows on the left lane with kind=hour", () => {
+    const { rows } = buildRowMap([], 0);
+    expect(rows[0]!.left).toEqual({ kind: "hour", hour: DAY_START_HOUR });
+    expect(rows[4]!.left).toEqual({ kind: "hour", hour: DAY_START_HOUR + 1 });
+    expect(rows[1]!.left.kind).toBe("empty");
+    // Right lane is always empty when no overlap.
+    expect(rows[0]!.right.kind).toBe("empty");
+  });
+
+  it("places a single entry on the left lane as head/body/fill", () => {
+    const { rows } = buildRowMap([entryAt(8, 14)], 0);
+    expect(rows[8]!.left.kind).toBe("head");
+    expect(rows[9]!.left.kind).toBe("body");
+    expect(rows[10]!.left.kind).toBe("fill");
+    expect(rows[13]!.left.kind).toBe("fill");
+    expect(rows[14]!.left.kind).not.toBe("fill"); // end exclusive
+    // No overlap → right lane all empty.
+    for (let r = 8; r < 14; r++) {
+      expect(rows[r]!.right.kind).toBe("empty");
+    }
+  });
+
+  it("places overlapping entries on left and right lanes side-by-side", () => {
+    // A: rows 5-10, B: rows 7-12 → overlap on rows 7-9.
+    const a = entryAt(5, 10, "A");
+    const b = entryAt(7, 12, "B");
+    const { rows, overflow } = buildRowMap([a, b], 0);
+    expect(overflow).toBe(0);
+    // Lane 0 (left) gets A.
+    expect(rows[5]!.left.kind).toBe("head");
+    expect(rows[5]!.left.entry?.task.displayTitle).toBe("A");
+    // Lane 1 (right) gets B starting at row 7.
+    expect(rows[7]!.right.kind).toBe("head");
+    expect(rows[7]!.right.entry?.task.displayTitle).toBe("B");
+    // Row 10 is past A's end but inside B → left empty, right fill.
+    expect(rows[10]!.left.kind).toBe("empty");
+    expect(rows[10]!.right.entry?.task.displayTitle).toBe("B");
+  });
+
+  it("counts third+ overlapping entry as overflow", () => {
+    // Three blocks overlapping at row 8.
+    const a = entryAt(5, 12, "A");
+    const b = entryAt(6, 11, "B");
+    const c = entryAt(7, 10, "C");
+    const { overflow } = buildRowMap([a, b, c], 0);
+    expect(overflow).toBe(1); // C didn't fit either lane
+  });
+
+  it("reuses a lane after its block ends", () => {
+    // A: rows 5-8, C: rows 10-15 → both can use lane 0.
+    const a = entryAt(5, 8, "A");
+    const c = entryAt(10, 15, "C");
+    const { rows, overflow } = buildRowMap([a, c], 0);
+    expect(overflow).toBe(0);
+    expect(rows[5]!.left.entry?.task.displayTitle).toBe("A");
+    expect(rows[10]!.left.entry?.task.displayTitle).toBe("C");
+    // Right lane stayed empty throughout.
+    for (let r = 0; r < TOTAL_ROWS; r++) {
+      expect(rows[r]!.right.kind).toBe("empty");
+    }
+  });
+
+  it("overlays a now marker on the left lane (and clears the right)", () => {
     const nowMin = 10 * 60 + 30; // 10:30 → row 14
-    const map = buildRowMap([], nowMin);
-    expect(map[14]?.kind).toBe("now");
-    expect(map[14]?.nowMin).toBe(nowMin);
+    const { rows } = buildRowMap([], nowMin);
+    expect(rows[14]!.left.kind).toBe("now");
+    expect(rows[14]!.left.nowMin).toBe(nowMin);
+    expect(rows[14]!.right.kind).toBe("empty");
   });
 
   it("does not place a now marker when out of window", () => {
-    const map = buildRowMap([], 3 * 60); // 03:00, before DAY_START
-    expect(map.some((r) => r.kind === "now")).toBe(false);
+    const { rows } = buildRowMap([], 3 * 60); // 03:00, before DAY_START
+    expect(rows.some((r) => r.left.kind === "now")).toBe(false);
   });
 });
 

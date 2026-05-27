@@ -56,6 +56,26 @@ process.on("SIGTERM", () => {
   store.dispose().finally(() => process.exit(0));
 });
 
+// ─── Responsive layout ──────────────────────────────────────────────────────
+// Auto-hide optional zones when the terminal isn't wide enough to host them
+// comfortably. Breakpoints from the design spec (§4.2):
+//   ≥ 150 col → all four zones
+//   120–149   → hide timeline
+//   100–119   → hide agents too
+//   < 100     → hide virtual too (board is non-hideable)
+//
+// User F1/F2/F3 toggles still work — they last until the next resize, at
+// which point auto re-evaluates. Acceptable trade-off: resize events are
+// rare, predictable layout > sticky overrides.
+function applyResponsiveLayout(): void {
+  const width = process.stdout.columns ?? 200;
+  store.setZoneVisible("timeline", width >= 150);
+  store.setZoneVisible("agents", width >= 120);
+  store.setZoneVisible("virtual", width >= 100);
+}
+applyResponsiveLayout();
+process.stdout.on("resize", applyResponsiveLayout);
+
 const { view } = parseArgs(process.argv.slice(2));
 
 // ─── App shell ──────────────────────────────────────────────────────────────

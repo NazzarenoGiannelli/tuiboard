@@ -133,22 +133,12 @@ function RenderGroups(props: {
                   {(item) => {
                     const showTag =
                       group.bucket === "agenda" || group.bucket === "priority";
-                    // When the row also carries a [board] context tag, the
-                    // shared cell shrinks the title — and OpenTUI's native
-                    // truncate kicks in with a middle-ellipsis algorithm
-                    // that overrides our clean tail-truncate. Pre-shrink
-                    // titleMaxChars so OUR tail-truncate produces a string
-                    // that fits the post-shrink cell width, and OpenTUI's
-                    // truncate has nothing left to do.
-                    const titleMax = showTag
-                      ? Math.min(props.titleMaxChars, 16)
-                      : props.titleMaxChars;
                     return (
                       <TaskRow
                         task={item.task}
                         cursor={props.isActive && item.flatIndex === props.cursorRow}
                         marked={props.isMarkedFn(item.ref)}
-                        titleMaxChars={titleMax}
+                        titleMaxChars={props.titleMaxChars}
                         contextTag={showTag ? item.boardName : undefined}
                         contextColor={showTag ? boardColor(item.boardIndex) : undefined}
                         onClick={() => props.onClickItem(item.flatIndex)}

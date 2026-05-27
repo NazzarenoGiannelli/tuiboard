@@ -64,9 +64,20 @@ export function TaskRow(props: TaskRowProps) {
       }}
       onMouseDown={props.onClick ? (() => props.onClick!()) : undefined}
     >
+      {/*
+        IMPORTANT: NO `truncate` flag on the title <text>.
+        OpenTUI's native truncate algorithm inserts `head…middle…tail`
+        ellipses when its multi-span content exceeds the flex-shrunk cell
+        width, overriding our clean tail-only truncation. By omitting
+        the flag, OpenTUI simply hard-clips at the cell boundary. Our
+        own tailTruncate(title, titleMaxChars) is the only source of
+        ellipsis insertion — the `…` it adds is visible whenever the
+        cell is wide enough; when the cell is tighter than that, the
+        right side (including the `…`) is clipped cleanly without any
+        middle-ellipsis garbage.
+      */}
       <text
         style={{ flexGrow: 1, flexShrink: 1 }}
-        truncate
         wrapMode="none"
       >
         <span style={{ fg: props.cursor ? T.accent : T.textDim }}>
@@ -97,11 +108,12 @@ export function TaskRow(props: TaskRowProps) {
       <Show when={props.contextTag}>
         {/*
           flexShrink 5 (vs 1 on the title) — when the row is tight, the
-          contextTag truncates aggressively while the title keeps as much
-          space as possible. Truncate + wrapMode none guarantee we never
-          wrap to a second line.
+          contextTag is the first thing to lose space. Same `truncate`
+          off as on the title text: OpenTUI's middle-ellipsis would turn
+          [R3PLICA] into [...A] when squeezed. Hard-clipping gives
+          [R3PLI or similar — readable, no fake-ellipsis noise.
         */}
-        <text style={{ flexShrink: 5 }} wrapMode="none" truncate>
+        <text style={{ flexShrink: 5 }} wrapMode="none">
           <span style={{ fg: props.contextColor ?? T.textDim }}>
             {" ["}{props.contextTag}{"]"}
           </span>

@@ -1,6 +1,6 @@
 /** The fixed Today/Tomorrow virtual panel — always on the left. */
 
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createEffect, createMemo } from "solid-js";
 
 import { ATTR, T, boardColor } from "~/ui/glyphs";
 import { TaskRow } from "~/ui/TaskRow";
@@ -10,6 +10,13 @@ import {
   type VirtualGroup,
 } from "~/store/virtual-panel";
 import type { TuiStore } from "~/store/index";
+
+interface ScrollBoxLike {
+  scrollChildIntoView(id: string): void;
+}
+
+const VP_ROW_PREFIX = "tuiboard-vp-row-";
+const vpRowId = (flatIndex: number) => `${VP_ROW_PREFIX}${flatIndex}`;
 
 const SECTION_HEADER: Record<string, { label: string; color: string }> = {
   overdue: { label: "● Overdue", color: T.overdue },
@@ -33,6 +40,24 @@ export function VirtualPanel(props: { store: TuiStore }) {
     () => props.store.state.ui.zoomed && props.store.state.ui.activeZone === "virtual",
   );
   const cursorRow = createMemo(() => props.store.state.ui.row);
+  let scrollBoxRef: ScrollBoxLike | undefined;
+
+  // Auto-scroll so the cursor's row stays visible. Without this, when the
+  // panel's content overflows, pressing j/k advanced ui.row but the
+  // scrollbox didn't follow — the cursor moved invisibly until the bottom
+  // of the visible window happened to scroll past it. Now the scroll
+  // tracks the cursor on every move (BoardView pattern).
+  createEffect(() => {
+    const row = cursorRow();
+    if (!isActive() || !scrollBoxRef) return;
+    setTimeout(() => {
+      try {
+        scrollBoxRef?.scrollChildIntoView(vpRowId(row));
+      } catch {
+        // Child not mounted yet — harmless.
+      }
+    }, 0);
+  });
 
   // Decorate title with vertical "tabs" `┤ … ├` so it visually breaks
   // through the rounded border line (Superfile-style).
@@ -67,6 +92,7 @@ export function VirtualPanel(props: { store: TuiStore }) {
         }
       >
         <scrollbox
+          ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}
           style={{
             width: "100%",
             flexGrow: 1,
@@ -139,15 +165,17 @@ function RenderGroups(props: {
                     const showTag =
                       group.bucket === "agenda" || group.bucket === "priority";
                     return (
-                      <TaskRow
-                        task={item.task}
-                        cursor={props.isActive && item.flatIndex === props.cursorRow}
-                        marked={props.isMarkedFn(item.ref)}
-                        availableWidth={props.availableWidth}
-                        contextTag={showTag ? item.boardName : undefined}
-                        contextColor={showTag ? boardColor(item.boardIndex) : undefined}
-                        onClick={() => props.onClickItem(item.flatIndex)}
-                      />
+                      <box id={vpRowId(item.flatIndex)}>
+                        <TaskRow
+                          task={item.task}
+                          cursor={props.isActive && item.flatIndex === props.cursorRow}
+                          marked={props.isMarkedFn(item.ref)}
+                          availableWidth={props.availableWidth}
+                          contextTag={showTag ? item.boardName : undefined}
+                          contextColor={showTag ? boardColor(item.boardIndex) : undefined}
+                          onClick={() => props.onClickItem(item.flatIndex)}
+                        />
+                      </box>
                     );
                   }}
                 </For>
@@ -165,13 +193,15 @@ function RenderGroups(props: {
                     </box>
                     <For each={sub.items}>
                       {(item) => (
-                        <TaskRow
-                          task={item.task}
-                          cursor={props.isActive && item.flatIndex === props.cursorRow}
-                          marked={props.isMarkedFn(item.ref)}
-                          availableWidth={props.availableWidth}
-                          onClick={() => props.onClickItem(item.flatIndex)}
-                        />
+                        <box id={vpRowId(item.flatIndex)}>
+                          <TaskRow
+                            task={item.task}
+                            cursor={props.isActive && item.flatIndex === props.cursorRow}
+                            marked={props.isMarkedFn(item.ref)}
+                            availableWidth={props.availableWidth}
+                            onClick={() => props.onClickItem(item.flatIndex)}
+                          />
+                        </box>
                       )}
                     </For>
                   </box>

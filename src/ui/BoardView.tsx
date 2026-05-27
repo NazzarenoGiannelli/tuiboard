@@ -141,6 +141,11 @@ interface ColumnViewProps {
   boxId: string;
 }
 
+/** Stable id for a task row inside a column, used by scrollChildIntoView. */
+function taskRowId(boardPath: string, colIdx: number, rowIdx: number): string {
+  return `tuiboard-task-${boardPath.replace(/[^a-zA-Z0-9]/g, "_")}-${colIdx}-${rowIdx}`;
+}
+
 function ColumnView(props: ColumnViewProps) {
   const allTasks = createMemo(() => props.column.children.filter(isTask));
   const openTasks = createMemo(() =>
@@ -156,6 +161,28 @@ function ColumnView(props: ColumnViewProps) {
   });
 
   const cursorRow = createMemo(() => props.store.state.ui.row);
+
+  // Auto-scroll the column's inner scrollbox so the cursor row is always in
+  // view. Without this, OpenTUI's scrollbox didn't know to follow the
+  // cursor — user reported pressing arrow down and seeing the cursor stuck
+  // until the visible window happened to catch up. setTimeout(0) waits for
+  // OpenTUI to commit layout before the scroll, same pattern as BoardView's
+  // column auto-scroll and TimelineView's now-line auto-scroll.
+  let innerScrollBoxRef: ScrollBoxLike | undefined;
+  createEffect(() => {
+    if (!props.active) return;
+    const row = cursorRow();
+    if (!innerScrollBoxRef) return;
+    setTimeout(() => {
+      try {
+        innerScrollBoxRef?.scrollChildIntoView(
+          taskRowId(props.board.filepath, props.columnIndex, row),
+        );
+      } catch {
+        // Child not mounted yet — harmless.
+      }
+    }, 0);
+  });
 
   const titleText = () => {
     const zoomMark = props.zoomed ? "⤢ " : "";
@@ -189,6 +216,7 @@ function ColumnView(props: ColumnViewProps) {
       titleAlignment="left"
     >
       <scrollbox
+        ref={(r: ScrollBoxLike) => (innerScrollBoxRef = r)}
         style={{
           width: "100%",
           flexGrow: 1,
@@ -205,25 +233,27 @@ function ColumnView(props: ColumnViewProps) {
               taskIndex: allTasks().indexOf(task),
             };
             return (
-              <TaskRow
-                task={task}
-                cursor={props.active && ri() === cursorRow()}
-                marked={props.store.isMarked(ref)}
-                grabbed={
-                  props.active &&
-                  ri() === cursorRow() &&
-                  props.store.state.ui.grabbing
-                }
-                // Column inner cell width for a TaskRow: COL_WIDTH 42 −
-                // border 2 − col padding 2 − TaskRow padding 2 = 36 cols
-                // (when not zoomed). Zoomed → column grows to fill, so
-                // ~terminal width − some chrome.
-                availableWidth={props.zoomed ? 100 : 36}
-                onClick={() => {
-                  props.store.setActiveZone("board");
-                  props.store.setCursor(props.columnIndex, ri());
-                }}
-              />
+              <box id={taskRowId(props.board.filepath, props.columnIndex, ri())}>
+                <TaskRow
+                  task={task}
+                  cursor={props.active && ri() === cursorRow()}
+                  marked={props.store.isMarked(ref)}
+                  grabbed={
+                    props.active &&
+                    ri() === cursorRow() &&
+                    props.store.state.ui.grabbing
+                  }
+                  // Column inner cell width for a TaskRow: COL_WIDTH 42 −
+                  // border 2 − col padding 2 − TaskRow padding 2 = 36 cols
+                  // (when not zoomed). Zoomed → column grows to fill, so
+                  // ~terminal width − some chrome.
+                  availableWidth={props.zoomed ? 100 : 36}
+                  onClick={() => {
+                    props.store.setActiveZone("board");
+                    props.store.setCursor(props.columnIndex, ri());
+                  }}
+                />
+              </box>
             );
           }}
         </For>

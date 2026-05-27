@@ -88,3 +88,91 @@ export function formatAge(ts: number, now: number): string {
   if (delta < 86_400) return `${Math.floor(delta / 3600)}h`;
   return `${Math.floor(delta / 86_400)}d`;
 }
+
+export interface TranscriptParseResult {
+  customTitle?: string;
+  aiTitle?: string;
+  lastUser?: string;
+  lastAssistant?: string;
+  messageCount: number;
+  toolCount: number;
+  gitBranch?: string;
+}
+
+/**
+ * Lightweight pass over a jsonl transcript. Defensive: malformed lines
+ * are skipped silently because the format is internal to Claude Code
+ * and may drift between versions.
+ */
+export function parseTranscript(content: string): TranscriptParseResult {
+  let customTitle: string | undefined;
+  let aiTitle: string | undefined;
+  let lastUser: string | undefined;
+  let lastAssistant: string | undefined;
+  let gitBranch: string | undefined;
+  let messageCount = 0;
+  let toolCount = 0;
+
+  for (const line of content.split("\n")) {
+    if (!line.trim()) continue;
+    let obj: any;
+    try {
+      obj = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (obj.gitBranch) gitBranch = obj.gitBranch;
+    const t = obj.type;
+    if (t === "custom-title") {
+      customTitle = obj.customTitle ?? obj.title ?? customTitle;
+      continue;
+    }
+    if (t === "ai-title") {
+      aiTitle = obj.aiTitle ?? obj.title ?? aiTitle;
+      continue;
+    }
+    const msg = obj.message ?? {};
+    const role = msg.role;
+    if (role === "user") {
+      messageCount++;
+      const content = msg.content;
+      if (typeof content === "string") {
+        lastUser = content;
+      } else if (Array.isArray(content)) {
+        for (const part of content) {
+          if (
+            part &&
+            typeof part === "object" &&
+            part.type === "text" &&
+            typeof part.text === "string"
+          ) {
+            lastUser = part.text;
+          }
+        }
+      }
+    } else if (role === "assistant") {
+      messageCount++;
+      const content = msg.content;
+      if (Array.isArray(content)) {
+        for (const part of content) {
+          if (!part || typeof part !== "object") continue;
+          if (part.type === "text" && typeof part.text === "string") {
+            lastAssistant = part.text;
+          } else if (part.type === "tool_use") {
+            toolCount++;
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    customTitle,
+    aiTitle,
+    lastUser,
+    lastAssistant,
+    messageCount,
+    toolCount,
+    gitBranch,
+  };
+}

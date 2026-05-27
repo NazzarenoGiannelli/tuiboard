@@ -4,6 +4,7 @@ import {
   cwdFromSlug,
   cwdShort,
   formatAge,
+  parseTranscript,
   type LivePidRecord,
 } from "./agents";
 
@@ -81,5 +82,44 @@ describe("formatAge", () => {
 
   it("returns dash for zero", () => {
     expect(formatAge(0, now)).toBe("—");
+  });
+});
+
+describe("parseTranscript", () => {
+  const SAMPLE_JSONL = [
+    JSON.stringify({ type: "user", message: { role: "user", content: "Ciao" }, gitBranch: "main" }),
+    JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Hello" },
+          { type: "tool_use", name: "Read" },
+        ],
+      },
+    }),
+    JSON.stringify({ type: "custom-title", customTitle: "Refactor store" }),
+  ].join("\n");
+
+  it("extracts title, last messages, counts, branch", () => {
+    const result = parseTranscript(SAMPLE_JSONL);
+    expect(result.customTitle).toBe("Refactor store");
+    expect(result.lastUser).toBe("Ciao");
+    expect(result.lastAssistant).toBe("Hello");
+    expect(result.messageCount).toBe(2);
+    expect(result.toolCount).toBe(1);
+    expect(result.gitBranch).toBe("main");
+  });
+
+  it("tolerates malformed lines", () => {
+    const broken = SAMPLE_JSONL + "\n{this is not json\n";
+    const result = parseTranscript(broken);
+    expect(result.lastUser).toBe("Ciao"); // still got the good lines
+  });
+
+  it("handles empty input", () => {
+    const result = parseTranscript("");
+    expect(result.messageCount).toBe(0);
+    expect(result.customTitle).toBeUndefined();
   });
 });

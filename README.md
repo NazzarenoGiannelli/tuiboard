@@ -1,40 +1,83 @@
 # tuiboard
 
-A modern terminal dashboard for markdown-based task boards.
-Kanban + timeline + agent view, in one TUI, with real drag & drop and a shared reactive store.
+A terminal dashboard that unifies **kanban**, a **Today/Tomorrow virtual
+panel**, a **24-hour timeline**, and a **live agent view** for Claude Code
+sessions — all on top of plain markdown task files.
 
-> Status: **Day 1** — bootstrapping. Not usable yet.
+Built with [OpenTUI](https://opentui.com) + SolidJS on Bun. Cross-platform
+(Linux, macOS, Windows). No vendor lock-in: boards are CommonMark with
+the Obsidian Tasks-plugin emoji vocabulary, so they open and edit fine in
+any markdown editor.
 
-## Why
+```
+┌─tuiboard──[1 Work · 2 Personal]──────────open · done · cols───────────────┐
+│ ┌Today/Tom──┐ ┌Board──────────────────────────┐ ┌─Timeline──┐             │
+│ │● Today    │ │ Inbox 3   In Progress 5  Done │ │ 07 ──────  │            │
+│ │ ⏰ Agenda │ │ ▶ Task 1                       │ │ 08 ──────  │            │
+│ │  ⌚09:00…│ │   Task 2                       │ │ 09 ⌚ deep │            │
+│ │ 🔺 Prio   │ │   Task 3                       │ │ 10 ──────  │            │
+│ └───────────┘ └────────────────────────────────┘ │ 11 ──────  │            │
+│ ┌Agents (live)──────────────────────────────────┐│ 12 ──────  │            │
+│ │● tuiboard      Shadow  💬 attivo  📂 ...      ││ 13 ⌚ call │            │
+│ │ pulse          Laptop  💤 3m fa   📂 ...      ││ ...        │            │
+│ └────────────────────────────────────────────────┘└────────────┘            │
+│ hjkl move · Tab board · S-Tab zone · F1/F2/F3 toggle · z zoom · ? help     │
+└────────────────────────────────────────────────────────────────────────────┘
+```
 
-Existing TUI task tools either:
+## Install
 
-- Tie you to a specific app (Obsidian Kanban plugin, Notion, Linear),
-- Are read-only viewers without scheduling,
-- Or are slow Python TUIs without real mouse interaction.
+```bash
+git clone <this repo>
+cd tuiboard
+bun install
+bun run dev
+```
 
-`tuiboard` aims to be:
+Requires [Bun](https://bun.sh) ≥ 1.3. OpenTUI ships its own native renderer
+binaries — `bun install` picks the right one for your platform automatically.
 
-- **Vendor-neutral** — boards are plain markdown files. Open them in any editor.
-  Compatible with Obsidian Kanban plugin and Tasks plugin conventions, but never required.
-- **Unified** — kanban view, timeline view, and Claude Code agent view share one
-  in-memory store, so an edit in one view re-renders the others instantly.
-- **Modern** — built on [OpenTUI](https://opentui.com) + SolidJS for fast
-  reactive rendering, real mouse drag & drop, and a native-feeling layout.
+For a global install (so you can run `tuiboard` from any vault directory):
+
+```bash
+bun link
+```
+
+## Configure
+
+Copy `.tuiboard/config.example.yaml` to `.tuiboard/config.yaml` somewhere
+along the path tuiboard will discover (the cwd or any parent), then edit
+the `boards:` list to point at your markdown files.
+
+`tuiboard` walks up from the current working directory looking for
+`.tuiboard/config.yaml`, so the most common pattern is to drop a
+`.tuiboard/` folder at your vault root. Without a config it falls back to
+scanning the cwd for any `.md` file containing `- [ ]` tasks.
+
+```yaml
+boards:
+  - path: ./Work.md
+    name: Work
+  - path: ./Personal.md
+    name: Personal
+
+assignees: [Alice, Bob]
+done_column: Done
+archive_column: Archive
+```
 
 ## Markdown board format
 
-`tuiboard` reads and writes **plain CommonMark** with a small set of well-known
-conventions inspired by the Obsidian Tasks plugin. Any markdown editor renders
-these files sensibly; the Obsidian Kanban plugin renders them as a kanban; we
-render them as our TUI.
+`tuiboard` reads and writes **plain CommonMark** with the Obsidian
+Tasks-plugin emoji vocabulary. Any markdown editor renders these files
+sensibly; the Obsidian Kanban plugin renders them as a kanban; we render
+them as a TUI.
 
 ### Minimal example
 
 ```markdown
 ---
-type: board
-name: R3PLICA
+kanban-plugin: board
 ---
 
 ## Today
@@ -55,58 +98,96 @@ name: R3PLICA
 |---|---|---|
 | `## Heading` | Column name | One column per H2 heading |
 | `- [ ]` / `- [x]` | Task (open / done) | Standard markdown task list |
-| `@name` | Assignee | Configurable list in `.tuiboard/config.yaml` |
+| `@name` | Assignee | Configurable list in config.yaml |
 | `#tag` | Tag | Any hashtag; passed through verbatim |
 | `⏳ YYYY-MM-DD` | Scheduled date | Tasks-plugin convention |
 | `📅 YYYY-MM-DD` | Due date | Tasks-plugin convention |
 | `🛫 YYYY-MM-DD` | Start date | Tasks-plugin convention |
 | `✅ YYYY-MM-DD` | Done date | Tasks-plugin convention |
-| `⌚ HH:MM-HH:MM` | Time block (today's calendar slot) | **tuiboard-specific** — Tasks plugin has no time-of-day |
-| `🔺` / `⏫` / `🔼` / `🔽` / `⏬` | Priority | Tasks-plugin convention |
+| `⌚ HH:MM-HH:MM` | Time block | tuiboard-specific (Tasks plugin has no time-of-day) |
+| `🔺 ⏫ 🔼 🔽 ⏬` | Priority | Tasks-plugin convention |
 
-Anything else stays in the task text untouched on write-back.
+Anything else stays in the task text untouched on write-back. Roundtrip is
+byte-for-byte preserving when a task hasn't been edited; structured fields
+are rebuilt only after an in-app mutation.
 
-## Config
+## Layouts
 
-`tuiboard` looks for `.tuiboard/config.yaml` in the current directory and
-walks up. Example:
+Launch `tuiboard` with no flag for the default 4-zone dashboard.
 
-```yaml
-boards:
-  - path: Tasks - R3PLICA.md
-    name: R3PLICA
-  - path: Tasks - Personal.md
-    name: Personal
-assignees: [Nazza, Shadow, Laptop, MiniPc]
-done_column: Done
-archive_column: Archive
-```
+| Flag | View | Use case |
+|---|---|---|
+| (none) | **Dashboard** — all 4 zones | Default; everything in one terminal |
+| `--view=board` | Kanban + virtual panel only | Focus mode, or a single WezTerm pane |
+| `--view=timeline` | Timeline fullscreen | Wall-mounted "what's now" |
+| `--view=agents` | Agent view fullscreen | Cross-machine session monitor |
 
-If no config is found, `tuiboard` falls back to scanning the cwd for any
-`.md` file containing at least one `- [ ]` task.
+The dashboard auto-collapses optional zones on narrow terminals:
 
-## Install
+| Terminal width | Default zones visible |
+|---|---|
+| ≥ 150 cols | virtual + board + timeline + agents |
+| 120–149 | virtual + board + agents |
+| 100–119 | virtual + board |
+| < 100 | board only |
 
-```bash
-bun install
-bun run dev
-```
+`F1` / `F2` / `F3` toggles override the auto-collapse for the current
+session (until the next terminal resize).
 
-Requires Bun ≥ 1.1. OpenTUI ships native bindings; on Windows make sure
-Visual Studio Build Tools are available if installation needs to compile.
+## Keyboard
 
-## Status / roadmap
+### Navigation
 
-- [x] Day 1 — scaffolding, parser, config loader, first render
-- [ ] Day 2 — atomic writer, file watcher, store
-- [ ] Day 3 — kanban view v0 (nav, toggle done, inline edit)
-- [ ] Day 4 — kanban drag & drop, multi-select, undo log
-- [ ] Day 5 — timeline view v0
-- [ ] Day 6 — timeline drag-to-schedule + resize
-- [ ] Day 7 — agent view (Claude Code session discovery)
-- [ ] Day 8 — unified dashboard layout + quick-add bar
-- [ ] Day 9 — command palette, themes, conflict-safe writes
-- [ ] Day 10 — single-binary bundle, v0.1 release
+| Key | Action |
+|---|---|
+| `h j k l` / arrows | Move cursor inside the active zone |
+| `Tab` | Cycle to next board |
+| `1`..`9` | Jump to board N |
+| `v` | Toggle Today/Tomorrow virtual panel focus |
+| `Shift-Tab` | Cycle active zone (virtual → board → timeline → agents) |
+| `F1` / `F2` / `F3` | Toggle visibility of Virtual / Timeline / Agents zones |
+| `z` | Zoom active zone to full screen |
+
+### Task actions (work in board, virtual, AND timeline zones)
+
+| Key | Action |
+|---|---|
+| `Enter` | Toggle done |
+| `o` | Open detail view |
+| `e` | Edit task text |
+| `s` | Schedule date modal |
+| `t` | Set scheduled = today |
+| `m` | Set scheduled = tomorrow |
+| `.` | Schedule **now** — time block at the next 15-min slot |
+| `b` | Set time block modal |
+| `p` | Cycle priority (none → 🔺 → ⏫ → 🔼 → 🔽 → ⏬ → none) |
+| `a` | Set assignee |
+| `d` | Delete task (with confirm) |
+| `Shift-X` | Archive task → moves to Archive column |
+
+### Multi-select
+
+| Key | Action |
+|---|---|
+| `Space` | Mark / unmark task — task actions then apply to ALL marked |
+| `Esc` | Clear marks (when no modal is open) |
+
+### Board-only / bulk / global
+
+| Key | Action |
+|---|---|
+| `n` | New task in current column (quick-add syntax) |
+| `Shift-T` | Reset ALL overdue tasks (any board) to today |
+| `Ctrl-Z` | Undo last mutation |
+| `?` | Help modal with the full reference |
+| `q` · `Ctrl-C` | Quit |
+
+## Status
+
+- **v0.5** — daily-driver ready. Kanban + virtual + timeline + agents
+  all functional, multi-select, undo, atomic file roundtrip, mouse click,
+  responsive layout. Tested on Windows with WezTerm; Linux/macOS should
+  work via the same OpenTUI binaries (untested).
 
 ## License
 

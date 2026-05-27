@@ -1,21 +1,32 @@
-# Copy this file to `config.yaml` in the same `.tuiboard/` directory and edit
-# the paths to point at your real markdown board files.
+# tuiboard configuration example — copy this file to `config.yaml` (same
+# directory) and edit to point at your real boards.
 #
-# tuiboard searches `.tuiboard/config.yaml` walking up from the current
-# working directory, so dropping a `.tuiboard/` folder at your vault root
-# makes the whole vault auto-configured.
+# tuiboard walks up from the cwd looking for `.tuiboard/config.yaml`, so
+# placing the file at the root of a vault makes every subdirectory of that
+# vault auto-configured.
+#
+# Without a config file, tuiboard falls back to scanning the cwd for any
+# .md file containing `- [ ]` tasks.
 
 boards:
-  - path: ./Tasks - R3PLICA.md
-    name: R3PLICA
-  - path: ./Tasks - Personal.md
+  # Each entry is a markdown file in the Obsidian Kanban Plugin format
+  # (frontmatter `kanban-plugin: board`, `## Column` headings, `- [ ] task`
+  # rows). Paths can be absolute or relative to this config file.
+  - path: ./Work.md
+    name: Work
+  - path: ./Personal.md
     name: Personal
-  - path: ./Tasks - Platform.md
-    name: Platform
 
-# Optional. Used by the kanban view for the assignee cycle (`a` key).
-assignees: [Nazza]
+# Assignees available in the assign modal (`a` shortcut). Plain list of
+# strings — tuiboard prefixes each with `@` when displayed.
+assignees:
+  - Alice
+  - Bob
 
-# Names of the columns treated as "done" and "archive" lanes.
+# Name of the column that counts as "done" for stats and status colors.
+# Defaults to "Done".
 done_column: Done
+
+# Name of the column used by the archive action (Shift-X). If the column
+# doesn't exist in a board, tuiboard creates it on the fly.
 archive_column: Archive

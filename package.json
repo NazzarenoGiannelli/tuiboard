@@ -1,11 +1,22 @@
 {
   "name": "tuiboard",
-  "version": "0.0.1",
-  "description": "A modern terminal dashboard for markdown-based task boards. Kanban + timeline + agent view in one TUI.",
+  "version": "0.5.0",
+  "description": "Terminal dashboard for markdown task boards. Kanban + Today/Tomorrow + 24h timeline + Claude Code agent view, all in one TUI.",
   "type": "module",
   "private": true,
+  "bin": {
+    "tuiboard": "./bin/tuiboard.ts"
+  },
+  "files": [
+    "src/",
+    "bin/",
+    ".tuiboard/config.example.yaml",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "dev": "bun --preload @opentui/solid/preload src/app.tsx",
+    "start": "bun --preload @opentui/solid/preload src/app.tsx",
     "parse:check": "bun run src/scripts/parse-check.ts",
     "roundtrip:check": "bun run src/scripts/roundtrip-check.ts",
     "typecheck": "tsc --noEmit",

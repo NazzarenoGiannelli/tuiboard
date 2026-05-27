@@ -57,13 +57,33 @@ export interface AgentSession {
   gitBranch?: string;
 }
 
-/** Reverse Claude Code's path-to-slug encoding (lossy on case). */
+/**
+ * Reverse Claude Code's path-to-slug encoding (lossy on case).
+ *
+ * Claude Code encodes the cwd by replacing every `:`, `\` and `/` with `-`.
+ *
+ *   Windows  "C:\Users\foo"   → "C--Users-foo"
+ *   POSIX    "/home/foo"      → "-home-foo"
+ *
+ * We can recognize a Windows-shaped slug by the `<letter>--` prefix
+ * (drive letter followed by colon → two leading dashes). Anything else
+ * is assumed POSIX. This works regardless of `process.platform`, so
+ * decoding remote-shape paths (sessions originated on a different OS)
+ * still produces something sensible.
+ */
 export function cwdFromSlug(slug: string): string {
-  // Drive letter heuristic: "C--Users-foo" → "C:\Users\foo"
-  if (slug.length >= 2 && slug[1] === "-") {
+  // Windows drive letter shape: "C--Users-foo" → "C:\Users\foo".
+  if (slug.length >= 3 && /^[A-Za-z]--/.test(slug)) {
     return slug[0] + ":\\" + slug.slice(3).replaceAll("-", "\\");
   }
-  return slug.replaceAll("-", "\\");
+  // POSIX shape: "-home-foo" → "/home/foo".
+  if (slug.startsWith("-")) {
+    return "/" + slug.slice(1).replaceAll("-", "/");
+  }
+  // Fallback: bare directory name. Pick the separator from the host OS so
+  // the result at least concatenates correctly when the user copies it.
+  const sep = process.platform === "win32" ? "\\" : "/";
+  return slug.replaceAll("-", sep);
 }
 
 /** Last 3 path parts with leading ellipsis when path is long. */

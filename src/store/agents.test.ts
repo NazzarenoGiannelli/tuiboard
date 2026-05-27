@@ -15,8 +15,20 @@ describe("cwdFromSlug", () => {
     );
   });
 
-  it("handles a simple path without drive letter", () => {
-    expect(cwdFromSlug("home-nazz-projects")).toBe("home\\nazz\\projects");
+  it("decodes a POSIX absolute path slug", () => {
+    expect(cwdFromSlug("-home-foo-projects-myrepo")).toBe(
+      "/home/foo/projects/myrepo",
+    );
+  });
+
+  it("decodes a macOS user directory slug", () => {
+    expect(cwdFromSlug("-Users-foo-code-blits")).toBe("/Users/foo/code/blits");
+  });
+
+  it("falls back to host separator for ambiguous bare slugs", () => {
+    // No leading dash and no drive letter — host OS picks the separator.
+    const sep = process.platform === "win32" ? "\\" : "/";
+    expect(cwdFromSlug("workdir-x")).toBe(`workdir${sep}x`);
   });
 });
 

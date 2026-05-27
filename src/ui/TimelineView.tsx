@@ -68,10 +68,10 @@ const MIN_BLOCK_MIN = 15;
 /** Default duration applied when an unscheduled task is dropped on the grid. */
 const DEFAULT_BLOCK_MIN = 30;
 /** Max rows shown in the sticky unscheduled section before the inner
- *  scrollbox takes over. We give it a few more rows than the Python
- *  version since vertical space is cheap here and the user works the
- *  list often during morning planning. */
-const UNSCHED_VISIBLE = 7;
+ *  scrollbox takes over. 6 rows feels right — short enough to leave
+ *  most of the timeline visible, long enough to fit a typical morning's
+ *  worth of pending tasks. */
+const UNSCHED_VISIBLE = 6;
 
 export function TimelineView(props: TimelineViewProps) {
   const isActive = () => props.store.state.ui.activeZone === "timeline";
@@ -531,21 +531,19 @@ function RowContent(props: RowContentProps) {
     );
   }
   if (r.kind === "hour") {
+    // Hour anchor: just the hour number, no horizontal grid line. Keeps
+    // the timeline scannable without the dotted/dashed clutter that
+    // competed visually with the sticky list above. The empty 15-min
+    // sub-rows below render as truly blank lines (see "empty" below).
     const label = (r.hour ?? 0).toString().padStart(2, "0");
     return (
-      <>
-        <span style={{ fg: T.textDim }}>{label}{" "}</span>
-        <span style={{ fg: T.border }}>{"─".repeat(120)}</span>
-      </>
+      <span style={{ fg: T.textDim }}>{label}</span>
     );
   }
   if (r.kind === "empty") {
-    return (
-      <>
-        <span style={{ fg: T.textDim }}>{prefix}</span>
-        <span style={{ fg: T.border }}>{"·".repeat(120)}</span>
-      </>
-    );
+    // Truly blank — no dotted "·····" pattern. Empty hours just look
+    // empty, time blocks stand out cleanly against them.
+    return <span>{" "}</span>;
   }
   if (r.kind === "head" && r.entry) {
     const e = r.entry;

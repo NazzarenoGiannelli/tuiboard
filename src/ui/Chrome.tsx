@@ -47,7 +47,7 @@ export function TopBar(props: { store: TuiStore }) {
   };
 
   return (
-    <box style={{ flexDirection: "row", justifyContent: "space-between" }}>
+    <box style={{ flexDirection: "row", justifyContent: "space-between", height: 1 }}>
       <text wrapMode="none" truncate style={{ flexGrow: 1, flexShrink: 1 }}>
         <For each={tabsText()}>
           {(p) => (

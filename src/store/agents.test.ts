@@ -105,6 +105,7 @@ describe("parseTranscript", () => {
     const result = parseTranscript(SAMPLE_JSONL);
     expect(result.customTitle).toBe("Refactor store");
     expect(result.lastUser).toBe("Ciao");
+    expect(result.firstHumanUser).toBe("Ciao");
     expect(result.lastAssistant).toBe("Hello");
     expect(result.messageCount).toBe(2);
     expect(result.toolCount).toBe(1);
@@ -121,5 +122,48 @@ describe("parseTranscript", () => {
     const result = parseTranscript("");
     expect(result.messageCount).toBe(0);
     expect(result.customTitle).toBeUndefined();
+  });
+
+  it("skips skill-bootstrap and system-tag user messages when picking firstHumanUser", () => {
+    const lines = [
+      // Synthetic skill loader injected by Claude Code on /morning
+      JSON.stringify({
+        type: "user",
+        message: {
+          role: "user",
+          content: "Base directory for this skill: C:\\Users\\nazza\\.claude\\skills\\morning",
+        },
+      }),
+      // System-injected reminder tag
+      JSON.stringify({
+        type: "user",
+        message: { role: "user", content: "<system-reminder>do the thing</system-reminder>" },
+      }),
+      // Real human prompt
+      JSON.stringify({
+        type: "user",
+        message: { role: "user", content: "Davvero buongiorno, partiamo dal recap di ieri" },
+      }),
+    ].join("\n");
+    const result = parseTranscript(lines);
+    expect(result.firstHumanUser).toBe("Davvero buongiorno, partiamo dal recap di ieri");
+    // lastUser still tracks the literal last message regardless
+    expect(result.lastUser).toBe("Davvero buongiorno, partiamo dal recap di ieri");
+  });
+
+  it("returns undefined firstHumanUser when every user message is synthetic", () => {
+    const lines = [
+      JSON.stringify({
+        type: "user",
+        message: { role: "user", content: "Base directory for this skill: X" },
+      }),
+      JSON.stringify({
+        type: "user",
+        message: { role: "user", content: "<task-notification>noisy</task-notification>" },
+      }),
+    ].join("\n");
+    const result = parseTranscript(lines);
+    expect(result.firstHumanUser).toBeUndefined();
+    expect(result.lastUser).toBe("<task-notification>noisy</task-notification>");
   });
 });

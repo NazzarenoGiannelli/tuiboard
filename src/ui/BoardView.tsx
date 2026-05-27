@@ -14,8 +14,14 @@ interface ScrollBoxLike {
   scrollChildIntoView(id: string): void;
 }
 
-/** Fixed column dimensions used to lay out the masonry. */
-const COL_WIDTH = 42;
+/**
+ * Preferred column width for layout. Columns try to be at least this wide;
+ * when the row has spare width they grow to fill it (flex-grow). When the
+ * row can't fit another column at this width, masonry wraps to a new row.
+ */
+const COL_BASIS = 42;
+/** Hard minimum — never shrink below this even with flex-shrink. */
+const COL_MIN_WIDTH = 32;
 /** Gap between columns (also between rows when wrapped). */
 const COL_GAP = 1;
 /** Min usable column height (avoid postage-stamp columns on tiny terminals). */
@@ -172,9 +178,14 @@ function ColumnView(props: ColumnViewProps) {
       id={props.boxId}
       style={{
         flexDirection: "column",
-        width: props.zoomed ? undefined : COL_WIDTH,
-        minWidth: props.zoomed ? undefined : COL_WIDTH,
-        flexGrow: props.zoomed ? 1 : 0,
+        // Flex-basis sets the preferred width; flex-grow:1 lets columns
+        // share the row's remaining space (e.g. 3 cols on a 120-wide
+        // board area each become ~40 wide instead of 42+42+empty).
+        // flex-shrink:0 + minWidth keeps them readable on narrow rows.
+        flexBasis: props.zoomed ? undefined : COL_BASIS,
+        minWidth: props.zoomed ? undefined : COL_MIN_WIDTH,
+        flexGrow: 1,
+        flexShrink: 0,
         // Explicit height needed inside a flex-wrap container — otherwise
         // children with flexGrow would inflate the column infinitely.
         height: props.zoomed ? undefined : props.height,

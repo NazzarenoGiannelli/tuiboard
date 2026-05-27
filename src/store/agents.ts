@@ -102,11 +102,35 @@ export function formatAge(ts: number, now: number): string {
 export interface TranscriptParseResult {
   customTitle?: string;
   aiTitle?: string;
+  /**
+   * First user message that looks like a real human prompt — skill loaders,
+   * system tags, and bare slash-command invocations are filtered. Used as
+   * the displayName fallback when there is no custom/ai title.
+   */
+  firstHumanUser?: string;
   lastUser?: string;
   lastAssistant?: string;
   messageCount: number;
   toolCount: number;
   gitBranch?: string;
+}
+
+/**
+ * Heuristic: is this user "message" actually a skill/system bootstrap that
+ * Claude Code injected on session start? Used to skip these when picking
+ * a fallback displayName — otherwise N sessions opened by the same skill
+ * all look identical in the list.
+ */
+function looksSyntheticUser(text: string): boolean {
+  const t = text.trimStart();
+  if (!t) return true;
+  // Skill bootstrap: "Base directory for this skill: ..."
+  if (t.startsWith("Base directory for this skill")) return true;
+  // System-injected tags: <command-name>, <task-notification>, <system-reminder>, <local-command-stdout>
+  if (/^<[a-z][a-z0-9-]*>/i.test(t)) return true;
+  // Bare slash-command invocation (the literal "/morning", "/log", etc.)
+  if (/^\/[a-z][a-z0-9-]*\s*$/i.test(t)) return true;
+  return false;
 }
 
 /**
@@ -117,11 +141,19 @@ export interface TranscriptParseResult {
 export function parseTranscript(content: string): TranscriptParseResult {
   let customTitle: string | undefined;
   let aiTitle: string | undefined;
+  let firstHumanUser: string | undefined;
   let lastUser: string | undefined;
   let lastAssistant: string | undefined;
   let gitBranch: string | undefined;
   let messageCount = 0;
   let toolCount = 0;
+
+  const recordUserText = (text: string) => {
+    lastUser = text;
+    if (firstHumanUser === undefined && !looksSyntheticUser(text)) {
+      firstHumanUser = text;
+    }
+  };
 
   for (const line of content.split("\n")) {
     if (!line.trim()) continue;
@@ -147,7 +179,7 @@ export function parseTranscript(content: string): TranscriptParseResult {
       messageCount++;
       const content = msg.content;
       if (typeof content === "string") {
-        lastUser = content;
+        recordUserText(content);
       } else if (Array.isArray(content)) {
         for (const part of content) {
           if (
@@ -156,7 +188,7 @@ export function parseTranscript(content: string): TranscriptParseResult {
             part.type === "text" &&
             typeof part.text === "string"
           ) {
-            lastUser = part.text;
+            recordUserText(part.text);
           }
         }
       }
@@ -179,6 +211,7 @@ export function parseTranscript(content: string): TranscriptParseResult {
   return {
     customTitle,
     aiTitle,
+    firstHumanUser,
     lastUser,
     lastAssistant,
     messageCount,
@@ -284,11 +317,19 @@ function buildSession(
     parsed = { messageCount: 0, toolCount: 0 };
   }
   const cwd = live?.cwd ?? cwdFromSlug(jsonl.slug);
-  const displayName =
-    parsed.customTitle?.slice(0, 60) ??
-    parsed.aiTitle?.slice(0, 60) ??
-    parsed.lastUser?.split("\n")[0]?.slice(0, 60) ??
-    jsonl.sessionId.slice(0, 8);
+  const hasRealTitle = Boolean(parsed.customTitle || parsed.aiTitle);
+  const fallbackText =
+    parsed.firstHumanUser?.split("\n").find((l) => l.trim().length > 0)?.slice(0, 60) ??
+    parsed.lastUser?.split("\n").find((l) => l.trim().length > 0)?.slice(0, 60);
+  const uuid8 = jsonl.sessionId.slice(0, 8);
+  // When no human-authored title is available, suffix the uuid8 so visually
+  // identical fallback titles (e.g. many sessions started by the same /skill)
+  // still produce distinct rows.
+  const displayName = hasRealTitle
+    ? (parsed.customTitle ?? parsed.aiTitle)!.slice(0, 60)
+    : fallbackText
+      ? `${fallbackText} · ${uuid8}`
+      : uuid8;
   return {
     sessionId: jsonl.sessionId,
     jsonlPath: jsonl.path,

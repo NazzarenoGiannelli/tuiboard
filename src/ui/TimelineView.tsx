@@ -26,7 +26,15 @@
  * 1:1 to MINS_PER_ROW (15) minute offsets from DAY_START_HOUR.
  */
 
-import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+} from "solid-js";
 
 import { isoToday, type TaskRef } from "~/store/index";
 import {
@@ -42,7 +50,13 @@ import {
   type TimelineEntry,
   type UnscheduledItem,
 } from "~/store/timeline";
-import { ATTR, PRIORITY_COLOR, PRIORITY_GLYPH, T, boardColor } from "~/ui/glyphs";
+import {
+  ATTR,
+  PRIORITY_COLOR,
+  PRIORITY_GLYPH,
+  T,
+  boardColor,
+} from "~/ui/glyphs";
 import type { TuiStore } from "~/store/index";
 import type { Task } from "~/types";
 
@@ -368,24 +382,34 @@ export function TimelineView(props: TimelineViewProps) {
 
       {/* Sticky "unscheduled today" section — tasks scheduled for today
           that don't have a time block yet. Click to arm, then click a
-          row in the grid below to drop them at that time (30min default). */}
+          row in the grid below to drop them at that time (30min default).
+          flexShrink: 0 ensures the sticky takes its natural height first
+          and the grid below gets only the remaining space. */}
       <Show when={unscheduled().length > 0}>
-        <UnscheduledSticky
-          items={unscheduled()}
-          armedRef={armedRef()}
-          onClick={onUnscheduledClick}
-        />
+        <box style={{ flexShrink: 0, flexDirection: "column" }}>
+          <UnscheduledSticky
+            items={unscheduled()}
+            armedRef={armedRef()}
+            onClick={onUnscheduledClick}
+          />
+        </box>
       </Show>
-      <scrollbox
-        ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}
-        style={{
-          width: "100%",
-          flexGrow: 1,
-          scrollX: false,
-          scrollY: true,
-          rootOptions: {},
-          contentOptions: {},
-          scrollbarOptions: { visible: false },
+      {/* Wrapper box with flexGrow:1 + minHeight:0 forces OpenTUI/Yoga to
+          confine the scrollbox to the parent's REMAINING height. Without
+          minHeight:0 the scrollbox could blow past its allocation and the
+          grid would visually overlap the preceding sticky sibling. */}
+      <box style={{ flexGrow: 1, flexShrink: 1, minHeight: 0, flexDirection: "column" }}>
+        <scrollbox
+          ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}
+          style={{
+            width: "100%",
+            height: "100%",
+            flexGrow: 1,
+            scrollX: false,
+            scrollY: true,
+            rootOptions: {},
+            contentOptions: {},
+            scrollbarOptions: { visible: false },
           // Ask OpenTUI to skip rendering rows that fall outside the
           // scrollbox viewport. Combined with the rowMap slicing above
           // (when a sticky section is present), this stops the grid
@@ -407,7 +431,8 @@ export function TimelineView(props: TimelineViewProps) {
             </box>
           )}
         </For>
-      </scrollbox>
+        </scrollbox>
+      </box>
     </box>
   );
 }
@@ -579,11 +604,10 @@ function RowContent(props: RowContentProps) {
     return (
       <>
         <span style={{ fg: T.overdue, attributes: ATTR.bold }}>
-          {"━━ "}{formatHm(r.nowMin ?? 0)}{" "}
+          {"━━ "}
+          {formatHm(r.nowMin ?? 0)}{" "}
         </span>
-        <span style={{ fg: T.overdue }}>
-          {"━".repeat(120)}
-        </span>
+        <span style={{ fg: T.overdue }}>{"━".repeat(120)}</span>
       </>
     );
   }
@@ -593,7 +617,7 @@ function RowContent(props: RowContentProps) {
     const label = (r.hour ?? 0).toString().padStart(2, "0");
     return (
       <>
-        <span style={{ fg: T.textDim }}>{label}{" "}</span>
+        <span style={{ fg: T.textDim }}>{label} </span>
         <span style={{ fg: T.border }}>{"─".repeat(120)}</span>
       </>
     );
@@ -612,16 +636,21 @@ function RowContent(props: RowContentProps) {
   if (r.kind === "head" && r.entry) {
     const e = r.entry;
     const bColor = boardColor(e.boardIndex);
-    const priorityGlyph =
-      e.task.priority !== "none" ? "🔺 " : "";
+    const priorityGlyph = e.task.priority !== "none" ? "🔺 " : "";
     return (
       <>
         <span style={{ fg: T.textDim }}>{prefix}</span>
         <span style={{ fg: bColor, attributes: ATTR.bold }}>
-          {"┤ "}{formatHm(e.startMin)}{"-"}{formatHm(e.endMin)}{" "}
+          {"┤ "}
+          {formatHm(e.startMin)}
+          {"-"}
+          {formatHm(e.endMin)}{" "}
         </span>
         <Show when={e.task.assignee}>
-          <span style={{ fg: T.assignee }}>{"@"}{e.task.assignee}{" "}</span>
+          <span style={{ fg: T.assignee }}>
+            {"@"}
+            {e.task.assignee}{" "}
+          </span>
         </Show>
         <Show when={priorityGlyph}>
           <span style={{ fg: PRIORITY_COLOR[e.task.priority] }}>
@@ -659,7 +688,7 @@ function RowContent(props: RowContentProps) {
       </>
     );
   }
-  return <span>{" "}</span>;
+  return <span> </span>;
 }
 
 // ─── Unscheduled sticky list ─────────────────────────────────────────────────
@@ -674,8 +703,7 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
   // The whole list goes through a scrollbox capped at UNSCHED_VISIBLE rows
   // tall — when there are more items, the user scrolls the inner box with
   // the mouse wheel. Keeps the timeline grid below visible at all times.
-  const scrollableHeight = () =>
-    Math.min(props.items.length, UNSCHED_VISIBLE);
+  const scrollableHeight = () => Math.min(props.items.length, UNSCHED_VISIBLE);
 
   const isArmed = (item: UnscheduledItem): boolean => {
     const a = props.armedRef;
@@ -692,12 +720,11 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
       <box style={{ flexDirection: "row", height: 1 }}>
         <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
           <span style={{ fg: T.textDim, attributes: ATTR.bold }}>
-            {"◦ Unscheduled · "}{props.items.length}
+            {"◦ Unscheduled · "}
+            {props.items.length}
           </span>
           <Show when={props.items.length > UNSCHED_VISIBLE}>
-            <span style={{ fg: T.textDim }}>
-              {"  (scroll for more)"}
-            </span>
+            <span style={{ fg: T.textDim }}>{"  (scroll for more)"}</span>
           </Show>
         </text>
       </box>

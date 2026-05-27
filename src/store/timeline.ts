@@ -227,6 +227,50 @@ export function countOverlaps(entries: TimelineEntry[]): number {
   return count;
 }
 
+export interface UnscheduledItem {
+  ref: TaskRef;
+  task: Task;
+  boardName: string;
+  boardIndex: number;
+  columnName: string;
+}
+
+/**
+ * Tasks scheduled for the given date but without a time block — the ones
+ * shown in the sticky "◦ Unscheduled" section above the timeline grid.
+ * Sorted by board declaration order, then by encounter in the column
+ * (preserves the user's manual ordering inside each kanban column).
+ */
+export function buildUnscheduledToday(
+  boards: Board[],
+  date: string,
+): UnscheduledItem[] {
+  const out: UnscheduledItem[] = [];
+  for (let bi = 0; bi < boards.length; bi++) {
+    const board = boards[bi]!;
+    for (let ci = 0; ci < board.columns.length; ci++) {
+      const col = board.columns[ci]!;
+      let taskIndex = 0;
+      for (const child of col.children) {
+        if (!isTask(child)) continue;
+        const idx = taskIndex++;
+        const t = child;
+        if (t.done) continue;
+        if (t.timeBlock) continue;
+        if (t.scheduled !== date) continue;
+        out.push({
+          ref: { boardPath: board.filepath, columnIndex: ci, taskIndex: idx },
+          task: t,
+          boardName: board.name,
+          boardIndex: bi,
+          columnName: col.name,
+        });
+      }
+    }
+  }
+  return out;
+}
+
 /** Format minutes since midnight as "HH:MM". */
 export function formatHm(mins: number): string {
   const h = Math.floor(mins / 60) % 24;

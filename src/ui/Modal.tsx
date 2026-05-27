@@ -576,8 +576,10 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  c                 Copy task to clipboard (markdown line)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nTimeline-specific (click-to-arm scheduling)\n"}</span>
         <span style={{ fg: T.text }}>{"  click band         Arm the block (warm highlight)\n"}</span>
-        <span style={{ fg: T.text }}>{"  click empty row    While armed: move block start to that row's time\n"}</span>
-        <span style={{ fg: T.text }}>{"  shift+click row    While armed: resize block end to that row's time\n"}</span>
+        <span style={{ fg: T.text }}>{"  click unscheduled  Arm a today task without a time block\n"}</span>
+        <span style={{ fg: T.text }}>{"  click empty row    Place armed task: move existing block, or\n"}</span>
+        <span style={{ fg: T.text }}>{"                     create new 30-min block for unscheduled tasks\n"}</span>
+        <span style={{ fg: T.text }}>{"  shift+click row    While armed (existing block): resize end to row\n"}</span>
         <span style={{ fg: T.text }}>{"  j / k              While armed: nudge block ±15 min\n"}</span>
         <span style={{ fg: T.text }}>{"  + / -              While armed: resize block end ±15 min\n"}</span>
         <span style={{ fg: T.text }}>{"  Enter              While armed: commit + jump to source task\n"}</span>

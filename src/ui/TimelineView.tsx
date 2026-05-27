@@ -35,13 +35,16 @@ import {
   TOTAL_ROWS,
   buildRowMap,
   buildTimelineEntries,
+  buildUnscheduledToday,
   formatHm,
   type RowMapEntry,
   type RowMapPair,
   type TimelineEntry,
+  type UnscheduledItem,
 } from "~/store/timeline";
-import { ATTR, PRIORITY_COLOR, T, boardColor } from "~/ui/glyphs";
+import { ATTR, PRIORITY_COLOR, PRIORITY_GLYPH, T, boardColor } from "~/ui/glyphs";
 import type { TuiStore } from "~/store/index";
+import type { Task } from "~/types";
 
 interface ScrollBoxLike {
   scrollChildIntoView(id: string): void;
@@ -62,6 +65,10 @@ interface TimelineViewProps {
 const ROW_ID_PREFIX = "tuiboard-tl-row-";
 /** Minimum block duration in minutes — prevents zero-length blocks on resize. */
 const MIN_BLOCK_MIN = 15;
+/** Default duration applied when an unscheduled task is dropped on the grid. */
+const DEFAULT_BLOCK_MIN = 30;
+/** Max rows shown in the sticky unscheduled section before collapsing to "+N more". */
+const UNSCHED_VISIBLE = 5;
 
 export function TimelineView(props: TimelineViewProps) {
   const isActive = () => props.store.state.ui.activeZone === "timeline";
@@ -70,6 +77,14 @@ export function TimelineView(props: TimelineViewProps) {
 
   const entries = createMemo(() =>
     buildTimelineEntries(
+      props.store.state.boards.map((b) => b.board),
+      isoToday(),
+    ),
+  );
+
+  /** Today's tasks that don't have a time block yet — sticky list candidates. */
+  const unscheduled = createMemo(() =>
+    buildUnscheduledToday(
       props.store.state.boards.map((b) => b.board),
       isoToday(),
     ),
@@ -89,6 +104,19 @@ export function TimelineView(props: TimelineViewProps) {
         e.ref.columnIndex === ref.columnIndex &&
         e.ref.taskIndex === ref.taskIndex,
     );
+  });
+
+  /** The armed task itself, whether it's a scheduled block or an unscheduled. */
+  const armedTask = createMemo<Task | undefined>(() => {
+    const ref = armedRef();
+    if (!ref) return undefined;
+    return props.store.getTask(ref);
+  });
+
+  /** True when arming an unscheduled-today task (drop = create new block). */
+  const armedIsUnscheduled = createMemo(() => {
+    const t = armedTask();
+    return !!t && !t.timeBlock;
   });
 
   let scrollBoxRef: ScrollBoxLike | undefined;
@@ -152,32 +180,76 @@ export function TimelineView(props: TimelineViewProps) {
   };
 
   /**
-   * Click on an empty / hour row when a block is armed. Plain click moves
-   * the block's start to that row's time (preserving duration). Shift+click
-   * resizes the end to that row's time.
+   * Click on an unscheduled task in the sticky list. Same arm/disarm
+   * toggle semantic as clicking on a band — except the underlying task
+   * has no time block (yet). Dropping on an empty row will create one.
+   */
+  const onUnscheduledClick = (item: UnscheduledItem) => {
+    props.store.setActiveZone("timeline");
+    const arm = armedRef();
+    const same =
+      arm &&
+      arm.boardPath === item.ref.boardPath &&
+      arm.columnIndex === item.ref.columnIndex &&
+      arm.taskIndex === item.ref.taskIndex;
+    if (same) {
+      props.store.armTimeline(undefined);
+      props.store.flashBanner("info", "Disarmed");
+    } else {
+      props.store.armTimeline(item.ref);
+      props.store.flashBanner(
+        "info",
+        `Armed: ${item.task.displayTitle.slice(0, 40)} · click a row to place (${DEFAULT_BLOCK_MIN}min default)`,
+      );
+    }
+  };
+
+  /**
+   * Click on an empty / hour row when a task is armed. Behavior depends
+   * on whether the armed task already has a time block:
+   *   - Has block + plain click  → MOVE start to clicked row (keep duration)
+   *   - Has block + shift+click  → RESIZE end to clicked row
+   *   - No block (unscheduled)   → CREATE block at clicked row, 30min default
    */
   const onEmptyRowClick = (rowIndex: number, event: MouseEventLike) => {
-    const armed = armedEntry();
-    if (!armed) return;
+    const armed = armedTask();
+    const ref = armedRef();
+    if (!armed || !ref) return;
     const targetMin = DAY_START_HOUR * 60 + rowIndex * MINS_PER_ROW;
+
+    // Unscheduled task → create a fresh block at the clicked row.
+    if (!armed.timeBlock) {
+      const startMin = Math.max(0, targetMin);
+      const endMin = Math.min(24 * 60 - 1, startMin + DEFAULT_BLOCK_MIN);
+      props.store.setTimeBlock(ref, { startMin, endMin });
+      props.store.flashBanner(
+        "info",
+        `⌚ Scheduled → ${formatHm(startMin)}-${formatHm(endMin)}`,
+      );
+      // Auto-disarm: the task now has a block and will appear as a band;
+      // the user can re-click on that band to keep adjusting.
+      props.store.armTimeline(undefined);
+      return;
+    }
+
+    // Existing block: move (plain click) or resize (shift+click).
+    const block = armed.timeBlock;
     const shift = !!event.modifiers?.shift;
     if (shift) {
-      // Resize: keep start, set new end. Must stay > start + MIN.
-      const newEnd = Math.max(armed.startMin + MIN_BLOCK_MIN, targetMin);
-      props.store.setTimeBlock(armed.ref, {
-        startMin: armed.startMin,
+      const newEnd = Math.max(block.startMin + MIN_BLOCK_MIN, targetMin);
+      props.store.setTimeBlock(ref, {
+        startMin: block.startMin,
         endMin: Math.min(24 * 60 - 1, newEnd),
       });
       props.store.flashBanner(
         "info",
-        `↕ Resized → ${formatHm(armed.startMin)}-${formatHm(newEnd)}`,
+        `↕ Resized → ${formatHm(block.startMin)}-${formatHm(newEnd)}`,
       );
     } else {
-      // Move: keep duration, slide so start = target.
-      const duration = armed.endMin - armed.startMin;
+      const duration = block.endMin - block.startMin;
       const newStart = Math.max(0, targetMin);
       const newEnd = Math.min(24 * 60 - 1, newStart + duration);
-      props.store.setTimeBlock(armed.ref, { startMin: newStart, endMin: newEnd });
+      props.store.setTimeBlock(ref, { startMin: newStart, endMin: newEnd });
       props.store.flashBanner(
         "info",
         `✋ Moved → ${formatHm(newStart)}-${formatHm(newEnd)}`,
@@ -203,23 +275,38 @@ export function TimelineView(props: TimelineViewProps) {
       title={`┤ Timeline · ${entries().length} ├`}
       titleAlignment="left"
     >
-      <Show when={armedEntry()}>
-        <text wrapMode="none" truncate>
+      <Show when={armedTask()}>
+        <text wrapMode="none">
           <span style={{ fg: T.warm, attributes: ATTR.bold }}>
-            {"⤤ Armed: "}
-            {formatHm(armedEntry()!.startMin)}-{formatHm(armedEntry()!.endMin)}
+            {armedIsUnscheduled() ? "⤤ Armed (new): " : "⤤ Armed: "}
+            {armedIsUnscheduled()
+              ? tailTruncate(armedTask()!.displayTitle, 32)
+              : `${formatHm(armedEntry()!.startMin)}-${formatHm(armedEntry()!.endMin)}`}
           </span>
           <span style={{ fg: T.textDim }}>
-            {"  click row to move · shift+click to resize · Esc to cancel"}
+            {armedIsUnscheduled()
+              ? "  click row to place · Esc to cancel"
+              : "  click row to move · shift+click to resize · Esc"}
           </span>
         </text>
       </Show>
-      <Show when={!armedEntry() && rowMap().overflow > 0}>
-        <text wrapMode="none" truncate>
+      <Show when={!armedTask() && rowMap().overflow > 0}>
+        <text wrapMode="none">
           <span style={{ fg: T.bannerWarn }}>
             {`⚠ ${rowMap().overflow} block${rowMap().overflow === 1 ? "" : "s"} hidden by 3-way overlap`}
           </span>
         </text>
+      </Show>
+
+      {/* Sticky "unscheduled today" section — tasks scheduled for today
+          that don't have a time block yet. Click to arm, then click a
+          row in the grid below to drop them at that time (30min default). */}
+      <Show when={unscheduled().length > 0}>
+        <UnscheduledSticky
+          items={unscheduled()}
+          armedRef={armedRef()}
+          onClick={onUnscheduledClick}
+        />
       </Show>
       <scrollbox
         ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}
@@ -495,6 +582,91 @@ function RowContent(props: RowContentProps) {
     );
   }
   return <span>{" "}</span>;
+}
+
+// ─── Unscheduled sticky list ─────────────────────────────────────────────────
+
+interface UnscheduledStickyProps {
+  items: UnscheduledItem[];
+  armedRef: TaskRef | undefined;
+  onClick: (item: UnscheduledItem) => void;
+}
+
+function UnscheduledSticky(props: UnscheduledStickyProps) {
+  const visible = () => props.items.slice(0, UNSCHED_VISIBLE);
+  const hiddenCount = () => Math.max(0, props.items.length - UNSCHED_VISIBLE);
+
+  const isArmed = (item: UnscheduledItem): boolean => {
+    const a = props.armedRef;
+    if (!a) return false;
+    return (
+      a.boardPath === item.ref.boardPath &&
+      a.columnIndex === item.ref.columnIndex &&
+      a.taskIndex === item.ref.taskIndex
+    );
+  };
+
+  return (
+    <box style={{ flexDirection: "column", marginBottom: 1 }}>
+      <text wrapMode="none">
+        <span style={{ fg: T.textDim, attributes: ATTR.bold }}>
+          {"◦ Unscheduled · "}{props.items.length}
+        </span>
+      </text>
+      <For each={visible()}>
+        {(item) => {
+          const armed = () => isArmed(item);
+          const priorityGlyph =
+            item.task.priority !== "none"
+              ? PRIORITY_GLYPH[item.task.priority] + " "
+              : "";
+          return (
+            <box
+              style={{
+                flexDirection: "row",
+                paddingLeft: 1,
+                paddingRight: 1,
+                backgroundColor: armed() ? T.warmDim : undefined,
+              }}
+              onMouseDown={() => props.onClick(item)}
+            >
+              <text wrapMode="none" style={{ flexGrow: 1 }}>
+                <span style={{ fg: armed() ? T.warm : T.textDim }}>
+                  {armed() ? "⤤ " : "  "}
+                </span>
+                <Show when={priorityGlyph}>
+                  <span style={{ fg: PRIORITY_COLOR[item.task.priority] }}>
+                    {priorityGlyph}
+                  </span>
+                </Show>
+                <span style={{ fg: T.text }}>
+                  {tailTruncate(item.task.displayTitle, 36)}
+                </span>
+              </text>
+            </box>
+          );
+        }}
+      </For>
+      <Show when={hiddenCount() > 0}>
+        <text wrapMode="none">
+          <span style={{ fg: T.textDim }}>
+            {"  + "}{hiddenCount()}{" more"}
+          </span>
+        </text>
+      </Show>
+      <text wrapMode="none">
+        <span style={{ fg: T.border }}>{"─".repeat(120)}</span>
+      </text>
+    </box>
+  );
+}
+
+/** Local tail-truncate helper (mirrors TaskRow's). Keeps the head + `…`. */
+function tailTruncate(s: string, max: number): string {
+  if (max <= 0) return "";
+  if (s.length <= max) return s;
+  if (max < 2) return s.slice(0, max);
+  return s.slice(0, max - 1) + "…";
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────

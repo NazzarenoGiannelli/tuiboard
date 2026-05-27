@@ -76,3 +76,35 @@ describe("UI visibleZones", () => {
     expect(store.state.ui.activeZone).toBe("board");
   });
 });
+
+describe("UI cycleActiveZone", () => {
+  it("cycles through all visible zones in fixed order", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setActiveZone("virtual");
+    store.cycleActiveZone();
+    expect(store.state.ui.activeZone).toBe("board");
+    store.cycleActiveZone();
+    expect(store.state.ui.activeZone).toBe("timeline");
+    store.cycleActiveZone();
+    expect(store.state.ui.activeZone).toBe("agents");
+    store.cycleActiveZone();
+    expect(store.state.ui.activeZone).toBe("virtual"); // wrap
+  });
+
+  it("skips hidden zones", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setZoneVisible("timeline", false);
+    store.setActiveZone("board");
+    store.cycleActiveZone();
+    expect(store.state.ui.activeZone).toBe("agents"); // timeline skipped
+  });
+
+  it("is a no-op when only one zone is visible (board only)", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setZoneVisible("virtual", false);
+    store.setZoneVisible("timeline", false);
+    store.setZoneVisible("agents", false);
+    store.cycleActiveZone();
+    expect(store.state.ui.activeZone).toBe("board");
+  });
+});

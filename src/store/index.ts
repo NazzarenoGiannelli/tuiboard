@@ -69,6 +69,9 @@ export type ModalKind =
 /** Which dashboard zone owns the keyboard cursor. */
 export type ActiveZone = "virtual" | "board" | "timeline" | "agents";
 
+/** Fixed cycling order for Shift+Tab navigation. */
+const ZONE_ORDER: readonly ActiveZone[] = ["virtual", "board", "timeline", "agents"];
+
 export interface UIState {
   activeBoardIndex: number;
   /** Which dashboard zone owns the keyboard cursor right now. */
@@ -655,6 +658,14 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     }
   }
 
+  function cycleActiveZone(): void {
+    const visible = ZONE_ORDER.filter((z) => state.ui.visibleZones[z]);
+    if (visible.length <= 1) return;
+    const currentIdx = visible.indexOf(state.ui.activeZone);
+    const nextIdx = (currentIdx + 1) % visible.length;
+    setActiveZone(visible[nextIdx]!);
+  }
+
   function toggleZoom(): void {
     setState("ui", "zoomed", (z: boolean) => !z);
   }
@@ -832,6 +843,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setCursor,
     setActiveZone,
     setZoneVisible,
+    cycleActiveZone,
     toggleZoom,
     setZoomed,
     toggleMark,

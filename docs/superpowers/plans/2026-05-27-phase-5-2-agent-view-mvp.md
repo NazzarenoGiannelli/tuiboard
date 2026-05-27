@@ -8,7 +8,9 @@
 
 **Tech Stack:** Bun · TypeScript · SolidJS · chokidar (already a dep) · OpenTUI 0.2.15.
 
-**Out of scope for this phase** (deferred to 5.2.x): rename action (write `custom-title` to jsonl), resume action (wezterm spawn), cross-machine session parsing from `Sessions.md`, user-archive flag (per-machine state.json).
+**Out of scope for this phase** (deferred to 5.2.x): rename action (write `custom-title` to jsonl), resume action (wezterm spawn), user-archive flag (per-machine state.json).
+
+> **Update 2026-05-27:** cross-machine session parsing from `Sessions.md` is dropped from the roadmap entirely. The local agent view supersedes the cross-machine tracker for this user's workflow.
 
 ---
 
@@ -1171,7 +1173,7 @@ git commit --allow-empty -m "checkpoint: Day 5.2 agent view MVP complete
 ✓ ModalKind: agent-detail variant + Modal.tsx render
 ✓ Tests: ~14 new pure-helper + parser tests
 ✓ Deferred to 5.2.x: rename (custom-title write), resume (wezterm spawn),
-   Sessions.md cross-machine parse, user-archive flag"
+   user-archive flag (Sessions.md cross-machine parse dropped from roadmap)"
 ```
 
 ---

@@ -20,6 +20,8 @@ interface TaskRowProps {
   task: Task;
   cursor?: boolean;
   marked?: boolean;
+  /** True when grab mode is on AND this row is the cursor (about to move). */
+  grabbed?: boolean;
   /** Optional `[board]` tag rendered as a separate small suffix. Used when
       the row is not already grouped under a `— board · col —` header. */
   contextTag?: string;
@@ -52,7 +54,13 @@ export function TaskRow(props: TaskRowProps) {
         flexDirection: "row",
         paddingLeft: 1,
         paddingRight: 1,
-        backgroundColor: props.cursor ? T.cardBgCursor : undefined,
+        // Grab mode tints the cursor row warm orange so the user always
+        // knows which task is "in transit". Plain cursor stays neutral.
+        backgroundColor: props.grabbed
+          ? T.warmDim
+          : props.cursor
+            ? T.cardBgCursor
+            : undefined,
       }}
       onMouseDown={props.onClick ? (() => props.onClick!()) : undefined}
     >
@@ -62,7 +70,7 @@ export function TaskRow(props: TaskRowProps) {
         wrapMode="none"
       >
         <span style={{ fg: props.cursor ? T.accent : T.textDim }}>
-          {props.cursor ? "▶ " : "  "}
+          {props.grabbed ? "⤤ " : props.cursor ? "▶ " : "  "}
         </span>
         <Show when={props.marked}>
           <span style={{ fg: T.accent }}>● </span>

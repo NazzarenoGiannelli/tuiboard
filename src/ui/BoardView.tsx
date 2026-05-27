@@ -143,7 +143,9 @@ interface ColumnViewProps {
 
 function ColumnView(props: ColumnViewProps) {
   const allTasks = createMemo(() => props.column.children.filter(isTask));
-  const openTasks = createMemo(() => allTasks().filter((t) => !t.done));
+  const openTasks = createMemo(() =>
+    props.store.applyBoardFilter(allTasks().filter((t) => !t.done)),
+  );
   const doneTasks = createMemo(() => allTasks().filter((t) => t.done));
 
   // In zoom mode, show open tasks first, then a divider, then done tasks.
@@ -207,6 +209,11 @@ function ColumnView(props: ColumnViewProps) {
                 task={task}
                 cursor={props.active && ri() === cursorRow()}
                 marked={props.store.isMarked(ref)}
+                grabbed={
+                  props.active &&
+                  ri() === cursorRow() &&
+                  props.store.state.ui.grabbing
+                }
                 titleMaxChars={props.zoomed ? 68 : 28}
                 onClick={() => {
                   props.store.setActiveZone("board");

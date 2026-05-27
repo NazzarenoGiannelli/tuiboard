@@ -66,6 +66,7 @@ export type ModalKind =
   | { kind: "confirm-delete"; ref: TaskRef }
   | { kind: "detail"; ref: TaskRef }
   | { kind: "agent-detail"; sessionId: string }
+  | { kind: "search" }
   | { kind: "help" };
 
 /** Which dashboard zone owns the keyboard cursor. */
@@ -91,6 +92,12 @@ export interface UIState {
    * Toggled with `z`.
    */
   zoomed: boolean;
+  /**
+   * Grab mode: when true, h/l moves the cursor task between adjacent
+   * columns instead of just moving the cursor. Toggled with `g`. Exit
+   * with `g` again or `Esc`. Mirrors Python kanban `toggle_move`.
+   */
+  grabbing: boolean;
   view: ViewMode;
   /**
    * Tasks marked for bulk ops (`Space`). Key format:
@@ -138,6 +145,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       col: 0,
       row: 0,
       zoomed: false,
+      grabbing: false,
       view: "kanban",
       marked: {},
       filter: "all",
@@ -676,8 +684,46 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "zoomed", (z: boolean) => !z);
   }
 
+  function setFilter(f: UIState["filter"]): void {
+    setState("ui", "filter", f);
+    // The cursor's row was an index into the unfiltered list — reset to top
+    // of the new view to avoid pointing past the filtered tail.
+    setState("ui", "row", 0);
+  }
+
+  /**
+   * Apply the current board filter to an open-task list. Used by both the
+   * BoardView render (to decide what to draw) and handleKey (to keep the
+   * cursor reference aligned with the rendered list).
+   */
+  function applyBoardFilter(tasks: Task[]): Task[] {
+    const f = state.ui.filter;
+    if (f === "all") return tasks;
+    const today = isoToday();
+    const tomorrow = isoTomorrow();
+    switch (f) {
+      case "today":
+        return tasks.filter((t) => t.scheduled === today);
+      case "overdue":
+        return tasks.filter((t) => t.scheduled !== undefined && t.scheduled < today);
+      case "tomorrow":
+        return tasks.filter((t) => t.scheduled === tomorrow);
+      case "followup":
+        return tasks.filter((t) => t.tags.includes("pr-followup"));
+    }
+    return tasks;
+  }
+
   function setZoomed(v: boolean): void {
     setState("ui", "zoomed", v);
+  }
+
+  function toggleGrab(): void {
+    setState("ui", "grabbing", (g: boolean) => !g);
+  }
+
+  function exitGrab(): void {
+    setState("ui", "grabbing", false);
   }
 
   // ─── Multi-select ────────────────────────────────────────────────────────
@@ -853,6 +899,10 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setZoneVisible,
     cycleActiveZone,
     toggleZoom,
+    toggleGrab,
+    exitGrab,
+    setFilter,
+    applyBoardFilter,
     setZoomed,
     toggleMark,
     isMarked,

@@ -73,8 +73,13 @@ export function handleKey(
     return;
   }
 
-  // Escape clears marks when nothing else handles it.
+  // Escape exits grab mode first (most disruptive), then clears marks.
   if (key.name === "escape") {
+    if (ui.grabbing) {
+      store.exitGrab();
+      store.flashBanner("info", "Grab released");
+      return;
+    }
     if (Object.keys(ui.marked).length > 0) {
       store.clearMarks();
       store.flashBanner("info", "Selection cleared");
@@ -85,6 +90,15 @@ export function handleKey(
   // Help
   if (key.name === "?" || key.sequence === "?") {
     store.openModal({ kind: "help" });
+    return;
+  }
+
+  // Search — opens a modal that jumps the kanban cursor to the first
+  // matching open task. Available globally so users can `/` from any
+  // zone. OpenTUI may name the key `slash` or pass `/` as sequence,
+  // depending on terminal — accept all common variants.
+  if (key.name === "slash" || key.name === "/" || key.sequence === "/") {
+    setTimeout(() => store.openModal({ kind: "search" }), 0);
     return;
   }
 
@@ -129,6 +143,18 @@ export function handleKey(
   // Switch in/out of virtual panel with `v`
   if (key.name === "v") {
     store.setActiveZone(ui.activeZone === "virtual" ? "board" : "virtual");
+    return;
+  }
+
+  // Cycle the board filter — affects which open tasks show up in board
+  // columns. Mirrors Python kanban `action_cycle_filter`. Cycle order:
+  // all → today → overdue → tomorrow → followup → all.
+  if (key.name === "f") {
+    const cycle = ["all", "today", "overdue", "tomorrow", "followup"] as const;
+    const idx = cycle.indexOf(ui.filter);
+    const next = cycle[(idx + 1) % cycle.length]!;
+    store.setFilter(next);
+    store.flashBanner("info", `Filter: ${next}`);
     return;
   }
 
@@ -278,7 +304,10 @@ function handleBoardZone(
   if (!col) return;
 
   const allTasks = col.children.filter(isTask);
-  const openTasks = allTasks.filter((t) => !t.done);
+  // Open tasks pass through the same filter the board view applies — so
+  // the cursor row index always lines up with the rendered list, even
+  // when `f` has narrowed it to today/overdue/etc.
+  const openTasks = store.applyBoardFilter(allTasks.filter((t) => !t.done));
   // Visible task list mirrors what the column renders: in zoom mode the
   // user can navigate into done tasks too; otherwise only open.
   const visibleTasks = ui.zoomed
@@ -294,6 +323,59 @@ function handleBoardZone(
     store.setCursor(ui.col, Math.max(0, ui.row - 1));
     return;
   }
+  // Cursor task (computed early so grab mode can use it for h/l moves).
+  const cursorTaskForGrab = visibleTasks[ui.row];
+  const cursorRefForGrab: TaskRef | undefined = cursorTaskForGrab
+    ? {
+        boardPath: board.filepath,
+        columnIndex: ui.col,
+        taskIndex: allTasks.indexOf(cursorTaskForGrab),
+      }
+    : undefined;
+
+  // Grab mode: h/l physically MOVES the task to the adjacent column.
+  // Cursor follows the moved task. Other navigation keys behave normally
+  // (j/k still scrolls cursor within column; user releases grab with `g`
+  // or Esc).
+  if (ui.grabbing && cursorRefForGrab) {
+    if (key.name === "h" || key.name === "left") {
+      if (ui.col > 0) {
+        const newRef = store.moveTaskWithinBoard(cursorRefForGrab, ui.col - 1, "top");
+        if (newRef) {
+          // Cursor goes to the moved task's new visible-row position in
+          // the destination column.
+          const destCol = board.columns[newRef.columnIndex];
+          if (destCol) {
+            const opens = store.applyBoardFilter(
+              destCol.children.filter(isTask).filter((t) => !t.done),
+            );
+            const moved = destCol.children.filter(isTask)[newRef.taskIndex];
+            const newRow = moved ? opens.indexOf(moved) : 0;
+            store.setCursor(newRef.columnIndex, Math.max(0, newRow));
+          }
+        }
+      }
+      return;
+    }
+    if (key.name === "l" || key.name === "right") {
+      if (ui.col < board.columns.length - 1) {
+        const newRef = store.moveTaskWithinBoard(cursorRefForGrab, ui.col + 1, "top");
+        if (newRef) {
+          const destCol = board.columns[newRef.columnIndex];
+          if (destCol) {
+            const opens = store.applyBoardFilter(
+              destCol.children.filter(isTask).filter((t) => !t.done),
+            );
+            const moved = destCol.children.filter(isTask)[newRef.taskIndex];
+            const newRow = moved ? opens.indexOf(moved) : 0;
+            store.setCursor(newRef.columnIndex, Math.max(0, newRow));
+          }
+        }
+      }
+      return;
+    }
+  }
+
   if (key.name === "h" || key.name === "left") {
     if (ui.col === 0) {
       store.setActiveZone("virtual");
@@ -305,6 +387,19 @@ function handleBoardZone(
   if (key.name === "l" || key.name === "right") {
     if (ui.col < board.columns.length - 1) {
       store.setCursor(ui.col + 1, 0);
+    }
+    return;
+  }
+
+  // `g` toggles grab mode. Only meaningful in board zone with a task under
+  // the cursor.
+  if (key.name === "g") {
+    if (ui.grabbing) {
+      store.exitGrab();
+      store.flashBanner("info", "Grab released");
+    } else if (cursorRefForGrab) {
+      store.toggleGrab();
+      store.flashBanner("info", "Grabbed — h/l moves between columns, Esc to release");
     }
     return;
   }
@@ -382,6 +477,20 @@ function dispatchTaskAction(
   if (key.name === "x" && key.shift) {
     const n = store.applyToMarkedOr(ref, (r) => { store.archiveTask(r); });
     store.flashBanner("info", n > 1 ? `Archived ${n} tasks` : "Archived");
+    return true;
+  }
+
+  // Copy task as a markdown line to the system clipboard. Mirrors Python
+  // kanban `action_copy_context`. Single-task only (multi-select would
+  // require deciding how to join lines).
+  if (key.name === "c") {
+    const t = store.getTask(ref);
+    if (t) {
+      copyToClipboard(t.rawLine).then(
+        () => store.flashBanner("info", "📋 Copied task"),
+        (err) => store.flashBanner("error", `Copy failed: ${err}`),
+      );
+    }
     return true;
   }
 
@@ -472,4 +581,54 @@ function fmtHm(m: number): string {
   const h = Math.floor(m / 60) % 24;
   const mm = m % 60;
   return `${h.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Cross-platform clipboard copy. Picks the host's native cli tool:
+ *   Windows  → clip
+ *   macOS    → pbcopy
+ *   Linux    → wl-copy (Wayland) with xclip fallback (X11)
+ *
+ * Returns a Promise that resolves on success and rejects with the stderr
+ * output of the failing command. We swallow ENOENT (tool not installed) and
+ * surface the same banner message either way.
+ */
+async function copyToClipboard(text: string): Promise<void> {
+  const { spawn } = await import("node:child_process");
+  const platform = process.platform;
+  const candidates: Array<{ cmd: string; args: string[] }> =
+    platform === "win32"
+      ? [{ cmd: "clip", args: [] }]
+      : platform === "darwin"
+        ? [{ cmd: "pbcopy", args: [] }]
+        : [
+            { cmd: "wl-copy", args: [] },
+            { cmd: "xclip", args: ["-selection", "clipboard"] },
+            { cmd: "xsel", args: ["--clipboard", "--input"] },
+          ];
+
+  let lastError: string = "no clipboard tool found";
+  for (const { cmd, args } of candidates) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(cmd, args, { stdio: ["pipe", "ignore", "pipe"] });
+        let stderr = "";
+        child.stderr?.on("data", (chunk: Buffer) => {
+          stderr += chunk.toString();
+        });
+        child.on("error", (e: NodeJS.ErrnoException) => reject(e.message));
+        child.on("close", (code: number) => {
+          if (code === 0) resolve();
+          else reject(stderr || `${cmd} exited ${code}`);
+        });
+        child.stdin?.write(text);
+        child.stdin?.end();
+      });
+      return; // Success — done.
+    } catch (e) {
+      lastError = String(e);
+      // Try next candidate.
+    }
+  }
+  throw new Error(lastError);
 }

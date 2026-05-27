@@ -13,6 +13,7 @@
 
 import { For, Show, createMemo, createSignal } from "solid-js";
 
+import { isTask } from "~/parser/markdown";
 import {
   parseDateShortcut,
   parseQuickAdd,
@@ -69,6 +70,7 @@ function ModalRouter(props: { store: TuiStore; modal: NonNullable<TuiStore["stat
     case "confirm-delete": return <ConfirmDeleteModal store={props.store} modal={m} />;
     case "detail":   return <DetailModal store={props.store} modal={m} />;
     case "agent-detail": return <AgentDetailModal store={props.store} modal={m} />;
+    case "search":   return <SearchModal store={props.store} />;
     case "help":     return <HelpModal store={props.store} />;
   }
 }
@@ -382,6 +384,63 @@ function DetailModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiSto
   );
 }
 
+// ─── Search ──────────────────────────────────────────────────────────────────
+
+function SearchModal(props: { store: TuiStore }) {
+  const [value, setValue] = createSignal("");
+
+  function submit(text: string) {
+    const q = text.trim().toLowerCase();
+    if (!q) {
+      props.store.closeModal();
+      return;
+    }
+    // First open-task match across boards, in display order.
+    const boards = props.store.state.boards;
+    for (let bi = 0; bi < boards.length; bi++) {
+      const board = boards[bi]!.board;
+      for (let ci = 0; ci < board.columns.length; ci++) {
+        const col = board.columns[ci]!;
+        const allTasks = col.children.filter(isTask);
+        const openTasks = props.store.applyBoardFilter(
+          allTasks.filter((t) => !t.done),
+        );
+        const matchIdx = openTasks.findIndex((t) =>
+          t.displayTitle.toLowerCase().includes(q),
+        );
+        if (matchIdx >= 0) {
+          props.store.setActiveBoard(bi);
+          props.store.setActiveZone("board");
+          props.store.setCursor(ci, matchIdx);
+          props.store.closeModal();
+          props.store.flashBanner(
+            "info",
+            `Found in [${board.name} · ${col.name}]`,
+          );
+          return;
+        }
+      }
+    }
+    props.store.flashBanner("warn", `No match for "${text}"`);
+    props.store.closeModal();
+  }
+
+  return (
+    <DialogShell
+      title="Search tasks"
+      hint="Enter to find first match · Esc to cancel"
+      width={70}
+    >
+      <input
+        focused
+        value={value()}
+        onInput={(v: string) => setValue(v)}
+        onSubmit={((v: string) => submit(v)) as any}
+      />
+    </DialogShell>
+  );
+}
+
 // ─── Agent detail ────────────────────────────────────────────────────────────
 
 function AgentDetailModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiStore["state"]["ui"]["modal"]>, { kind: "agent-detail" }> }) {
@@ -514,8 +573,12 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  a                 Set assignee\n"}</span>
         <span style={{ fg: T.text }}>{"  d                 Delete task (with confirm)\n"}</span>
         <span style={{ fg: T.text }}>{"  X                 Archive task → moves to Archive column\n"}</span>
+        <span style={{ fg: T.text }}>{"  c                 Copy task to clipboard (markdown line)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nBoard-only actions\n"}</span>
         <span style={{ fg: T.text }}>{"  n                 New task in current column (quick-add syntax)\n"}</span>
+        <span style={{ fg: T.text }}>{"  g                 Grab task — h/l then moves it between columns; g/Esc to drop\n"}</span>
+        <span style={{ fg: T.text }}>{"  f                 Cycle board filter: all → today → overdue → tomorrow → followup\n"}</span>
+        <span style={{ fg: T.text }}>{"  /                 Search task titles — jumps cursor to first match\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nMulti-select\n"}</span>
         <span style={{ fg: T.text }}>{"  Space             Mark / unmark task — single-task actions then\n"}</span>
         <span style={{ fg: T.text }}>{"                    apply to ALL marked instead of just the cursor\n"}</span>

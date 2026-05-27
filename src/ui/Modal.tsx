@@ -475,33 +475,37 @@ function truncate(s: string, n: number): string {
 function HelpModal(props: { store: TuiStore }) {
   void props;
   return (
-    <DialogShell title="tuiboard — keyboard reference" hint="Esc/? to close" width={90}>
+    <DialogShell title="tuiboard — keyboard reference" hint="Esc/? to close" width={92}>
       <text>
         <span style={{ fg: T.textDim }}>{"Navigation\n"}</span>
-        <span style={{ fg: T.text }}>{"  h j k l  ←↑↓→     Move cursor (or browse virtual panel)\n"}</span>
-        <span style={{ fg: T.text }}>{"  Tab               Next board\n"}</span>
+        <span style={{ fg: T.text }}>{"  h j k l  ←↑↓→     Move cursor inside the active zone\n"}</span>
+        <span style={{ fg: T.text }}>{"  Tab               Next board (kanban zone)\n"}</span>
         <span style={{ fg: T.text }}>{"  1..9              Jump to board N\n"}</span>
-        <span style={{ fg: T.text }}>{"  v                 Toggle Today/Tomorrow panel focus\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nSingle-task actions\n"}</span>
+        <span style={{ fg: T.text }}>{"  v                 Toggle Today/Tomorrow virtual panel focus\n"}</span>
+        <span style={{ fg: T.text }}>{"  Shift-Tab         Cycle active zone (virtual → board → timeline → agents)\n"}</span>
+        <span style={{ fg: T.text }}>{"  F1 / F2 / F3      Toggle visibility of Virtual / Timeline / Agents zones\n"}</span>
+        <span style={{ fg: T.text }}>{"  z                 Zoom active zone (or column) to full screen\n"}</span>
+        <span style={{ fg: T.textDim }}>{"\nTask actions (work in board, virtual, AND timeline zones)\n"}</span>
         <span style={{ fg: T.text }}>{"  Enter             Toggle done\n"}</span>
         <span style={{ fg: T.text }}>{"  o                 Open detail view\n"}</span>
-        <span style={{ fg: T.text }}>{"  n                 New task in current column (quick-add syntax)\n"}</span>
         <span style={{ fg: T.text }}>{"  e                 Edit task text\n"}</span>
         <span style={{ fg: T.text }}>{"  s                 Schedule date modal (t/tm/+N/lun/YYYY-MM-DD)\n"}</span>
         <span style={{ fg: T.text }}>{"  t                 Set scheduled = today\n"}</span>
         <span style={{ fg: T.text }}>{"  m                 Set scheduled = tomorrow\n"}</span>
+        <span style={{ fg: T.text }}>{"  .                 Schedule now — time block at next 15-min slot (30min)\n"}</span>
         <span style={{ fg: T.text }}>{"  b                 Set time block modal\n"}</span>
+        <span style={{ fg: T.text }}>{"  p                 Cycle priority (none → 🔺 → ⏫ → 🔼 → 🔽 → ⏬ → none)\n"}</span>
         <span style={{ fg: T.text }}>{"  a                 Set assignee\n"}</span>
         <span style={{ fg: T.text }}>{"  d                 Delete task (with confirm)\n"}</span>
         <span style={{ fg: T.text }}>{"  X                 Archive task → moves to Archive column\n"}</span>
+        <span style={{ fg: T.textDim }}>{"\nBoard-only actions\n"}</span>
+        <span style={{ fg: T.text }}>{"  n                 New task in current column (quick-add syntax)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nMulti-select\n"}</span>
         <span style={{ fg: T.text }}>{"  Space             Mark / unmark task — single-task actions then\n"}</span>
         <span style={{ fg: T.text }}>{"                    apply to ALL marked instead of just the cursor\n"}</span>
         <span style={{ fg: T.text }}>{"  Esc               Clear marks (when no modal is open)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nBulk\n"}</span>
         <span style={{ fg: T.text }}>{"  T                 Reset ALL overdue tasks (any board) to today\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nView\n"}</span>
-        <span style={{ fg: T.text }}>{"  z                 Zoom active panel/column to full width\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nGlobal\n"}</span>
         <span style={{ fg: T.text }}>{"  Ctrl-Z            Undo last mutation\n"}</span>
         <span style={{ fg: T.text }}>{"  ?                 This help\n"}</span>

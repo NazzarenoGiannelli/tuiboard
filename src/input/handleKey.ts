@@ -1,8 +1,13 @@
 /**
  * Centralized keyboard input handler. Dispatches based on:
  *   1. modal state (modal eats most keys)
- *   2. global keys (quit, help, undo, board switch, escape)
- *   3. active zone (virtual / board)
+ *   2. global keys (quit, help, undo, board switch, escape, zone cycle)
+ *   3. active zone (virtual / board / timeline / agents)
+ *
+ * Task-level actions (`t`/`m`/`s`/`b`/`a`/`o`/`Space`/`X`/`d`/`p`/`.`/`Enter`)
+ * all route through `dispatchTaskAction`, so they work identically on a
+ * cursor task whether you reach it via the kanban board, the virtual
+ * panel, or a timeline block.
  *
  * Extracted from app.tsx so every root view (Dashboard, BoardOnly, etc.)
  * shares the same input contract.
@@ -12,16 +17,25 @@ import { isTask } from "~/parser/markdown";
 import {
   isoToday,
   isoTomorrow,
+  type ModalKind,
   type TaskRef,
   type TuiStore,
 } from "~/store/index";
+import type { PriorityLevel } from "~/types";
 import { buildTimelineEntries } from "~/store/timeline";
 import { buildVirtualItems } from "~/store/virtual-panel";
 import { jumpToKanban } from "~/ui/TimelineView";
 
+interface KeyEvent {
+  name: string;
+  ctrl?: boolean;
+  shift?: boolean;
+  sequence?: string;
+}
+
 export function handleKey(
   store: TuiStore,
-  key: { name: string; ctrl?: boolean; shift?: boolean; sequence?: string },
+  key: KeyEvent,
   virtualCount: number,
 ): void {
   const ui = store.state.ui;
@@ -75,8 +89,6 @@ export function handleKey(
   }
 
   // Bulk: reset all overdue across all boards → today (Shift+T).
-  // We rely on `key.shift` being set so plain `t` still works as
-  // "set today on cursor/marked".
   if (key.name === "t" && key.shift) {
     const n = store.resetAllOverdueToToday();
     store.flashBanner("info", n > 0 ? `Reset ${n} overdue → today` : "No overdue tasks");
@@ -133,77 +145,134 @@ export function handleKey(
     return;
   }
 
-  // Navigation
+  // Defer modal opens by one macrotask so the OpenTUI <input> mounts after
+  // the current key event has been fully dispatched.
+  const openLater = (m: ModalKind) => {
+    setTimeout(() => store.openModal(m), 0);
+  };
+
+  // ─── Per-zone dispatching ───────────────────────────────────────────────
+
   if (ui.activeZone === "virtual") {
-    if (key.name === "j" || key.name === "down") {
-      store.setCursor(ui.col, Math.min(virtualCount - 1, ui.row + 1));
-    } else if (key.name === "k" || key.name === "up") {
-      store.setCursor(ui.col, Math.max(0, ui.row - 1));
-    } else if (key.name === "l" || key.name === "right") {
-      // jump out into the board's column 0
-      store.setActiveZone("board");
-    } else if (key.name === "enter" || key.name === "return") {
-      // Toggle done on the virtual cursor's target (cross-board).
-      const items = buildVirtualItems(
-        store.state.boards.map((b) => b.board),
-      );
-      const target = items[ui.row];
-      if (target) store.toggleDone(target.ref);
-    }
+    handleVirtualZone(store, key, virtualCount, openLater);
     return;
   }
 
-  // Timeline zone navigation. j/k walks the entry list in chronological
-  // order; Enter bounces the kanban cursor to the underlying task.
   if (ui.activeZone === "timeline") {
-    const entries = buildTimelineEntries(
-      store.state.boards.map((b) => b.board),
-      isoToday(),
-    );
-    if (key.name === "j" || key.name === "down") {
-      store.setCursor(0, Math.min(entries.length - 1, ui.row + 1));
-    } else if (key.name === "k" || key.name === "up") {
-      store.setCursor(0, Math.max(0, ui.row - 1));
-    } else if (
-      key.name === "enter" ||
-      key.name === "return"
-    ) {
-      const target = entries[ui.row];
-      if (target) jumpToKanban(store, target.ref);
-    } else if (key.name === "h" || key.name === "left") {
-      store.setActiveZone("board");
-    }
+    handleTimelineZone(store, key, openLater);
     return;
   }
 
-  // Agents zone navigation. Must come BEFORE the `if (!board)` guard so
-  // it works even when there are no kanban boards loaded.
   if (ui.activeZone === "agents") {
-    const sessions = store.agents.sessions();
-    if (key.name === "j" || key.name === "down") {
-      store.setCursor(0, Math.min(sessions.length - 1, ui.row + 1));
-    } else if (key.name === "k" || key.name === "up") {
-      store.setCursor(0, Math.max(0, ui.row - 1));
-    } else if (
-      key.name === "enter" ||
-      key.name === "return" ||
-      key.name === "o"
-    ) {
-      const target = sessions[ui.row];
-      if (target) {
-        setTimeout(
-          () => store.openModal({ kind: "agent-detail", sessionId: target.sessionId }),
-          0,
-        );
-      }
-    } else if (key.name === "h" || key.name === "left") {
-      // Bounce back to board
-      store.setActiveZone("board");
-    }
+    handleAgentsZone(store, key);
     return;
   }
 
   // Inside a board
+  if (!board) return;
+  handleBoardZone(store, key, openLater);
+}
+
+// ─── Zone handlers ──────────────────────────────────────────────────────────
+
+function handleVirtualZone(
+  store: TuiStore,
+  key: KeyEvent,
+  virtualCount: number,
+  openLater: (m: ModalKind) => void,
+): void {
+  const ui = store.state.ui;
+  const items = buildVirtualItems(store.state.boards.map((b) => b.board));
+  const target = items[ui.row];
+
+  // Navigation
+  if (key.name === "j" || key.name === "down") {
+    store.setCursor(ui.col, Math.min(virtualCount - 1, ui.row + 1));
+    return;
+  }
+  if (key.name === "k" || key.name === "up") {
+    store.setCursor(ui.col, Math.max(0, ui.row - 1));
+    return;
+  }
+  if (key.name === "l" || key.name === "right") {
+    store.setActiveZone("board");
+    return;
+  }
+
+  // Task actions on the virtual cursor's target (works cross-board).
+  if (target) {
+    dispatchTaskAction(store, key, target.ref, openLater);
+  }
+}
+
+function handleTimelineZone(
+  store: TuiStore,
+  key: KeyEvent,
+  openLater: (m: ModalKind) => void,
+): void {
+  const ui = store.state.ui;
+  const entries = buildTimelineEntries(
+    store.state.boards.map((b) => b.board),
+    isoToday(),
+  );
+  const target = entries[ui.row];
+
+  // Navigation
+  if (key.name === "j" || key.name === "down") {
+    store.setCursor(0, Math.min(entries.length - 1, ui.row + 1));
+    return;
+  }
+  if (key.name === "k" || key.name === "up") {
+    store.setCursor(0, Math.max(0, ui.row - 1));
+    return;
+  }
+  if (key.name === "h" || key.name === "left") {
+    store.setActiveZone("board");
+    return;
+  }
+  // Enter on a timeline block bounces the kanban cursor to its source task.
+  if ((key.name === "enter" || key.name === "return") && target) {
+    jumpToKanban(store, target.ref);
+    return;
+  }
+
+  // All other task actions operate on the timeline entry's task.
+  if (target) {
+    dispatchTaskAction(store, key, target.ref, openLater);
+  }
+}
+
+function handleAgentsZone(store: TuiStore, key: KeyEvent): void {
+  const ui = store.state.ui;
+  const sessions = store.agents.sessions();
+  if (key.name === "j" || key.name === "down") {
+    store.setCursor(0, Math.min(sessions.length - 1, ui.row + 1));
+  } else if (key.name === "k" || key.name === "up") {
+    store.setCursor(0, Math.max(0, ui.row - 1));
+  } else if (
+    key.name === "enter" ||
+    key.name === "return" ||
+    key.name === "o"
+  ) {
+    const target = sessions[ui.row];
+    if (target) {
+      setTimeout(
+        () => store.openModal({ kind: "agent-detail", sessionId: target.sessionId }),
+        0,
+      );
+    }
+  } else if (key.name === "h" || key.name === "left") {
+    store.setActiveZone("board");
+  }
+}
+
+function handleBoardZone(
+  store: TuiStore,
+  key: KeyEvent,
+  openLater: (m: ModalKind) => void,
+): void {
+  const ui = store.state.ui;
+  const board = store.state.boards[ui.activeBoardIndex]?.board;
   if (!board) return;
   const col = board.columns[ui.col];
   if (!col) return;
@@ -216,6 +285,7 @@ export function handleKey(
     ? [...openTasks, ...allTasks.filter((t) => t.done)]
     : openTasks;
 
+  // Navigation
   if (key.name === "j" || key.name === "down") {
     store.setCursor(ui.col, Math.min(visibleTasks.length - 1, ui.row + 1));
     return;
@@ -239,90 +309,167 @@ export function handleKey(
     return;
   }
 
-  // Task-level actions need a task under the cursor.
-  const cursorTask = visibleTasks[ui.row];
-  const cursorRef: TaskRef | undefined = cursorTask
-    ? {
-        boardPath: board.filepath,
-        columnIndex: ui.col,
-        taskIndex: allTasks.indexOf(cursorTask),
-      }
-    : undefined;
-
-  // Defer modal opens by one macrotask so the OpenTUI <input> mounts after
-  // the current key event has been fully dispatched.
-  const openLater = (m: Parameters<typeof store.openModal>[0]) => {
-    setTimeout(() => store.openModal(m), 0);
-  };
-
-  if (key.name === "enter" || key.name === "return") {
-    if (cursorRef) {
-      const n = store.applyToMarkedOr(cursorRef, (r) => store.toggleDone(r));
-      if (n > 1) store.flashBanner("info", `Toggled done on ${n} tasks`);
-    }
-    return;
-  }
-
-  // Multi-select toggle
-  if (key.name === "space" && cursorRef) {
-    store.toggleMark(cursorRef);
-    return;
-  }
-
-  // Detail
-  if (key.name === "o" && cursorRef) {
-    openLater({ kind: "detail", ref: cursorRef });
-    return;
-  }
-
-  // Quick set scheduled = today / tomorrow on cursor or all marked
-  if (key.name === "t" && !key.shift) {
-    if (cursorRef) {
-      const n = store.applyToMarkedOr(cursorRef, (r) => store.setScheduled(r, isoToday()));
-      if (n > 1) store.flashBanner("info", `${n} tasks → today`);
-    }
-    return;
-  }
-  if (key.name === "m") {
-    if (cursorRef) {
-      const n = store.applyToMarkedOr(cursorRef, (r) => store.setScheduled(r, isoTomorrow()));
-      if (n > 1) store.flashBanner("info", `${n} tasks → tomorrow`);
-    }
-    return;
-  }
-
-  // Archive (Shift+X) — move to Archive column (creates it if absent).
-  if (key.name === "x" && key.shift) {
-    if (cursorRef) {
-      const n = store.applyToMarkedOr(cursorRef, (r) => { store.archiveTask(r); });
-      store.flashBanner("info", n > 1 ? `Archived ${n} tasks` : "Archived");
-    }
-    return;
-  }
-
-  // Modals
+  // `n` adds a new task in the current column — this needs a column context
+  // which only the board zone has, so it lives outside dispatchTaskAction.
   if (key.name === "n") {
     openLater({ kind: "add", targetColumnIndex: ui.col });
     return;
   }
-  if (key.name === "e" && cursorRef) {
-    openLater({ kind: "edit", ref: cursorRef });
-    return;
+
+  // Task-level actions need a task under the cursor.
+  const cursorTask = visibleTasks[ui.row];
+  if (!cursorTask) return;
+  const cursorRef: TaskRef = {
+    boardPath: board.filepath,
+    columnIndex: ui.col,
+    taskIndex: allTasks.indexOf(cursorTask),
+  };
+
+  dispatchTaskAction(store, key, cursorRef, openLater);
+}
+
+// ─── Shared task-level action dispatcher ────────────────────────────────────
+
+/**
+ * Apply a task-level action to the given cursorRef. Used by every zone
+ * (board / virtual / timeline) so the keys feel identical wherever the
+ * cursor lives. Multi-select aware: when there are marked tasks, the
+ * action operates on all of them via `applyToMarkedOr`.
+ *
+ * Returns true when the key was recognized as a task action (whether or
+ * not it produced a visible change). Callers can ignore the return value
+ * — this is mostly a contract for future composition.
+ */
+function dispatchTaskAction(
+  store: TuiStore,
+  key: KeyEvent,
+  ref: TaskRef,
+  openLater: (m: ModalKind) => void,
+): boolean {
+  // Toggle done (Enter). Only meaningful for board/virtual; timeline has
+  // its own Enter behavior (jump to kanban) which is handled earlier.
+  if (key.name === "enter" || key.name === "return") {
+    const n = store.applyToMarkedOr(ref, (r) => store.toggleDone(r));
+    if (n > 1) store.flashBanner("info", `Toggled done on ${n} tasks`);
+    return true;
   }
-  if (key.name === "s" && cursorRef) {
-    openLater({ kind: "schedule", ref: cursorRef });
-    return;
+
+  // Multi-select toggle
+  if (key.name === "space") {
+    store.toggleMark(ref);
+    return true;
   }
-  if (key.name === "b" && cursorRef) {
-    openLater({ kind: "timeblock", ref: cursorRef });
-    return;
+
+  // Detail
+  if (key.name === "o") {
+    openLater({ kind: "detail", ref });
+    return true;
   }
-  if (key.name === "a" && cursorRef) {
-    openLater({ kind: "assign", ref: cursorRef });
-    return;
+
+  // Quick set scheduled = today / tomorrow
+  if (key.name === "t" && !key.shift) {
+    const n = store.applyToMarkedOr(ref, (r) => store.setScheduled(r, isoToday()));
+    if (n > 1) store.flashBanner("info", `${n} tasks → today`);
+    return true;
   }
-  if (key.name === "d" && cursorRef) {
-    openLater({ kind: "confirm-delete", ref: cursorRef });
-    return;
+  if (key.name === "m") {
+    const n = store.applyToMarkedOr(ref, (r) => store.setScheduled(r, isoTomorrow()));
+    if (n > 1) store.flashBanner("info", `${n} tasks → tomorrow`);
+    return true;
   }
+
+  // Archive (Shift+X) — move to Archive column (creates it if absent).
+  if (key.name === "x" && key.shift) {
+    const n = store.applyToMarkedOr(ref, (r) => { store.archiveTask(r); });
+    store.flashBanner("info", n > 1 ? `Archived ${n} tasks` : "Archived");
+    return true;
+  }
+
+  // Toggle priority — cycle: none → highest → high → medium → low → lowest → none.
+  // Mirrors Python kanban `action_toggle_priority`.
+  if (key.name === "p") {
+    const n = store.applyToMarkedOr(ref, (r) => {
+      const t = store.getTask(r);
+      if (!t) return;
+      store.setPriority(r, nextPriority(t.priority));
+    });
+    if (n > 1) store.flashBanner("info", `Priority cycled on ${n} tasks`);
+    return true;
+  }
+
+  // Schedule now: time block at the next 15-min slot, 30min default duration.
+  // Mirrors Python kanban `action_schedule_now`. Also forces scheduled=today
+  // since a time block without a date is meaningless to Day Planner.
+  if (key.name === "." || key.sequence === ".") {
+    const { startMin, endMin } = nextNowBlock();
+    const n = store.applyToMarkedOr(ref, (r) => {
+      store.setScheduled(r, isoToday());
+      store.setTimeBlock(r, { startMin, endMin });
+    });
+    const label = `${fmtHm(startMin)}-${fmtHm(endMin)}`;
+    store.flashBanner("info", n > 1 ? `${n} tasks ⌚${label}` : `⌚${label}`);
+    return true;
+  }
+
+  // Modals
+  if (key.name === "e") {
+    openLater({ kind: "edit", ref });
+    return true;
+  }
+  if (key.name === "s") {
+    openLater({ kind: "schedule", ref });
+    return true;
+  }
+  if (key.name === "b") {
+    openLater({ kind: "timeblock", ref });
+    return true;
+  }
+  if (key.name === "a") {
+    openLater({ kind: "assign", ref });
+    return true;
+  }
+  if (key.name === "d") {
+    openLater({ kind: "confirm-delete", ref });
+    return true;
+  }
+
+  return false;
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+const PRIORITY_CYCLE: PriorityLevel[] = [
+  "none",
+  "highest",
+  "high",
+  "medium",
+  "low",
+  "lowest",
+];
+
+function nextPriority(p: PriorityLevel): PriorityLevel {
+  const i = PRIORITY_CYCLE.indexOf(p);
+  if (i < 0) return "highest";
+  return PRIORITY_CYCLE[(i + 1) % PRIORITY_CYCLE.length]!;
+}
+
+/**
+ * Round the current minute up to the nearest 15-minute slot, return a
+ * 30-minute time block starting there.
+ *
+ *   12:03 → 12:15-12:45
+ *   12:14 → 12:15-12:45
+ *   12:16 → 12:30-13:00
+ */
+function nextNowBlock(): { startMin: number; endMin: number } {
+  const d = new Date();
+  const minutes = d.getHours() * 60 + d.getMinutes();
+  const slot = Math.ceil(minutes / 15) * 15;
+  return { startMin: slot, endMin: Math.min(slot + 30, 24 * 60 - 1) };
+}
+
+function fmtHm(m: number): string {
+  const h = Math.floor(m / 60) % 24;
+  const mm = m % 60;
+  return `${h.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`;
 }

@@ -67,8 +67,11 @@ const ROW_ID_PREFIX = "tuiboard-tl-row-";
 const MIN_BLOCK_MIN = 15;
 /** Default duration applied when an unscheduled task is dropped on the grid. */
 const DEFAULT_BLOCK_MIN = 30;
-/** Max rows shown in the sticky unscheduled section before collapsing to "+N more". */
-const UNSCHED_VISIBLE = 5;
+/** Max rows shown in the sticky unscheduled section before the inner
+ *  scrollbox takes over. We give it a few more rows than the Python
+ *  version since vertical space is cheap here and the user works the
+ *  list often during morning planning. */
+const UNSCHED_VISIBLE = 7;
 
 export function TimelineView(props: TimelineViewProps) {
   const isActive = () => props.store.state.ui.activeZone === "timeline";
@@ -151,23 +154,36 @@ export function TimelineView(props: TimelineViewProps) {
   const cursorEntry = createMemo(() => entries()[cursor()]);
 
   /**
-   * Click on a block band. Two behaviors:
-   *   - No armed block → arm this one (focus into timeline, set cursor).
-   *   - Same block armed → disarm.
-   *   - Different block armed → re-arm to this one.
+   * Click on a block band. Three behaviors, in priority order:
+   *   1. DIFFERENT task already armed → PLACE armed task at this band's
+   *      startMin (lets the user stack two blocks at the same start time
+   *      by clicking on an existing band).
+   *   2. SAME block already armed → DISARM.
+   *   3. Nothing armed → ARM this band.
    */
-  const onBlockClick = (entry: TimelineEntry) => {
+  const onBlockClick = (entry: TimelineEntry, event: MouseEventLike) => {
     props.store.setActiveZone("timeline");
-    const idx = entries().indexOf(entry);
-    if (idx >= 0) props.store.setCursor(0, idx);
 
     const arm = armedRef();
-    const same =
-      arm &&
+    const armedSame =
+      !!arm &&
       arm.boardPath === entry.ref.boardPath &&
       arm.columnIndex === entry.ref.columnIndex &&
       arm.taskIndex === entry.ref.taskIndex;
-    if (same) {
+    const armedDifferent = !!arm && !armedSame;
+
+    if (armedDifferent) {
+      // Delegate to onEmptyRowClick using the band's startRow — places
+      // (move or create) the armed task at this band's start time. Lets
+      // the user pile two blocks at the same minute (e.g. both at 9:00).
+      onEmptyRowClick(entry.startRow, event);
+      return;
+    }
+
+    const idx = entries().indexOf(entry);
+    if (idx >= 0) props.store.setCursor(0, idx);
+
+    if (armedSame) {
       props.store.armTimeline(undefined);
       props.store.flashBanner("info", "Disarmed");
     } else {
@@ -374,7 +390,7 @@ interface TimelineRowProps {
   cursorEntry: TimelineEntry | undefined;
   /** When set, the armed entry — used to tint its rows warm. */
   armedEntry: TimelineEntry | undefined;
-  onBlockClick: (entry: TimelineEntry) => void;
+  onBlockClick: (entry: TimelineEntry, event: MouseEventLike) => void;
   onEmptyRowClick: (rowIndex: number, event: MouseEventLike) => void;
 }
 
@@ -408,7 +424,7 @@ function TimelineRow(props: TimelineRowProps) {
   const cellMouseDown = (cellEntry: TimelineEntry | undefined) => {
     return (event: MouseEventLike) => {
       if (cellEntry) {
-        props.onBlockClick(cellEntry);
+        props.onBlockClick(cellEntry, event);
       } else {
         // Empty / hour / now row — placement target when armed.
         props.onEmptyRowClick(props.rowIndex, event);
@@ -593,8 +609,11 @@ interface UnscheduledStickyProps {
 }
 
 function UnscheduledSticky(props: UnscheduledStickyProps) {
-  const visible = () => props.items.slice(0, UNSCHED_VISIBLE);
-  const hiddenCount = () => Math.max(0, props.items.length - UNSCHED_VISIBLE);
+  // The whole list goes through a scrollbox capped at UNSCHED_VISIBLE rows
+  // tall — when there are more items, the user scrolls the inner box with
+  // the mouse wheel. Keeps the timeline grid below visible at all times.
+  const scrollableHeight = () =>
+    Math.min(props.items.length, UNSCHED_VISIBLE);
 
   const isArmed = (item: UnscheduledItem): boolean => {
     const a = props.armedRef;
@@ -608,55 +627,70 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
 
   return (
     <box style={{ flexDirection: "column", marginBottom: 1 }}>
-      <text wrapMode="none">
-        <span style={{ fg: T.textDim, attributes: ATTR.bold }}>
-          {"◦ Unscheduled · "}{props.items.length}
-        </span>
-      </text>
-      <For each={visible()}>
-        {(item) => {
-          const armed = () => isArmed(item);
-          const priorityGlyph =
-            item.task.priority !== "none"
-              ? PRIORITY_GLYPH[item.task.priority] + " "
-              : "";
-          return (
-            <box
-              style={{
-                flexDirection: "row",
-                paddingLeft: 1,
-                paddingRight: 1,
-                backgroundColor: armed() ? T.warmDim : undefined,
-              }}
-              onMouseDown={() => props.onClick(item)}
-            >
-              <text wrapMode="none" style={{ flexGrow: 1 }}>
-                <span style={{ fg: armed() ? T.warm : T.textDim }}>
-                  {armed() ? "⤤ " : "  "}
-                </span>
-                <Show when={priorityGlyph}>
-                  <span style={{ fg: PRIORITY_COLOR[item.task.priority] }}>
-                    {priorityGlyph}
-                  </span>
-                </Show>
-                <span style={{ fg: T.text }}>
-                  {tailTruncate(item.task.displayTitle, 36)}
-                </span>
-              </text>
-            </box>
-          );
-        }}
-      </For>
-      <Show when={hiddenCount() > 0}>
-        <text wrapMode="none">
-          <span style={{ fg: T.textDim }}>
-            {"  + "}{hiddenCount()}{" more"}
+      <box style={{ flexDirection: "row", height: 1 }}>
+        <text wrapMode="none" truncate>
+          <span style={{ fg: T.textDim, attributes: ATTR.bold }}>
+            {"◦ Unscheduled · "}{props.items.length}
           </span>
+          <Show when={props.items.length > UNSCHED_VISIBLE}>
+            <span style={{ fg: T.textDim }}>
+              {"  (scroll for more)"}
+            </span>
+          </Show>
         </text>
-      </Show>
-      <text wrapMode="none">
-        <span style={{ fg: T.border }}>{"─".repeat(120)}</span>
-      </text>
+      </box>
+      <scrollbox
+        style={{
+          width: "100%",
+          height: scrollableHeight(),
+          scrollX: false,
+          scrollY: true,
+          rootOptions: {},
+          contentOptions: {},
+          scrollbarOptions: { visible: false },
+        }}
+      >
+        <For each={props.items}>
+          {(item) => {
+            const armed = () => isArmed(item);
+            const priorityGlyph =
+              item.task.priority !== "none"
+                ? PRIORITY_GLYPH[item.task.priority] + " "
+                : "";
+            return (
+              <box
+                style={{
+                  flexDirection: "row",
+                  height: 1,
+                  paddingLeft: 1,
+                  paddingRight: 1,
+                  backgroundColor: armed() ? T.warmDim : undefined,
+                }}
+                onMouseDown={() => props.onClick(item)}
+              >
+                <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
+                  <span style={{ fg: armed() ? T.warm : T.textDim }}>
+                    {armed() ? "⤤ " : "  "}
+                  </span>
+                  <Show when={priorityGlyph}>
+                    <span style={{ fg: PRIORITY_COLOR[item.task.priority] }}>
+                      {priorityGlyph}
+                    </span>
+                  </Show>
+                  <span style={{ fg: T.text }}>
+                    {tailTruncate(item.task.displayTitle, 36)}
+                  </span>
+                </text>
+              </box>
+            );
+          }}
+        </For>
+      </scrollbox>
+      <box style={{ flexDirection: "row", height: 1 }}>
+        <text wrapMode="none">
+          <span style={{ fg: T.border }}>{"─".repeat(120)}</span>
+        </text>
+      </box>
     </box>
   );
 }

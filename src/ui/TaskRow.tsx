@@ -89,19 +89,19 @@ export function TaskRow(props: TaskRowProps) {
       onMouseDown={props.onClick ? (() => props.onClick!()) : undefined}
     >
       {/*
-        IMPORTANT: NO `truncate` flag on the title <text>.
-        OpenTUI's native truncate algorithm inserts `head…middle…tail`
-        ellipses when its multi-span content exceeds the flex-shrunk cell
-        width, overriding our clean tail-only truncation. By omitting
-        the flag, OpenTUI simply hard-clips at the cell boundary. Our
-        own tailTruncate(title, titleMaxChars) is the only source of
-        ellipsis insertion — the `…` it adds is visible whenever the
-        cell is wide enough; when the cell is tighter than that, the
-        right side (including the `…`) is clipped cleanly without any
-        middle-ellipsis garbage.
+        `truncate` is on as a SAFETY NET. The titleBudget memo above
+        sizes our own tailTruncate so the text content fits exactly
+        in the flex-shrunk cell — when that calculation is right (the
+        common case), OpenTUI has nothing to truncate and our `…` is
+        the only ellipsis. When emoji width or terminal quirks throw
+        off the math by 1-2 cells, OpenTUI's truncate clips at the
+        cell boundary instead of letting the text overflow into
+        adjacent renderables (which produced visible 'Linktoday'
+        merges and bleed-into-neighbor-zone glitches before this).
       */}
       <text
         style={{ flexGrow: 1, flexShrink: 1 }}
+        truncate
         wrapMode="none"
       >
         <span style={{ fg: props.cursor ? T.accent : T.textDim }}>
@@ -132,12 +132,11 @@ export function TaskRow(props: TaskRowProps) {
       <Show when={props.contextTag}>
         {/*
           flexShrink 5 (vs 1 on the title) — when the row is tight, the
-          contextTag is the first thing to lose space. Same `truncate`
-          off as on the title text: OpenTUI's middle-ellipsis would turn
-          [R3PLICA] into [...A] when squeezed. Hard-clipping gives
-          [R3PLI or similar — readable, no fake-ellipsis noise.
+          contextTag is the first thing to lose space. `truncate` ON
+          as safety so the tag doesn't overflow into neighboring zones
+          when the cell shrinks below its content width.
         */}
-        <text style={{ flexShrink: 5 }} wrapMode="none">
+        <text style={{ flexShrink: 5 }} wrapMode="none" truncate>
           <span style={{ fg: props.contextColor ?? T.textDim }}>
             {" ["}{props.contextTag}{"]"}
           </span>

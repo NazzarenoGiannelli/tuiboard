@@ -54,10 +54,11 @@ export function AgentRow(props: AgentRowProps) {
       }}
       onMouseDown={props.onClick ? (() => props.onClick!()) : undefined}
     >
-      {/* No `truncate` — see TaskRow for rationale. Our own displayName
-          tail-truncation in AgentRow controls the visible string; OpenTUI
-          hard-clips at cell boundary without inserting middle ellipses. */}
-      <text style={{ flexGrow: 1, flexShrink: 1 }} wrapMode="none">
+      {/* `truncate` is on as a safety net — our own displayName tail
+          truncation in AgentRow normally controls the visible string,
+          but OpenTUI's clip-at-cell-bound prevents bleed into adjacent
+          renderables in edge cases (terminal emoji width quirks etc.). */}
+      <text style={{ flexGrow: 1, flexShrink: 1 }} wrapMode="none" truncate>
         <span style={{ fg: props.cursor ? T.accent : T.textDim }}>
           {props.cursor ? "▶ " : "  "}
         </span>

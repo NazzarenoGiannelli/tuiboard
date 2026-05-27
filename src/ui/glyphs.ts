@@ -42,6 +42,10 @@ export const T = {
   cardBg: undefined as string | undefined,
   cardBgDone: undefined as string | undefined,
   cardBgCursor: "#2a2f3c",
+  // Subtle fill behind timeline block rows so the bands separate from the
+  // dotted/empty gutters around them. Just barely darker-than-cursor; on a
+  // typical dark terminal it reads as "filled card", not as "highlighted".
+  cardBlockBg: "#1c2030",
 
   // Foreground neutrals — readable mid-grays so dim chrome doesn't disappear
   text: undefined as string | undefined,    // terminal default fg

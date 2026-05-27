@@ -111,7 +111,7 @@ export function BottomBar(props: { store: TuiStore }) {
       <box style={{ height: 1, flexDirection: "row" }}>
         <text>
           <span style={{ fg: T.textDim }}>
-            {"hjkl move · Tab/1-9 board · v panel · z zoom · Space mark · Enter done · o detail · n new · e edit · s/t/m sched · b time · a assign · X arch · d del · T reset · ? help · ⌃Z undo · q quit"}
+            {"hjkl move · Tab/1-9 board · S-Tab zone · F1/F2/F3 toggle · v panel · z zoom · Space mark · ⏎ done · o detail · n/e/s/b/a/X act · d del · ⌃Z undo · ? help · q quit"}
           </span>
         </text>
       </box>

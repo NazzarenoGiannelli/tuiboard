@@ -9,6 +9,16 @@
  * Eager initial scan (1-2s for ~80 sessions) is acceptable startup cost.
  */
 
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import chokidar from "chokidar";
+import { createSignal } from "solid-js";
+
+const CLAUDE_HOME = join(homedir(), ".claude");
+const PROJECTS_DIR = join(CLAUDE_HOME, "projects");
+const SESSIONS_DIR = join(CLAUDE_HOME, "sessions");
+
 /** Threshold: PID record older than this means the Claude process likely crashed. */
 const LIVE_STALE_AFTER_MS = 5 * 60 * 1000;
 /** Threshold: jsonl untouched longer than this is "archived" (won't show in compact list). */
@@ -175,4 +185,190 @@ export function parseTranscript(content: string): TranscriptParseResult {
     toolCount,
     gitBranch,
   };
+}
+
+// ─── Discovery ──────────────────────────────────────────────────────────────
+
+function discoverLivePids(): Map<string, LivePidRecord> {
+  const out = new Map<string, LivePidRecord>();
+  if (!existsSync(SESSIONS_DIR)) return out;
+  let entries: string[];
+  try {
+    entries = readdirSync(SESSIONS_DIR);
+  } catch {
+    return out;
+  }
+  for (const f of entries) {
+    if (!f.endsWith(".json")) continue;
+    const path = join(SESSIONS_DIR, f);
+    try {
+      const raw = JSON.parse(readFileSync(path, "utf-8"));
+      const sid = raw.sessionId;
+      if (!sid) continue;
+      const stat = statSync(path);
+      out.set(sid, {
+        mtimeMs: stat.mtimeMs,
+        status: raw.status?.toLowerCase(),
+        pid: raw.pid,
+        version: raw.version,
+        cwd: raw.cwd,
+      });
+    } catch {
+      // ignore — malformed PID files happen during writes
+    }
+  }
+  return out;
+}
+
+interface JsonlEntry {
+  slug: string;
+  sessionId: string;
+  path: string;
+  mtimeMs: number;
+}
+
+function discoverJsonlFiles(): JsonlEntry[] {
+  const out: JsonlEntry[] = [];
+  if (!existsSync(PROJECTS_DIR)) return out;
+  let slugs: string[];
+  try {
+    slugs = readdirSync(PROJECTS_DIR);
+  } catch {
+    return out;
+  }
+  for (const slug of slugs) {
+    const slugDir = join(PROJECTS_DIR, slug);
+    let slugStat;
+    try {
+      slugStat = statSync(slugDir);
+    } catch {
+      continue;
+    }
+    if (!slugStat.isDirectory()) continue;
+    let inner: string[];
+    try {
+      inner = readdirSync(slugDir);
+    } catch {
+      continue;
+    }
+    for (const f of inner) {
+      // Skip subagent transcripts — they're addressed by their parent session.
+      if (!f.endsWith(".jsonl")) continue;
+      const path = join(slugDir, f);
+      try {
+        const stat = statSync(path);
+        if (!stat.isFile()) continue;
+        out.push({
+          slug,
+          sessionId: f.slice(0, -".jsonl".length),
+          path,
+          mtimeMs: stat.mtimeMs,
+        });
+      } catch {
+        continue;
+      }
+    }
+  }
+  return out;
+}
+
+function buildSession(
+  jsonl: JsonlEntry,
+  live: LivePidRecord | undefined,
+  now: number,
+): AgentSession {
+  let parsed: TranscriptParseResult;
+  try {
+    parsed = parseTranscript(readFileSync(jsonl.path, "utf-8"));
+  } catch {
+    parsed = { messageCount: 0, toolCount: 0 };
+  }
+  const cwd = live?.cwd ?? cwdFromSlug(jsonl.slug);
+  const displayName =
+    parsed.customTitle?.slice(0, 60) ??
+    parsed.aiTitle?.slice(0, 60) ??
+    parsed.lastUser?.split("\n")[0]?.slice(0, 60) ??
+    jsonl.sessionId.slice(0, 8);
+  return {
+    sessionId: jsonl.sessionId,
+    jsonlPath: jsonl.path,
+    cwd,
+    cwdShort: cwdShort(cwd),
+    status: classifyStatus(now, jsonl.mtimeMs, live),
+    lastActivityMs: jsonl.mtimeMs,
+    customTitle: parsed.customTitle,
+    aiTitle: parsed.aiTitle,
+    displayName,
+    messageCount: parsed.messageCount,
+    toolCount: parsed.toolCount,
+    lastUser: parsed.lastUser,
+    lastAssistant: parsed.lastAssistant,
+    gitBranch: parsed.gitBranch,
+  };
+}
+
+const STATUS_RANK: Record<AgentStatus, number> = {
+  "live-busy": 0,
+  "live-idle": 1,
+  "stale-pid": 2,
+  "dormant": 3,
+  "archived": 4,
+};
+
+function sortSessions(arr: AgentSession[]): AgentSession[] {
+  return arr.slice().sort((a, b) => {
+    const r = STATUS_RANK[a.status] - STATUS_RANK[b.status];
+    if (r !== 0) return r;
+    return b.lastActivityMs - a.lastActivityMs;
+  });
+}
+
+// ─── Reactive store ─────────────────────────────────────────────────────────
+
+export interface AgentsStore {
+  sessions: () => AgentSession[];
+  refresh: () => void;
+  dispose: () => Promise<void>;
+}
+
+/**
+ * Reactive store of local Claude Code sessions. Watches the .claude
+ * projects + sessions directories and refreshes on any change with a
+ * short debounce. Initial scan is eager.
+ */
+export function createAgentsStore(): AgentsStore {
+  const [sessions, setSessions] = createSignal<AgentSession[]>([]);
+
+  function refresh(): void {
+    const now = Date.now();
+    const live = discoverLivePids();
+    const jsonlFiles = discoverJsonlFiles();
+    const built = jsonlFiles.map((j) =>
+      buildSession(j, live.get(j.sessionId), now),
+    );
+    setSessions(sortSessions(built));
+  }
+
+  refresh();
+
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+  const onChange = () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(refresh, 200);
+  };
+
+  const watcher = chokidar.watch([PROJECTS_DIR, SESSIONS_DIR], {
+    ignoreInitial: true,
+    depth: 3,
+  });
+  watcher.on("add", onChange);
+  watcher.on("change", onChange);
+  watcher.on("unlink", onChange);
+
+  async function dispose() {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    await watcher.close();
+  }
+
+  return { sessions, refresh, dispose };
 }

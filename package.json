@@ -9,7 +9,8 @@
     "parse:check": "bun run src/scripts/parse-check.ts",
     "roundtrip:check": "bun run src/scripts/roundtrip-check.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "agents:check": "bun run src/scripts/agents-check.ts"
   },
   "dependencies": {
     "@opentui/core": "^0.2.15",

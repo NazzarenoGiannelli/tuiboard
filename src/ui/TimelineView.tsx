@@ -531,19 +531,26 @@ function RowContent(props: RowContentProps) {
     );
   }
   if (r.kind === "hour") {
-    // Hour anchor: just the hour number, no horizontal grid line. Keeps
-    // the timeline scannable without the dotted/dashed clutter that
-    // competed visually with the sticky list above. The empty 15-min
-    // sub-rows below render as truly blank lines (see "empty" below).
+    // Hour anchor row: '07  ──────────' — number + horizontal grid line.
+    // Gives the eye a strong tick mark to scan against.
     const label = (r.hour ?? 0).toString().padStart(2, "0");
     return (
-      <span style={{ fg: T.textDim }}>{label}</span>
+      <>
+        <span style={{ fg: T.textDim }}>{label}{" "}</span>
+        <span style={{ fg: T.border }}>{"─".repeat(120)}</span>
+      </>
     );
   }
   if (r.kind === "empty") {
-    // Truly blank — no dotted "·····" pattern. Empty hours just look
-    // empty, time blocks stand out cleanly against them.
-    return <span>{" "}</span>;
+    // 15-min sub-row: dotted '···' fill so the grid is visually
+    // continuous. Reads as 'tick mark every 15 min' without competing
+    // with block content (which paints on top with a solid bg color).
+    return (
+      <>
+        <span style={{ fg: T.textDim }}>{prefix}</span>
+        <span style={{ fg: T.border }}>{"·".repeat(120)}</span>
+      </>
+    );
   }
   if (r.kind === "head" && r.entry) {
     const e = r.entry;
@@ -624,9 +631,20 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
   };
 
   return (
-    <box style={{ flexDirection: "column", marginBottom: 1 }}>
-      <box style={{ flexDirection: "row", height: 1 }}>
-        <text wrapMode="none" truncate>
+    // Opaque background on the whole sticky block so the timeline grid
+    // behind (hour numbers, 15-min dots) doesn't bleed through the
+    // transparent gaps between text spans. Without this, OpenTUI renders
+    // the grid scrollbox below this section and any pixel not painted by
+    // the sticky shows the grid's underlying content.
+    <box
+      style={{
+        flexDirection: "column",
+        marginBottom: 1,
+        backgroundColor: T.cardBlockBg,
+      }}
+    >
+      <box style={{ flexDirection: "row", height: 1, backgroundColor: T.cardBlockBg }}>
+        <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
           <span style={{ fg: T.textDim, attributes: ATTR.bold }}>
             {"◦ Unscheduled · "}{props.items.length}
           </span>
@@ -644,7 +662,7 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
           scrollX: false,
           scrollY: true,
           rootOptions: {},
-          contentOptions: {},
+          contentOptions: { backgroundColor: T.cardBlockBg },
           scrollbarOptions: { visible: false },
         }}
       >
@@ -662,7 +680,9 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
                   height: 1,
                   paddingLeft: 1,
                   paddingRight: 1,
-                  backgroundColor: armed() ? T.warmDim : undefined,
+                  // Each row needs its own opaque bg too — the scrollbox
+                  // viewport may not paint its content's bg per row.
+                  backgroundColor: armed() ? T.warmDim : T.cardBlockBg,
                 }}
                 onMouseDown={() => props.onClick(item)}
               >
@@ -684,7 +704,7 @@ function UnscheduledSticky(props: UnscheduledStickyProps) {
           }}
         </For>
       </scrollbox>
-      <box style={{ flexDirection: "row", height: 1 }}>
+      <box style={{ flexDirection: "row", height: 1, backgroundColor: T.cardBlockBg }}>
         <text wrapMode="none">
           <span style={{ fg: T.border }}>{"─".repeat(120)}</span>
         </text>

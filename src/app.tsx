@@ -25,6 +25,7 @@ import {
 import { buildVirtualItems } from "~/store/virtual-panel";
 import { T } from "~/ui/glyphs";
 import { TopBar, BottomBar } from "~/ui/Chrome";
+import { ModalLayer } from "~/ui/Modal";
 import { BoardOnly } from "~/views/BoardOnly";
 import { Dashboard } from "~/views/Dashboard";
 import { TimelineOnly } from "~/views/TimelineOnly";
@@ -87,7 +88,19 @@ function App() {
     >
       <TopBar store={store} />
       <box style={{ height: 1 }} />
-      {rootViewFor(view, store)}
+      {/*
+        rootView and ModalLayer are siblings inside a flex-row so the
+        modal can sit beside the view as a fixed-width, full-height
+        side panel. ModalLayer renders only when ui.modal is set,
+        otherwise its <Show> resolves to nothing and the rootView gets
+        the whole row.
+      */}
+      <box style={{ flexDirection: "row", flexGrow: 1 }}>
+        <box style={{ flexDirection: "column", flexGrow: 1 }}>
+          {rootViewFor(view, store)}
+        </box>
+        <ModalLayer store={store} />
+      </box>
       <BottomBar store={store} />
     </box>
   );

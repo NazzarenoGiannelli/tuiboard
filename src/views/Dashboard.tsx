@@ -23,7 +23,6 @@ import { Show, createMemo } from "solid-js";
 
 import { AgentsBar } from "~/ui/AgentsBar";
 import { BoardView } from "~/ui/BoardView";
-import { ModalLayer } from "~/ui/Modal";
 import { TimelineView } from "~/ui/TimelineView";
 import { VirtualPanel } from "~/ui/VirtualPanel";
 import { AgentsOnly } from "~/views/AgentsOnly";
@@ -101,7 +100,7 @@ function FourZoneLayout(props: { store: TuiStore }) {
       <Show when={visible().timeline}>
         <TimelineView store={props.store} width={TIMELINE_WIDTH} />
       </Show>
-      <ModalLayer store={props.store} />
+      {/* ModalLayer rendered at App level so it can sit beside any view */}
     </box>
   );
 }

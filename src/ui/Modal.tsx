@@ -22,6 +22,10 @@ import { ATTR, T } from "~/ui/glyphs";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
 
+/** Fixed side-panel width for any modal. Wide enough for Detail / Help
+ *  without being absurd for Edit / Confirm. */
+const MODAL_WIDTH = 64;
+
 export function ModalLayer(props: { store: TuiStore }) {
   const modal = createMemo(() => props.store.state.ui.modal);
   return (
@@ -29,11 +33,23 @@ export function ModalLayer(props: { store: TuiStore }) {
       <box
         style={{
           flexDirection: "column",
-          marginTop: 1,
+          width: MODAL_WIDTH,
+          minWidth: MODAL_WIDTH,
+          flexGrow: 0,
+          flexShrink: 0,
+          // Stretch to the parent's height so the modal panel matches
+          // the timeline / board zones it sits next to. Same contract as
+          // every other zone — fixed cross-axis size, full-height fill.
+          alignSelf: "stretch",
+          marginLeft: 1,
           backgroundColor: T.panelBgActive,
           border: true,
+          borderStyle: "rounded",
           borderColor: T.borderActive,
-          padding: 1,
+          paddingLeft: 1,
+          paddingRight: 1,
+          paddingTop: 1,
+          paddingBottom: 1,
         }}
       >
         <ModalRouter store={props.store} modal={modal()!} />

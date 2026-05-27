@@ -8,7 +8,6 @@
 import { For, Show, createEffect, createMemo } from "solid-js";
 
 import { AgentRow } from "~/ui/AgentRow";
-import { ModalLayer } from "~/ui/Modal";
 import { T } from "~/ui/glyphs";
 import type { TuiStore } from "~/store/index";
 
@@ -45,7 +44,7 @@ export function AgentsOnly(props: { store: TuiStore }) {
   });
 
   return (
-    <box style={{ flexDirection: "column", flexGrow: 1 }}>
+    <box style={{ flexDirection: "row", flexGrow: 1 }}>
       <box
         style={{
           flexDirection: "column",
@@ -99,7 +98,6 @@ export function AgentsOnly(props: { store: TuiStore }) {
           </scrollbox>
         </Show>
       </box>
-      <ModalLayer store={props.store} />
     </box>
   );
 }

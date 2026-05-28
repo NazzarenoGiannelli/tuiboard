@@ -43,17 +43,14 @@ import {
   TOTAL_ROWS,
   buildRowMap,
   buildTimelineEntries,
-  buildUnscheduledToday,
   formatHm,
   type RowMapEntry,
   type RowMapPair,
   type TimelineEntry,
-  type UnscheduledItem,
 } from "~/store/timeline";
 import {
   ATTR,
   PRIORITY_COLOR,
-  PRIORITY_GLYPH,
   T,
   boardColor,
 } from "~/ui/glyphs";
@@ -79,15 +76,8 @@ interface TimelineViewProps {
 const ROW_ID_PREFIX = "tuiboard-tl-row-";
 /** Minimum block duration in minutes — prevents zero-length blocks on resize. */
 const MIN_BLOCK_MIN = 15;
-/** Default duration applied when an unscheduled task is dropped on the grid. */
+/** Default duration applied when an armed (unscheduled) task is dropped. */
 const DEFAULT_BLOCK_MIN = 30;
-/** Max rows shown in the sticky unscheduled section before the inner
- *  scrollbox takes over. Kept at 4 because OpenTUI's flex doesn't
- *  strictly clip the grid scrollbox below — beyond ~4 sticky rows the
- *  grid starts bleeding 'hour numbers / dotted lines' into the
- *  sticky's last task rows. The internal scrollbox covers any user
- *  who has more pending tasks (mouse-wheel to scroll the list). */
-const UNSCHED_VISIBLE = 4;
 
 export function TimelineView(props: TimelineViewProps) {
   const isActive = () => props.store.state.ui.activeZone === "timeline";
@@ -101,67 +91,14 @@ export function TimelineView(props: TimelineViewProps) {
     ),
   );
 
-  /** Today's tasks that don't have a time block yet — sticky list candidates. */
-  const unscheduled = createMemo(() =>
-    buildUnscheduledToday(
-      props.store.state.boards.map((b) => b.board),
-      isoToday(),
-    ),
-  );
-
   // Recompute the row map every minute so the "now" marker stays current.
+  // No more sticky-unscheduled trimming — the unscheduled list lived at the
+  // top of the timeline and caused unsolvable flex-overlap with the grid
+  // scrollbox below it. Replaced by the global `C` (calendar-arm) shortcut:
+  // arm a task from the board / virtual panel, then click a timeline slot
+  // to place it. The grid now owns the whole panel, clean and simple.
   const nowMin = useNowMin();
-  const fullRowMap = createMemo(() => buildRowMap(entries(), nowMin()));
-
-  /**
-   * Rows the sticky section consumes in the parent's vertical space.
-   * Header (1) + scrollbox-of-N (min items, UNSCHED_VISIBLE) + divider (1)
-   * + outer marginBottom (1) + 1 row safety buffer (OpenTUI's flex layout
-   * in practice leaves us 1 row of grid bleed even with the math nominally
-   * matching the visual height). When the sticky isn't rendered, 0.
-   */
-  const stickyConsumedRows = createMemo(() => {
-    const n = unscheduled().length;
-    if (n === 0) return 0;
-    return Math.min(n, UNSCHED_VISIBLE) + 4;
-  });
-
-  /**
-   * The visible row map for the grid scrollbox. OpenTUI's flex layout
-   * doesn't strictly clip the scrollbox's content to its allocated space,
-   * so when the sticky section is present, the grid's first rows would
-   * render at the SAME screen rows as the sticky — visible as `07`,
-   * `······` bleed-through behind the sticky tasks.
-   *
-   * Fix: slice off the first `stickyConsumedRows` rows of the rowMap when
-   * the sticky is showing. Those rows wouldn't be readable anyway (covered
-   * by the sticky), and dropping them lets the grid's remaining content
-   * start exactly where the sticky ends — no visual overlap, no need for
-   * an opaque sticky background.
-   *
-   * The trade-off: the earliest few 15-min slots of the day (07:00 ish)
-   * disappear from the grid when there are unscheduled tasks. They're
-   * empty hours for most workdays, so this is acceptable. If you have a
-   * time-blocked task in that range, it stays in the row map (we never
-   * drop hours with block content — see the clamp below).
-   */
-  const rowMap = createMemo(() => {
-    const full = fullRowMap();
-    let skip = stickyConsumedRows();
-    if (skip === 0) return full;
-    // Don't drop any row that has block content (head/body/fill on either
-    // lane) or is the now marker — only drop pure empty/hour rows.
-    let safeSkip = 0;
-    for (let i = 0; i < skip && i < full.rows.length; i++) {
-      const r = full.rows[i]!;
-      const droppable =
-        (r.left.kind === "empty" || r.left.kind === "hour") &&
-        (r.right.kind === "empty" || r.right.kind === "hour");
-      if (!droppable) break;
-      safeSkip = i + 1;
-    }
-    return { rows: full.rows.slice(safeSkip), overflow: full.overflow };
-  });
+  const rowMap = createMemo(() => buildRowMap(entries(), nowMin()));
 
   /** Find the armed entry in the current entries list (if still present). */
   const armedEntry = createMemo<TimelineEntry | undefined>(() => {
@@ -262,31 +199,6 @@ export function TimelineView(props: TimelineViewProps) {
   };
 
   /**
-   * Click on an unscheduled task in the sticky list. Same arm/disarm
-   * toggle semantic as clicking on a band — except the underlying task
-   * has no time block (yet). Dropping on an empty row will create one.
-   */
-  const onUnscheduledClick = (item: UnscheduledItem) => {
-    props.store.setActiveZone("timeline");
-    const arm = armedRef();
-    const same =
-      arm &&
-      arm.boardPath === item.ref.boardPath &&
-      arm.columnIndex === item.ref.columnIndex &&
-      arm.taskIndex === item.ref.taskIndex;
-    if (same) {
-      props.store.armTimeline(undefined);
-      props.store.flashBanner("info", "Disarmed");
-    } else {
-      props.store.armTimeline(item.ref);
-      props.store.flashBanner(
-        "info",
-        `Armed: ${item.task.displayTitle.slice(0, 40)} · click a row to place (${DEFAULT_BLOCK_MIN}min default)`,
-      );
-    }
-  };
-
-  /**
    * Click on an empty / hour row when a task is armed. Behavior depends
    * on whether the armed task already has a time block:
    *   - Has block + plain click  → MOVE start to clicked row (keep duration)
@@ -380,36 +292,19 @@ export function TimelineView(props: TimelineViewProps) {
         </text>
       </Show>
 
-      {/* Sticky "unscheduled today" section — tasks scheduled for today
-          that don't have a time block yet. Click to arm, then click a
-          row in the grid below to drop them at that time (30min default). */}
-      <Show when={unscheduled().length > 0}>
-        <UnscheduledSticky
-          items={unscheduled()}
-          armedRef={armedRef()}
-          onClick={onUnscheduledClick}
-        />
-      </Show>
-      {/* Wrapper box with flexGrow:1 + minHeight:0 forces OpenTUI/Yoga to
-          confine the scrollbox to the parent's REMAINING height. Without
-          minHeight:0 the scrollbox could blow past its allocation and the
-          grid would visually overlap the preceding sticky sibling. */}
-      <box style={{ flexGrow: 1, minHeight: 0, flexDirection: "column" }}>
-        <scrollbox
-          ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}
-          style={{
-            width: "100%",
-            flexGrow: 1,
-            scrollX: false,
-            scrollY: true,
-            rootOptions: {},
-            contentOptions: {},
-            scrollbarOptions: { visible: false },
-          // Ask OpenTUI to skip rendering rows that fall outside the
-          // scrollbox viewport. Combined with the rowMap slicing above
-          // (when a sticky section is present), this stops the grid
-          // from painting `07` / `······` content behind the sticky.
-          viewportCulling: true,
+      {/* The 24h grid now owns the whole panel — no sticky section above
+          it. Tasks are armed for scheduling from the board / virtual panel
+          via the `C` shortcut, then placed by clicking a slot here. */}
+      <scrollbox
+        ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}
+        style={{
+          width: "100%",
+          flexGrow: 1,
+          scrollX: false,
+          scrollY: true,
+          rootOptions: {},
+          contentOptions: {},
+          scrollbarOptions: { visible: false },
         }}
       >
         <For each={rowMap().rows}>
@@ -426,8 +321,7 @@ export function TimelineView(props: TimelineViewProps) {
             </box>
           )}
         </For>
-        </scrollbox>
-      </box>
+      </scrollbox>
     </box>
   );
 }
@@ -684,100 +578,6 @@ function RowContent(props: RowContentProps) {
     );
   }
   return <span> </span>;
-}
-
-// ─── Unscheduled sticky list ─────────────────────────────────────────────────
-
-interface UnscheduledStickyProps {
-  items: UnscheduledItem[];
-  armedRef: TaskRef | undefined;
-  onClick: (item: UnscheduledItem) => void;
-}
-
-function UnscheduledSticky(props: UnscheduledStickyProps) {
-  // The whole list goes through a scrollbox capped at UNSCHED_VISIBLE rows
-  // tall — when there are more items, the user scrolls the inner box with
-  // the mouse wheel. Keeps the timeline grid below visible at all times.
-  const scrollableHeight = () => Math.min(props.items.length, UNSCHED_VISIBLE);
-
-  const isArmed = (item: UnscheduledItem): boolean => {
-    const a = props.armedRef;
-    if (!a) return false;
-    return (
-      a.boardPath === item.ref.boardPath &&
-      a.columnIndex === item.ref.columnIndex &&
-      a.taskIndex === item.ref.taskIndex
-    );
-  };
-
-  return (
-    <box style={{ flexDirection: "column", marginBottom: 1 }}>
-      <box style={{ flexDirection: "row", height: 1 }}>
-        <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
-          <span style={{ fg: T.textDim, attributes: ATTR.bold }}>
-            {"◦ Unscheduled · "}
-            {props.items.length}
-          </span>
-          <Show when={props.items.length > UNSCHED_VISIBLE}>
-            <span style={{ fg: T.textDim }}>{"  (scroll for more)"}</span>
-          </Show>
-        </text>
-      </box>
-      <scrollbox
-        style={{
-          width: "100%",
-          height: scrollableHeight(),
-          scrollX: false,
-          scrollY: true,
-          rootOptions: {},
-          contentOptions: {},
-          scrollbarOptions: { visible: false },
-          viewportCulling: true,
-        }}
-      >
-        <For each={props.items}>
-          {(item) => {
-            const armed = () => isArmed(item);
-            const priorityGlyph =
-              item.task.priority !== "none"
-                ? PRIORITY_GLYPH[item.task.priority] + " "
-                : "";
-            return (
-              <box
-                style={{
-                  flexDirection: "row",
-                  height: 1,
-                  paddingLeft: 1,
-                  paddingRight: 1,
-                  backgroundColor: armed() ? T.warmDim : undefined,
-                }}
-                onMouseDown={() => props.onClick(item)}
-              >
-                <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
-                  <span style={{ fg: armed() ? T.warm : T.textDim }}>
-                    {armed() ? "⤤ " : "  "}
-                  </span>
-                  <Show when={priorityGlyph}>
-                    <span style={{ fg: PRIORITY_COLOR[item.task.priority] }}>
-                      {priorityGlyph}
-                    </span>
-                  </Show>
-                  <span style={{ fg: T.text }}>
-                    {tailTruncate(item.task.displayTitle, 36)}
-                  </span>
-                </text>
-              </box>
-            );
-          }}
-        </For>
-      </scrollbox>
-      <box style={{ flexDirection: "row", height: 1 }}>
-        <text wrapMode="none">
-          <span style={{ fg: T.border }}>{"─".repeat(120)}</span>
-        </text>
-      </box>
-    </box>
-  );
 }
 
 /** Local tail-truncate helper (mirrors TaskRow's). Keeps the head + `…`. */

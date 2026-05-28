@@ -80,9 +80,10 @@ done_column: Done
 archive_column: Archive
 
 # Optional: override Enter in the Agents zone. argv array, {cwd}/{sessionId}
-# substituted, run directly (no shell). Defaults to opening a WezTerm tab with
-# `claude --resume <id>`. Point it at your own script for a custom layout:
-# resume_command: ["pwsh", "-NoProfile", "-File", "~/.config/tuiboard/code-resume.ps1", "{cwd}", "{sessionId}"]
+# substituted, run directly (no shell — element 0 must be a real binary/abs
+# path, NOT a shell builtin or Windows App Execution Alias). Defaults to
+# opening a WezTerm tab with `claude --resume <id>`. For a custom layout:
+# resume_command: ["nu", "C:/Users/you/.config/tuiboard/code-resume.nu", "{cwd}", "{sessionId}"]
 ```
 
 ## Markdown board format

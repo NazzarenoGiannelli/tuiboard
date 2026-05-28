@@ -37,10 +37,13 @@ archive_column: Archive
 # to spawn a custom terminal layout. When omitted, tuiboard just opens a new
 # WezTerm tab and runs `claude --resume <sessionId>`.
 #
+# The first element must be a DIRECTLY EXECUTABLE program — a real binary on
+# PATH or an absolute path. It is NOT run through a shell, so shell builtins
+# and Windows App Execution Aliases (e.g. a Store-installed `pwsh`) won't
+# resolve; use a real binary like `nu`, `python`, or a full path instead.
+#
 # resume_command:
-#   - pwsh
-#   - -NoProfile
-#   - -File
-#   - C:/Users/you/.config/tuiboard/code-resume.ps1
+#   - nu
+#   - C:/Users/you/.config/tuiboard/code-resume.nu
 #   - "{cwd}"
 #   - "{sessionId}"

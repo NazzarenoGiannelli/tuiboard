@@ -8,7 +8,7 @@
  * board width.
  */
 
-import { For, Show, createEffect, createMemo } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 
 import { isTask } from "~/parser/markdown";
 import { computeColumnScrollLeft } from "~/ui/board-scroll";
@@ -23,15 +23,9 @@ interface ScrollBoxLike {
   scrollChildIntoView(id: string): void;
 }
 
-/**
- * Horizontal scrollbox: we drive `scrollLeft` directly from known column
- * geometry rather than `scrollChildIntoView`, which relies on per-child
- * layout being measured at call time (unreliable for fully off-screen
- * columns). `viewport.width` is the visible width; `scrollLeft` is r/w.
- */
-interface HScrollBoxLike {
-  scrollLeft: number;
-  readonly viewport: { width: number };
+/** Just enough of a box renderable to read its laid-out width. */
+interface SizedBoxLike {
+  readonly width: number;
 }
 
 /** Fixed column width when not zoomed. Single source of truth for layout. */
@@ -54,7 +48,11 @@ function columnId(boardPath: string, idx: number): string {
 export function BoardView(props: BoardViewProps) {
   const ui = () => props.store.state.ui;
   const archiveName = () => props.store.config.archiveColumn;
-  let scrollBoxRef: (ScrollBoxLike & Partial<HScrollBoxLike>) | undefined;
+  // Width of the clipping viewport (the board zone), read from layout.
+  let viewportRef: SizedBoxLike | undefined;
+  // Horizontal scroll offset in cells, applied as a negative left margin on
+  // the inner column row. A signal so the shift re-renders reactively.
+  const [scrollX, setScrollX] = createSignal(0);
 
   /**
    * Columns shown in the view — Archive is filtered out entirely
@@ -65,43 +63,6 @@ export function BoardView(props: BoardViewProps) {
   const visibleColumns = createMemo(() =>
     props.board.columns.filter((c) => c.name !== archiveName()),
   );
-
-  // Auto-scroll horizontally so the active column is always fully visible.
-  // We compute the target scrollLeft from the fixed column geometry
-  // (COL_WIDTH + COL_GAP) and the active column's position within the
-  // *rendered* (non-archive) column list. Driving scrollLeft directly is
-  // deterministic — unlike scrollChildIntoView it doesn't depend on each
-  // column's measured layout being current, which failed for columns that
-  // start fully off-screen.
-  createEffect(() => {
-    const colIdx = ui().col;
-    if (ui().activeZone === "virtual" || ui().zoomed || !scrollBoxRef) return;
-    // Map the board-columns index (what ui.col carries, used for task refs)
-    // to the index within the rendered, non-archive list the scrollbox lays
-    // out. They diverge once the Archive column is skipped.
-    const cols = props.board.columns;
-    const visibleIndex = visibleColumns().findIndex(
-      (c) => cols.indexOf(c) === colIdx,
-    );
-    if (visibleIndex < 0) return;
-    // setTimeout(0) — full event-loop tick — lets OpenTUI commit the current
-    // layout (so viewport.width is correct) before we read + set scrollLeft.
-    setTimeout(() => {
-      const box = scrollBoxRef;
-      if (!box || box.viewport === undefined) return;
-      try {
-        box.scrollLeft = computeColumnScrollLeft({
-          visibleIndex,
-          colWidth: COL_WIDTH,
-          colGap: COL_GAP,
-          viewportWidth: box.viewport.width,
-          currentScroll: box.scrollLeft ?? 0,
-        });
-      } catch {
-        // Scrollbox not mounted yet on first paint — harmless.
-      }
-    }, 0);
-  });
 
   /**
    * In zoom mode we render only the column under the cursor, expanded
@@ -121,46 +82,85 @@ export function BoardView(props: BoardViewProps) {
     return idx >= 0 ? [cols[idx]!] : cols;
   });
 
+  // Auto-scroll horizontally so the active column is always fully visible.
+  //
+  // We do this MANUALLY rather than with OpenTUI's <scrollbox>: on the
+  // horizontal axis the scrollbox's content box never grows past the
+  // viewport width (scrollWidth stays == viewportWidth), so it reports
+  // "nothing to scroll" even when fixed-width columns overflow. Instead we
+  // clip with a plain overflow:hidden box and shift an inner row left by a
+  // negative margin. The shift amount comes from the same deterministic
+  // geometry used everywhere (COL_WIDTH + COL_GAP).
+  createEffect(() => {
+    const colIdx = ui().col;
+    if (ui().zoomed || ui().activeZone === "virtual") {
+      setScrollX(0);
+      return;
+    }
+    const cols = props.board.columns;
+    const visibleIndex = visibleColumns().findIndex(
+      (c) => cols.indexOf(c) === colIdx,
+    );
+    if (visibleIndex < 0) return;
+    // setTimeout(0) lets OpenTUI commit layout so viewportRef.width is current.
+    setTimeout(() => {
+      const vw = viewportRef?.width ?? 0;
+      if (vw <= 0) return;
+      setScrollX((prev) =>
+        computeColumnScrollLeft({
+          visibleIndex,
+          colWidth: COL_WIDTH,
+          colGap: COL_GAP,
+          viewportWidth: vw,
+          currentScroll: prev,
+        }),
+      );
+    }, 0);
+  });
+
   return (
     <box style={{ flexDirection: "column", flexGrow: 1 }}>
-      <scrollbox
-        ref={(r: ScrollBoxLike & Partial<HScrollBoxLike>) =>
-          (scrollBoxRef = r)
-        }
+      {/* Clipping viewport: fills the board zone, hides overflow. */}
+      <box
+        ref={(r: SizedBoxLike) => (viewportRef = r)}
         style={{
           width: "100%",
           flexGrow: 1,
-          scrollX: true,
-          scrollY: false,
-          rootOptions: {},
-          contentOptions: {
-            flexDirection: "row",
-            // alignItems defaults to "stretch" in Yoga, which is exactly
-            // what we want: every column auto-fills the row's height,
-            // matching the Today/Tomorrow virtual panel.
-          },
-          scrollbarOptions: { visible: false },
+          flexDirection: "row",
+          overflow: "hidden",
         }}
       >
-        <For each={renderedColumns()}>
-          {(col) => {
-            const originalIndex = props.board.columns.indexOf(col);
-            const isActive = () =>
-              ui().activeZone === "board" && ui().col === originalIndex;
-            return (
-              <ColumnView
-                store={props.store}
-                board={props.board}
-                column={col}
-                columnIndex={originalIndex}
-                active={isActive()}
-                zoomed={ui().zoomed && isActive()}
-                boxId={columnId(props.board.filepath, originalIndex)}
-              />
-            );
+        {/* Inner row: shifted left by the scroll offset to reveal columns. */}
+        <box
+          style={{
+            flexDirection: "row",
+            flexGrow: ui().zoomed ? 1 : 0,
+            flexShrink: 0,
+            height: "100%",
+            alignItems: "stretch",
+            marginLeft: ui().zoomed ? 0 : -scrollX(),
           }}
-        </For>
-      </scrollbox>
+        >
+          <For each={renderedColumns()}>
+            {(col) => {
+              const originalIndex = props.board.columns.indexOf(col);
+              const isActive = () =>
+                ui().activeZone === "board" && ui().col === originalIndex;
+              return (
+                <ColumnView
+                  store={props.store}
+                  board={props.board}
+                  column={col}
+                  columnIndex={originalIndex}
+                  active={isActive()}
+                  zoomed={ui().zoomed && isActive()}
+                  boxId={columnId(props.board.filepath, originalIndex)}
+                />
+              );
+            }}
+          </For>
+        </box>
+      </box>
     </box>
   );
 }

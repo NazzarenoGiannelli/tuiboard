@@ -111,9 +111,15 @@ export function BottomBar(props: { store: TuiStore }) {
         </Show>
       </box>
       <box style={{ height: 1, flexDirection: "row" }}>
-        <text>
+        {/*
+          Curated cheat-sheet: only the keys that keep you unstuck (move,
+          switch zone/board, help, quit) plus the highest-frequency, on-brand
+          actions (done, new, schedule). Everything else — zoom, toggles,
+          multi-select, edit/assign/archive/delete, undo — lives in `?`.
+        */}
+        <text wrapMode="none" truncate>
           <span style={{ fg: T.textDim }}>
-            {"hjkl move · Tab/1-9 board · S-Tab zone · F1/F2/F3 toggle · v panel · z zoom · Space mark · ⏎ done · o detail · n/e/s/b/a/X act · d del · ⌃Z undo · ? help · q quit"}
+            {"hjkl move · Tab board · ⇧Tab zone · ⏎ done · n new · c schedule · ? help · q quit"}
           </span>
         </text>
       </box>

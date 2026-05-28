@@ -113,6 +113,26 @@ export function fmtMin(m: number): string {
   return `${h}:${mm}`;
 }
 
+// Symbols in the Misc-Technical block that render 2 cells wide despite being
+// a single JS code unit (so `.length` undercounts them): ⌚ ⏰ ⏫ ⏬ ⏩ ⏪.
+const WIDE_CODEPOINTS = new Set([0x231a, 0x231b, 0x23eb, 0x23ec, 0x23e9, 0x23ea, 0x23f0, 0x23f3]);
+
+/**
+ * Terminal display width of a string in cells, counting emoji / wide glyphs
+ * as 2. `.length` undercounts these (e.g. `⌚` is 1 code unit but 2 cells),
+ * which throws off truncation budgets and makes OpenTUI re-truncate a row
+ * with its middle-ellipsis. Use this wherever a layout budget must match what
+ * the terminal actually paints.
+ */
+export function cellWidth(s: string): number {
+  let w = 0;
+  for (const ch of s) {
+    const cp = ch.codePointAt(0)!;
+    w += cp >= 0x1f000 || WIDE_CODEPOINTS.has(cp) ? 2 : 1;
+  }
+  return w;
+}
+
 /**
  * Per-board accent palette. Used by the virtual panel to color-code the
  * source-board tag on priority/agenda items, so the user can recognize

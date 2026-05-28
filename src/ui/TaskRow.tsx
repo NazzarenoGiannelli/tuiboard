@@ -12,7 +12,7 @@
 
 import { Show, createMemo } from "solid-js";
 
-import { PRIORITY_COLOR, PRIORITY_GLYPH, T, fmtMin } from "~/ui/glyphs";
+import { PRIORITY_COLOR, PRIORITY_GLYPH, T, cellWidth, fmtMin } from "~/ui/glyphs";
 import { isoToday, isoTomorrow } from "~/store/index";
 import type { Task } from "~/types";
 
@@ -71,7 +71,10 @@ export function TaskRow(props: TaskRowProps) {
     if (props.task.priority !== "none") overhead += 3; // emoji 2 cells + space
     if (props.contextTag) overhead += props.contextTag.length + 3; // " [" + tag + "]"
     const sfx = suffix();
-    if (sfx) overhead += sfx.length + 1; // leading space + suffix
+    // cellWidth (not .length) so the ⌚ time-block glyph — 2 cells but 1 code
+    // unit — is counted correctly. +1 leading space, +1 safety so the row can
+    // never exact-fit-overflow into OpenTUI's middle-ellipsis truncation.
+    if (sfx) overhead += cellWidth(sfx) + 2;
     const computed = props.availableWidth - overhead;
     return Math.max(6, Math.min(hardCap, computed));
   });

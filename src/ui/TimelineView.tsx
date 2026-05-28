@@ -336,6 +336,7 @@ export function TimelineView(props: TimelineViewProps) {
                 rowIndex={i()}
                 cursorEntry={isActive() ? cursorEntry() : undefined}
                 armedEntry={armedEntry()}
+                innerWidth={props.width ? props.width - 4 : undefined}
                 onBlockClick={onBlockClick}
                 onEmptyRowClick={onEmptyRowClick}
               />
@@ -382,6 +383,8 @@ interface TimelineRowProps {
   cursorEntry: TimelineEntry | undefined;
   /** When set, the armed entry — used to tint its rows warm. */
   armedEntry: TimelineEntry | undefined;
+  /** Panel content width (border+padding already removed). Undefined = fullscreen. */
+  innerWidth?: number;
   onBlockClick: (entry: TimelineEntry, event: MouseEventLike) => void;
   onEmptyRowClick: (rowIndex: number, event: MouseEventLike) => void;
 }
@@ -415,6 +418,12 @@ function TimelineRow(props: TimelineRowProps) {
   const leftIsDone = () => !!left().entry?.task.done;
   const rightIsDone = () => !!right().entry?.task.done;
 
+  // Cell budget per lane, so RowContent can tail-truncate the title (keeping
+  // the head readable) instead of leaning on OpenTUI's middle-ellipsis.
+  const innerW = () => props.innerWidth ?? 200;
+  const splitLeftW = () => Math.floor((innerW() - 1) / 2);
+  const splitRightW = () => innerW() - 1 - splitLeftW();
+
   /** Mouse handler factory for a lane cell. */
   const cellMouseDown = (cellEntry: TimelineEntry | undefined) => {
     return (event: MouseEventLike) => {
@@ -446,7 +455,7 @@ function TimelineRow(props: TimelineRowProps) {
           onMouseDown={cellMouseDown(left().entry)}
         >
           <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
-            <RowContent row={left()} rowIndex={props.rowIndex} />
+            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={innerW()} />
           </text>
         </box>
       }
@@ -474,7 +483,7 @@ function TimelineRow(props: TimelineRowProps) {
           onMouseDown={cellMouseDown(left().entry)}
         >
           <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
-            <RowContent row={left()} rowIndex={props.rowIndex} />
+            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={splitLeftW()} />
           </text>
         </box>
         <text style={{ width: 1, flexShrink: 0 }} wrapMode="none">
@@ -497,7 +506,7 @@ function TimelineRow(props: TimelineRowProps) {
         >
           <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
             {/* Right lane skips the 3-char hour prefix that's already on the row. */}
-            <RowContent row={right()} rowIndex={props.rowIndex} skipPrefix />
+            <RowContent row={right()} rowIndex={props.rowIndex} laneWidth={splitRightW()} skipPrefix />
           </text>
         </box>
       </box>
@@ -510,6 +519,8 @@ interface RowContentProps {
   rowIndex: number;
   /** When true, omit the leading 3-char hour-gutter spacer. */
   skipPrefix?: boolean;
+  /** Cell budget for this lane — used to tail-truncate the block title. */
+  laneWidth?: number;
 }
 
 function RowContent(props: RowContentProps) {
@@ -579,6 +590,14 @@ function RowContent(props: RowContentProps) {
   if (r.kind === "body" && r.entry) {
     const e = r.entry;
     const bColor = boardColor(e.boardIndex);
+    // Tail-truncate so the START of the title stays readable (the head/tail
+    // ellipsis OpenTUI does otherwise chops the middle). Budget = lane width
+    // minus the prefix, the "│ " gutter, and the done check.
+    const avail = props.laneWidth ?? 200;
+    const budget = Math.max(
+      6,
+      avail - (props.skipPrefix ? 0 : 3) - 2 - (e.task.done ? 2 : 0),
+    );
     return (
       <>
         <span style={{ fg: T.textDim }}>{prefix}</span>
@@ -587,7 +606,7 @@ function RowContent(props: RowContentProps) {
           <span style={{ fg: T.done }}>{"✓ "}</span>
         </Show>
         <span style={{ fg: e.task.done ? T.done : T.text }}>
-          {e.task.displayTitle}
+          {tailTruncate(e.task.displayTitle, budget)}
         </span>
       </>
     );

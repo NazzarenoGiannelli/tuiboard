@@ -24,10 +24,12 @@ const SECTION_HEADER: Record<string, { label: string; color: string }> = {
   tomorrow: { label: "→ Tomorrow", color: T.warmDim },
 };
 
+// Only the agenda and priority buckets get a header. The "rest" bucket has
+// no header of its own — its items already sit under their own
+// `— board · column —` sub-dividers, so a generic label would be redundant.
 const BUCKET_HEADER: Record<string, { label: string; color: string }> = {
   agenda: { label: "⏰ Agenda", color: T.accent },
-  priority: { label: "🔺 Priorità", color: T.highest },
-  rest: { label: "Altro", color: T.textDim },
+  priority: { label: "🔺 Priority", color: T.highest },
 };
 
 export function VirtualPanel(props: { store: TuiStore }) {
@@ -87,7 +89,7 @@ export function VirtualPanel(props: { store: TuiStore }) {
         when={items().length > 0}
         fallback={
           <text>
-            <span style={{ fg: T.textDim }}>Niente di schedulato.</span>
+            <span style={{ fg: T.textDim }}>Nothing scheduled.</span>
           </text>
         }
       >
@@ -152,11 +154,13 @@ function RenderGroups(props: {
                 </text>
               </box>
             </Show>
-            <box style={{ paddingLeft: 1, paddingRight: 1 }}>
-              <text>
-                <span style={{ fg: bucketHeader!.color }}>{"  "}{bucketHeader!.label}</span>
-              </text>
-            </box>
+            <Show when={bucketHeader}>
+              <box style={{ paddingLeft: 1, paddingRight: 1 }}>
+                <text>
+                  <span style={{ fg: bucketHeader!.color }}>{"  "}{bucketHeader!.label}</span>
+                </text>
+              </box>
+            </Show>
             <Show
               when={group.subgroups && group.subgroups.length > 0}
               fallback={

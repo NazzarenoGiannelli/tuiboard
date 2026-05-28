@@ -3,7 +3,30 @@
   "version": "0.5.0",
   "description": "Terminal dashboard for markdown task boards. Kanban + Today/Tomorrow + 24h timeline + Claude Code agent view, all in one TUI.",
   "type": "module",
-  "private": true,
+  "license": "MIT",
+  "author": "Nazzareno Giannelli <nazzareno.giannelli@gmail.com>",
+  "homepage": "https://github.com/NazzarenoGiannelli/tuiboard#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NazzarenoGiannelli/tuiboard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NazzarenoGiannelli/tuiboard/issues"
+  },
+  "keywords": [
+    "tui",
+    "kanban",
+    "terminal",
+    "task-board",
+    "markdown",
+    "obsidian",
+    "productivity",
+    "opentui",
+    "bun"
+  ],
+  "engines": {
+    "bun": ">=1.2.0"
+  },
   "bin": {
     "tuiboard": "./bin/tuiboard.ts"
   },
@@ -21,7 +44,8 @@
     "roundtrip:check": "bun run src/scripts/roundtrip-check.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "agents:check": "bun run src/scripts/agents-check.ts"
+    "agents:check": "bun run src/scripts/agents-check.ts",
+    "prepublishOnly": "bun run typecheck && bun test"
   },
   "dependencies": {
     "@opentui/core": "^0.2.15",

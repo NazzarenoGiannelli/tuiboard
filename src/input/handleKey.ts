@@ -724,7 +724,14 @@ async function openSessionInWezterm(
     );
     const [cmd, ...rest] = argv;
     try {
-      const child = spawn(cmd!, rest, { detached: true, stdio: "ignore" });
+      // windowsHide suppresses the transient console window the orchestrator
+      // process would otherwise flash on Windows (the equivalent of Python's
+      // CREATE_NO_WINDOW).
+      const child = spawn(cmd!, rest, {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      });
       child.on("error", (e: NodeJS.ErrnoException) =>
         store.flashBanner("error", `resume_command failed: ${e.message}`),
       );
@@ -739,6 +746,7 @@ async function openSessionInWezterm(
   try {
     const spawned = spawnSync("wezterm", ["cli", "spawn", "--cwd", cwd], {
       encoding: "utf8",
+      windowsHide: true,
     });
     if (spawned.error) {
       store.flashBanner("error", `WezTerm launch failed: ${spawned.error.message}`);
@@ -756,7 +764,7 @@ async function openSessionInWezterm(
     spawnSync(
       "wezterm",
       ["cli", "send-text", "--pane-id", paneId, "--no-paste"],
-      { input: `claude --resume ${sessionId}\r`, encoding: "utf8" },
+      { input: `claude --resume ${sessionId}\r`, encoding: "utf8", windowsHide: true },
     );
     store.flashBanner("info", `↗ Opened session in WezTerm (${sessionId.slice(0, 8)})`);
   } catch (e) {

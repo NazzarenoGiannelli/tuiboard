@@ -30,3 +30,17 @@ done_column: Done
 # Name of the column used by the archive action (Shift-X). If the column
 # doesn't exist in a board, tuiboard creates it on the fly.
 archive_column: Archive
+
+# Optional: override what Enter does in the Agents zone ("open the selected
+# Claude Code session"). An argv array — the tokens {cwd} and {sessionId} are
+# substituted, then it's run directly (no shell). Point it at your own script
+# to spawn a custom terminal layout. When omitted, tuiboard just opens a new
+# WezTerm tab and runs `claude --resume <sessionId>`.
+#
+# resume_command:
+#   - pwsh
+#   - -NoProfile
+#   - -File
+#   - C:/Users/you/.config/tuiboard/code-resume.ps1
+#   - "{cwd}"
+#   - "{sessionId}"

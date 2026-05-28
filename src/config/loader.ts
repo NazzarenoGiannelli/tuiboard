@@ -34,6 +34,15 @@ export interface Config {
   assignees: string[];
   doneColumn: string;
   archiveColumn: string;
+  /**
+   * Optional override for "open the selected agent session" (Enter in the
+   * agents zone). An argv array; the tokens `{cwd}` and `{sessionId}` are
+   * substituted, then it's spawned directly (no shell). Point it at your own
+   * script to launch a custom terminal layout — e.g.
+   *   ["pwsh", "-NoProfile", "-File", "C:/.../code-resume.ps1", "{cwd}", "{sessionId}"]
+   * When unset, tuiboard falls back to opening a tab + `claude --resume <id>`.
+   */
+  resumeCommand?: string[];
 }
 
 export const DEFAULT_CONFIG: Omit<Config, "root" | "loaded" | "boards"> = {
@@ -81,6 +90,7 @@ interface RawConfig {
   assignees: string[];
   done_column: string;
   archive_column: string;
+  resume_command: string[];
 }
 
 interface FoundConfig {
@@ -144,6 +154,10 @@ function normalize(raw: Partial<RawConfig>, root: string, loaded: boolean): Conf
     assignees: raw.assignees ?? DEFAULT_CONFIG.assignees,
     doneColumn: raw.done_column ?? DEFAULT_CONFIG.doneColumn,
     archiveColumn: raw.archive_column ?? DEFAULT_CONFIG.archiveColumn,
+    resumeCommand:
+      Array.isArray(raw.resume_command) && raw.resume_command.length > 0
+        ? raw.resume_command.map(String)
+        : undefined,
   };
 }
 

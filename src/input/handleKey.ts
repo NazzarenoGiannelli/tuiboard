@@ -712,7 +712,30 @@ async function openSessionInWezterm(
   cwd: string,
   sessionId: string,
 ): Promise<void> {
-  const { spawnSync } = await import("node:child_process");
+  const { spawn, spawnSync } = await import("node:child_process");
+
+  // Custom override (config `resume_command`): an argv array with {cwd} /
+  // {sessionId} placeholders, spawned directly (no shell). Lets you launch a
+  // personal terminal layout without baking it into the distributed tool.
+  const custom = store.config.resumeCommand;
+  if (custom && custom.length > 0) {
+    const argv = custom.map((arg) =>
+      arg.replaceAll("{cwd}", cwd).replaceAll("{sessionId}", sessionId),
+    );
+    const [cmd, ...rest] = argv;
+    try {
+      const child = spawn(cmd!, rest, { detached: true, stdio: "ignore" });
+      child.on("error", (e: NodeJS.ErrnoException) =>
+        store.flashBanner("error", `resume_command failed: ${e.message}`),
+      );
+      child.unref();
+      store.flashBanner("info", `↗ Opening session (${sessionId.slice(0, 8)})`);
+    } catch (e) {
+      store.flashBanner("error", `resume_command failed: ${String(e)}`);
+    }
+    return;
+  }
+
   try {
     const spawned = spawnSync("wezterm", ["cli", "spawn", "--cwd", cwd], {
       encoding: "utf8",

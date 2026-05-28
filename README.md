@@ -78,6 +78,11 @@ boards:
 assignees: [Alice, Bob]
 done_column: Done
 archive_column: Archive
+
+# Optional: override Enter in the Agents zone. argv array, {cwd}/{sessionId}
+# substituted, run directly (no shell). Defaults to opening a WezTerm tab with
+# `claude --resume <id>`. Point it at your own script for a custom layout:
+# resume_command: ["pwsh", "-NoProfile", "-File", "~/.config/tuiboard/code-resume.ps1", "{cwd}", "{sessionId}"]
 ```
 
 ## Markdown board format

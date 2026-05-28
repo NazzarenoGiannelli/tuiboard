@@ -18,8 +18,8 @@ any markdown editor.
 │ │ 🔺 Prio   │ │   Task 3                       │ │ 10 ──────  │            │
 │ └───────────┘ └────────────────────────────────┘ │ 11 ──────  │            │
 │ ┌Agents (live)──────────────────────────────────┐│ 12 ──────  │            │
-│ │● tuiboard      Shadow  💬 attivo  📂 ...      ││ 13 ⌚ call │            │
-│ │ pulse          Laptop  💤 3m fa   📂 ...      ││ ...        │            │
+│ │● tuiboard      Shadow  💬 active  📂 ...      ││ 13 ⌚ call │            │
+│ │ pulse          Laptop  💤 3m ago  📂 ...      ││ ...        │            │
 │ └────────────────────────────────────────────────┘└────────────┘            │
 │ hjkl move · Tab board · S-Tab zone · F1/F2/F3 toggle · z zoom · ? help     │
 └────────────────────────────────────────────────────────────────────────────┘
@@ -27,32 +27,46 @@ any markdown editor.
 
 ## Install
 
+Requires [Bun](https://bun.sh) ≥ 1.2 — tuiboard runs on the Bun runtime (it's
+not a Node CLI). OpenTUI ships its own native renderer binaries; Bun picks the
+right one for your platform automatically. Pick whichever install fits:
+
+**Global, straight from GitHub** (no npm needed) — run `tuiboard` from anywhere:
+
 ```bash
-git clone <this repo>
-cd tuiboard
-bun install
-bun run dev
+bun install -g github:NazzarenoGiannelli/tuiboard
+tuiboard
 ```
 
-Requires [Bun](https://bun.sh) ≥ 1.3. OpenTUI ships its own native renderer
-binaries — `bun install` picks the right one for your platform automatically.
-
-For a global install (so you can run `tuiboard` from any vault directory):
+**Global, from npm** (once published):
 
 ```bash
-bun link
+bun install -g tuiboard      # or run once, no install: bunx tuiboard
+```
+
+**From source** (for hacking on it):
+
+```bash
+git clone https://github.com/NazzarenoGiannelli/tuiboard.git
+cd tuiboard
+bun install
+bun run dev          # or: bun link  → then `tuiboard` globally, live-linked
 ```
 
 ## Configure
 
-Copy `.tuiboard/config.example.yaml` to `.tuiboard/config.yaml` somewhere
-along the path tuiboard will discover (the cwd or any parent), then edit
-the `boards:` list to point at your markdown files.
+Copy `.tuiboard/config.example.yaml` to a config location and edit the
+`boards:` list to point at your markdown files. tuiboard resolves the config
+in this order (first hit wins):
 
-`tuiboard` walks up from the current working directory looking for
-`.tuiboard/config.yaml`, so the most common pattern is to drop a
-`.tuiboard/` folder at your vault root. Without a config it falls back to
-scanning the cwd for any `.md` file containing `- [ ]` tasks.
+1. **`$TUIBOARD_CONFIG`** — explicit path to a config file.
+2. **Project-local** — `.tuiboard/config.yaml`, walking up from the cwd. Drop
+   a `.tuiboard/` folder at a project/vault root and it's used whenever you
+   launch from inside that tree.
+3. **Global** — `~/.config/tuiboard/config.yaml` (or `~/.tuiboard/config.yaml`).
+   Use **absolute** board paths here and `tuiboard` shows your boards from
+   *any* directory — the usual setup for a single-vault user.
+4. **Fallback** — scan the cwd for any `.md` file containing `- [ ]` tasks.
 
 ```yaml
 boards:
@@ -191,4 +205,4 @@ session (until the next terminal resize).
 
 ## License
 
-MIT (pending).
+MIT — see [LICENSE](LICENSE).

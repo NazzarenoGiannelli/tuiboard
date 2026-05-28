@@ -1,11 +1,20 @@
 /**
  * Config loader.
  *
- * Looks for `.tuiboard/config.yaml` in cwd and walks up to the filesystem
- * root. Returns a normalized `Config` with sane defaults if not found.
+ * Resolution order (first hit wins):
+ *   1. $TUIBOARD_CONFIG — explicit path to a config file.
+ *   2. Project-local — `.tuiboard/config.(yaml|yml)` in cwd, walking up.
+ *   3. Global — `~/.config/tuiboard/config.(yaml|yml)` or `~/.tuiboard/…`.
+ *   4. Fallback — scan cwd for `.md` files containing tasks.
+ *
+ * The global step is what lets `tuiboard` run from ANY directory and still
+ * show your boards: drop one config in your home dir (with absolute board
+ * paths) and it's found regardless of cwd. A project-local config still wins
+ * when you're inside a project that has its own.
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import * as YAML from "js-yaml";
 
@@ -49,7 +58,11 @@ export interface LoadConfigOptions {
 
 export function loadConfig({ startDir }: LoadConfigOptions = {}): Config {
   const start = resolve(startDir ?? process.cwd());
-  const found = findConfigFile(start);
+
+  const found =
+    findEnvConfigFile() ?? // 1. $TUIBOARD_CONFIG
+    findConfigFile(start) ?? // 2. project-local, walking up from cwd
+    findGlobalConfigFile(); // 3. ~/.config/tuiboard or ~/.tuiboard
 
   if (found) {
     const raw = readFileSync(found.path, "utf-8");
@@ -57,7 +70,7 @@ export function loadConfig({ startDir }: LoadConfigOptions = {}): Config {
     return normalize(data, found.dir, true);
   }
 
-  // Fallback: scan cwd for .md files containing tasks.
+  // 4. Fallback: scan cwd for .md files containing tasks.
   return normalize({ boards: scanFallbackBoards(start) }, start, false);
 }
 
@@ -86,6 +99,29 @@ function findConfigFile(start: string): FoundConfig | undefined {
     const parent = dirname(dir);
     if (parent === dir) return undefined;
     dir = parent;
+  }
+  return undefined;
+}
+
+/** Explicit config path via $TUIBOARD_CONFIG (points at the file itself). */
+function findEnvConfigFile(): FoundConfig | undefined {
+  const envPath = process.env.TUIBOARD_CONFIG;
+  if (!envPath) return undefined;
+  const abs = resolve(envPath);
+  return existsSync(abs) ? { path: abs, dir: dirname(abs) } : undefined;
+}
+
+/** User-global config in the home dir — found regardless of cwd. */
+function findGlobalConfigFile(): FoundConfig | undefined {
+  const home = homedir();
+  const candidates = [
+    join(home, ".config", "tuiboard", "config.yaml"),
+    join(home, ".config", "tuiboard", "config.yml"),
+    join(home, ".tuiboard", "config.yaml"),
+    join(home, ".tuiboard", "config.yml"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return { path: candidate, dir: dirname(candidate) };
   }
   return undefined;
 }

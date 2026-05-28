@@ -33,6 +33,15 @@ export const DEFAULT_CONFIG: Omit<Config, "root" | "loaded" | "boards"> = {
   archiveColumn: "Archive",
 };
 
+/**
+ * Columns that exist in the markdown model but are never rendered in the
+ * board view: the Done column (completed-work log) and the Archive column.
+ * Their tasks stay in the file; the board just doesn't show them.
+ */
+export function isHiddenColumn(config: Config, columnName: string): boolean {
+  return columnName === config.doneColumn || columnName === config.archiveColumn;
+}
+
 export interface LoadConfigOptions {
   /** Starting directory for upward search. Defaults to process.cwd(). */
   startDir?: string;

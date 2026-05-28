@@ -13,6 +13,7 @@
  * shares the same input contract.
  */
 
+import { isHiddenColumn } from "~/config/loader";
 import { isTask } from "~/parser/markdown";
 import {
   isoToday,
@@ -348,18 +349,19 @@ function handleAgentsZone(store: TuiStore, key: KeyEvent): void {
 
 /**
  * Find the next/previous *rendered* column index moving in `dir` (+1 right,
- * -1 left) from `fromCol`, skipping the Archive column (which BoardView never
- * displays). Returns a `board.columns` index, or undefined when there is no
- * further visible column in that direction.
+ * -1 left) from `fromCol`, skipping hidden columns (Done / Archive) that
+ * BoardView never displays. Returns a `board.columns` index, or undefined
+ * when there is no further visible column in that direction.
  */
 function adjacentVisibleColumn(
+  store: TuiStore,
   board: Board,
-  archiveName: string,
   fromCol: number,
   dir: 1 | -1,
 ): number | undefined {
   for (let i = fromCol + dir; i >= 0 && i < board.columns.length; i += dir) {
-    if (board.columns[i]?.name !== archiveName) return i;
+    const name = board.columns[i]?.name;
+    if (name !== undefined && !isHiddenColumn(store.config, name)) return i;
   }
   return undefined;
 }
@@ -449,10 +451,10 @@ function handleBoardZone(
   }
 
   if (key.name === "h" || key.name === "left") {
-    // Step left over rendered (non-archive) columns. The Archive column is
-    // never displayed, so navigating onto it would strand the cursor on an
+    // Step left over rendered columns. Hidden columns (Done / Archive) are
+    // never displayed, so navigating onto one would strand the cursor on an
     // unrendered, unscrollable column.
-    const prev = adjacentVisibleColumn(board, store.config.archiveColumn, ui.col, -1);
+    const prev = adjacentVisibleColumn(store, board, ui.col, -1);
     if (prev === undefined) {
       store.setActiveZone("virtual");
     } else {
@@ -461,7 +463,7 @@ function handleBoardZone(
     return;
   }
   if (key.name === "l" || key.name === "right") {
-    const next = adjacentVisibleColumn(board, store.config.archiveColumn, ui.col, +1);
+    const next = adjacentVisibleColumn(store, board, ui.col, +1);
     if (next !== undefined) {
       store.setCursor(next, 0);
     }

@@ -6,6 +6,7 @@
 
 import { For, Show } from "solid-js";
 
+import { isHiddenColumn } from "~/config/loader";
 import { isoToday } from "~/store/index";
 import { ATTR, T } from "~/ui/glyphs";
 import type { TuiStore } from "~/store/index";
@@ -16,8 +17,9 @@ export function TopBar(props: { store: TuiStore }) {
   const activeStats = () => {
     const b = boards()[active()]?.board;
     if (!b) return undefined;
-    let open = 0, done = 0;
+    let open = 0, done = 0, cols = 0;
     for (const c of b.columns) {
+      if (!isHiddenColumn(props.store.config, c.name)) cols++;
       for (const child of c.children) {
         if (!("kind" in child)) {
           if (child.done) done++;
@@ -25,7 +27,7 @@ export function TopBar(props: { store: TuiStore }) {
         }
       }
     }
-    return { open, done, cols: b.columns.length };
+    return { open, done, cols };
   };
 
   // Build a flat token list for the tab row so we can render as a single

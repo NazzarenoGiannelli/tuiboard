@@ -10,6 +10,7 @@
 
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 
+import { isHiddenColumn } from "~/config/loader";
 import { isTask } from "~/parser/markdown";
 import { computeColumnScrollLeft } from "~/ui/board-scroll";
 import { T } from "~/ui/glyphs";
@@ -30,8 +31,21 @@ interface SizedBoxLike {
 
 /** Fixed column width when not zoomed. Single source of truth for layout. */
 const COL_WIDTH = 42;
+/**
+ * Width of a collapsed column — one with no OPEN tasks (an all-done lane like
+ * "Done", or an empty column). It shows just the `✓ N` counter; zoom (`z`)
+ * expands it back to full width so the done tasks can be scrolled on demand.
+ */
+const COL_WIDTH_COLLAPSED = 18;
 /** Horizontal gap between adjacent columns. */
 const COL_GAP = 1;
+
+/** Open (non-done) task count for a column, honoring the active board filter. */
+function openCountOf(store: TuiStore, column: Column): number {
+  return store.applyBoardFilter(
+    column.children.filter(isTask).filter((t) => !t.done),
+  ).length;
+}
 
 interface BoardViewProps {
   store: TuiStore;
@@ -47,7 +61,6 @@ function columnId(boardPath: string, idx: number): string {
 
 export function BoardView(props: BoardViewProps) {
   const ui = () => props.store.state.ui;
-  const archiveName = () => props.store.config.archiveColumn;
   // Width of the clipping viewport (the board zone), read from layout.
   let viewportRef: SizedBoxLike | undefined;
   // Horizontal scroll offset in cells, applied as a negative left margin on
@@ -55,13 +68,13 @@ export function BoardView(props: BoardViewProps) {
   const [scrollX, setScrollX] = createSignal(0);
 
   /**
-   * Columns shown in the view — Archive is filtered out entirely
-   * (Python kanban convention: archived tasks are never displayed).
-   * The Archive column still exists in the model so tasks can be moved
-   * into it; we just don't render it.
+   * Columns shown in the view — the Done and Archive columns are filtered
+   * out entirely (completed-work logs; never displayed on the board). Their
+   * tasks still live in the model so tasks can be moved into them; we just
+   * don't render them.
    */
   const visibleColumns = createMemo(() =>
-    props.board.columns.filter((c) => c.name !== archiveName()),
+    props.board.columns.filter((c) => !isHiddenColumn(props.store.config, c.name)),
   );
 
   /**
@@ -102,15 +115,18 @@ export function BoardView(props: BoardViewProps) {
       (c) => cols.indexOf(c) === colIdx,
     );
     if (visibleIndex < 0) return;
+    // Columns are uniform width today, so the active column's start offset is
+    // visibleIndex * stride. Passing an explicit start/width (rather than an
+    // index) keeps the geometry correct if columns ever become variable-width.
+    const colStart = visibleIndex * (COL_WIDTH + COL_GAP);
     // setTimeout(0) lets OpenTUI commit layout so viewportRef.width is current.
     setTimeout(() => {
       const vw = viewportRef?.width ?? 0;
       if (vw <= 0) return;
       setScrollX((prev) =>
         computeColumnScrollLeft({
-          visibleIndex,
+          colStart,
           colWidth: COL_WIDTH,
-          colGap: COL_GAP,
           viewportWidth: vw,
           currentScroll: prev,
         }),

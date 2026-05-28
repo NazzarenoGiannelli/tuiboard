@@ -696,30 +696,46 @@ function fmtHm(m: number): string {
 /**
  * Open (resume) a Claude Code session in a new WezTerm tab.
  *
- * Uses `wezterm cli spawn`, which adds a tab to the WezTerm window tuiboard is
- * already running in, sets its working directory to the session's cwd, and
- * runs `claude --resume <id>` so you drop straight back into that conversation.
- * Fire-and-forget (detached); a failed launch (e.g. not inside WezTerm, or
- * `wezterm`/`claude` not on PATH) surfaces as a banner instead of throwing.
+ * Two steps:
+ *   1. `wezterm cli spawn --cwd <cwd>` opens a new tab running your DEFAULT
+ *      shell in the session's directory (prints the new pane id).
+ *   2. `wezterm cli send-text` types `claude --resume <id>` + Enter into it.
+ *
+ * Running it through the interactive shell (rather than `spawn -- claude …`
+ * directly) means `claude` gets your full shell environment — PATH, env vars,
+ * any wrapper — which is why the direct form exited 1. And if `claude` still
+ * errors, you're left at a live prompt that shows it instead of a vanishing
+ * tab. Failures (not inside WezTerm, `wezterm` off PATH) surface as a banner.
  */
 async function openSessionInWezterm(
   store: TuiStore,
   cwd: string,
   sessionId: string,
 ): Promise<void> {
-  const { spawn } = await import("node:child_process");
+  const { spawnSync } = await import("node:child_process");
   try {
-    const child = spawn(
+    const spawned = spawnSync("wezterm", ["cli", "spawn", "--cwd", cwd], {
+      encoding: "utf8",
+    });
+    if (spawned.error) {
+      store.flashBanner("error", `WezTerm launch failed: ${spawned.error.message}`);
+      return;
+    }
+    if (spawned.status !== 0) {
+      store.flashBanner(
+        "error",
+        `WezTerm spawn failed: ${(spawned.stderr || "").trim() || `exit ${spawned.status}`}`,
+      );
+      return;
+    }
+    const paneId = spawned.stdout.trim();
+    // Type the resume command into the fresh pane (\r submits, like Enter).
+    spawnSync(
       "wezterm",
-      ["cli", "spawn", "--cwd", cwd, "--", "claude", "--resume", sessionId],
-      { detached: true, stdio: "ignore" },
+      ["cli", "send-text", "--pane-id", paneId, "--no-paste"],
+      { input: `claude --resume ${sessionId}\r`, encoding: "utf8" },
     );
-    // ENOENT (wezterm not found) arrives as an async 'error' event, not a throw.
-    child.on("error", (e: NodeJS.ErrnoException) =>
-      store.flashBanner("error", `WezTerm launch failed: ${e.message}`),
-    );
-    child.unref();
-    store.flashBanner("info", `↗ Opening session in WezTerm (${sessionId.slice(0, 8)})`);
+    store.flashBanner("info", `↗ Opened session in WezTerm (${sessionId.slice(0, 8)})`);
   } catch (e) {
     store.flashBanner("error", `WezTerm launch failed: ${String(e)}`);
   }

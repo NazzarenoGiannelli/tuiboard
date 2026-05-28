@@ -83,6 +83,7 @@ export function TimelineView(props: TimelineViewProps) {
   const isActive = () => props.store.state.ui.activeZone === "timeline";
   const cursor = () => props.store.state.ui.row;
   const armedRef = () => props.store.state.ui.armedTimelineRef;
+  const armMode = () => props.store.state.ui.armMode;
 
   const entries = createMemo(() =>
     buildTimelineEntries(
@@ -215,6 +216,10 @@ export function TimelineView(props: TimelineViewProps) {
     if (!armed.timeBlock) {
       const startMin = Math.max(0, targetMin);
       const endMin = Math.min(24 * 60 - 1, startMin + DEFAULT_BLOCK_MIN);
+      // A time block only renders on the timeline when the task is also
+      // scheduled for today — so arming a task from ANY board and dropping it
+      // here pins it to today (otherwise it'd vanish: block set, wrong date).
+      props.store.setScheduled(ref, isoToday());
       props.store.setTimeBlock(ref, { startMin, endMin });
       props.store.flashBanner(
         "info",
@@ -262,13 +267,29 @@ export function TimelineView(props: TimelineViewProps) {
         marginLeft: 1,
         border: true,
         borderStyle: "rounded",
-        borderColor: isActive() ? T.borderActive : T.border,
+        // Arm mode paints the border warm so the special scheduling mode is
+        // unmistakable, even when the keyboard focus is elsewhere.
+        borderColor: armMode()
+          ? T.warmActive
+          : isActive()
+            ? T.borderActive
+            : T.border,
         paddingLeft: 1,
         paddingRight: 1,
       }}
-      title={`┤ Timeline · ${entries().length} ├`}
+      title={`┤ Timeline · ${entries().length}${armMode() ? "  ◉ ARM" : ""} ├`}
       titleAlignment="left"
     >
+      <Show when={armMode()}>
+        <text wrapMode="none">
+          <span style={{ fg: T.warmActive, attributes: ATTR.bold }}>
+            {"◉ ARM MODE "}
+          </span>
+          <span style={{ fg: T.textDim }}>
+            {"click a task → click a slot · Esc to exit"}
+          </span>
+        </text>
+      </Show>
       <Show when={armedTask()}>
         <text wrapMode="none">
           <span style={{ fg: T.warm, attributes: ATTR.bold }}>
@@ -391,6 +412,9 @@ function TimelineRow(props: TimelineRowProps) {
   const rightIsArmed = () =>
     !!props.armedEntry && right().entry === props.armedEntry;
 
+  const leftIsDone = () => !!left().entry?.task.done;
+  const rightIsDone = () => !!right().entry?.task.done;
+
   /** Mouse handler factory for a lane cell. */
   const cellMouseDown = (cellEntry: TimelineEntry | undefined) => {
     return (event: MouseEventLike) => {
@@ -416,6 +440,7 @@ function TimelineRow(props: TimelineRowProps) {
               leftIsCursor(),
               leftIsArmed(),
               leftIsBlock(),
+              leftIsDone(),
             ),
           }}
           onMouseDown={cellMouseDown(left().entry)}
@@ -443,6 +468,7 @@ function TimelineRow(props: TimelineRowProps) {
               leftIsCursor(),
               leftIsArmed(),
               leftIsBlock(),
+              leftIsDone(),
             ),
           }}
           onMouseDown={cellMouseDown(left().entry)}
@@ -464,6 +490,7 @@ function TimelineRow(props: TimelineRowProps) {
               rightIsCursor(),
               rightIsArmed(),
               rightIsBlock(),
+              rightIsDone(),
             ),
           }}
           onMouseDown={cellMouseDown(right().entry)}
@@ -556,7 +583,10 @@ function RowContent(props: RowContentProps) {
       <>
         <span style={{ fg: T.textDim }}>{prefix}</span>
         <span style={{ fg: bColor }}>{"│ "}</span>
-        <span style={{ fg: e.task.done ? T.textDone : T.text }}>
+        <Show when={e.task.done}>
+          <span style={{ fg: T.done }}>{"✓ "}</span>
+        </Show>
+        <span style={{ fg: e.task.done ? T.done : T.text }}>
           {e.task.displayTitle}
         </span>
       </>
@@ -614,10 +644,11 @@ function laneBg(
   isCursor: boolean,
   isArmed: boolean,
   isBlock: boolean,
+  isDone: boolean,
 ): string | undefined {
   if (isArmed) return T.warmDim;
   if (isCursor) return T.cardBgCursor;
-  if (isBlock) return T.cardBlockBg;
+  if (isBlock) return isDone ? T.cardBlockBgDone : T.cardBlockBg;
   return undefined;
 }
 

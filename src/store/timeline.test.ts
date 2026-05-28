@@ -73,7 +73,7 @@ describe("buildTimelineEntries", () => {
     expect(entries[0]!.endRow).toBe(14);
   });
 
-  it("excludes done tasks", () => {
+  it("includes done tasks (timeline doubles as a done-log)", () => {
     const t = makeTask({
       displayTitle: "done deal",
       done: true,
@@ -81,7 +81,9 @@ describe("buildTimelineEntries", () => {
       timeBlock: { startMin: 9 * 60, endMin: 10 * 60 },
     });
     const board = makeBoard("R3PLICA", "r3.md", [t]);
-    expect(buildTimelineEntries([board], today)).toEqual([]);
+    const entries = buildTimelineEntries([board], today);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.task.done).toBe(true);
   });
 
   it("excludes tasks scheduled for a different date", () => {

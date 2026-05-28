@@ -119,6 +119,15 @@ export function VirtualPanel(props: { store: TuiStore }) {
             onClickItem={(flatIndex) => {
               props.store.setActiveZone("virtual");
               props.store.setCursor(0, flatIndex);
+              // In calendar arm mode, a click also arms the task for the
+              // timeline (click a task, then a slot to place it).
+              if (props.store.state.ui.armMode) {
+                const item = items().find((it) => it.flatIndex === flatIndex);
+                if (item) {
+                  props.store.armTimeline(item.ref);
+                  props.store.setZoneVisible("timeline", true);
+                }
+              }
             }}
           />
         </scrollbox>

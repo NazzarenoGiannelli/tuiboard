@@ -70,11 +70,14 @@ export interface BuildRowMapResult {
 
 /**
  * Build the flat list of time-blocked tasks for the given ISO date.
- * Tasks must be:
- *   - non-done
+ * Tasks must:
  *   - have task.timeBlock
  *   - have task.scheduled === date (we ignore `due` for now; calendar-style
  *     time-blocking is always scheduled, not due)
+ *
+ * Completed tasks ARE included (rendered green + checked) so the timeline
+ * doubles as a record of what actually got done in each slot, not just what's
+ * still pending.
  *
  * Sorted ascending by startMin so head/body/fill rendering can claim rows
  * in chronological order.
@@ -93,7 +96,8 @@ export function buildTimelineEntries(
         if (!isTask(child)) continue;
         const idx = taskIndex++;
         const t = child;
-        if (t.done) continue;
+        // Done tasks stay on the timeline (shown green + checked) — the day's
+        // schedule is also a log of what got done.
         if (!t.timeBlock) continue;
         if (t.scheduled !== date) continue;
 

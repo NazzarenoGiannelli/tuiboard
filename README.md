@@ -176,6 +176,8 @@ session (until the next terminal resize).
 | `b` | Set time block modal |
 | `p` | Cycle priority (none → 🔺 → ⏫ → 🔼 → 🔽 → ⏬ → none) |
 | `a` | Set assignee |
+| `c` | Toggle calendar **arm mode** — then click a task, click a timeline slot, repeat |
+| `Shift-C` | Copy task to clipboard (markdown line — paste as context for Claude Code) |
 | `d` | Delete task (with confirm) |
 | `Shift-X` | Archive task → moves to Archive column |
 

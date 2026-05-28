@@ -106,6 +106,14 @@ export interface UIState {
    * cancels.
    */
   armedTimelineRef?: TaskRef;
+  /**
+   * Persistent calendar "arm mode" (toggled with `c`). While on, clicking any
+   * task in the board / virtual panel arms it for the timeline, so you can
+   * schedule several tasks in a row — click a task, click a slot, repeat —
+   * without re-pressing `c`. `Esc` (or `c` again) exits. Distinct from
+   * `armedTimelineRef`, which is the single task currently armed.
+   */
+  armMode: boolean;
   view: ViewMode;
   /**
    * Tasks marked for bulk ops (`Space`). Key format:
@@ -154,6 +162,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       row: 0,
       zoomed: false,
       grabbing: false,
+      armMode: false,
       view: "kanban",
       marked: {},
       filter: "all",
@@ -738,6 +747,10 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "armedTimelineRef", ref);
   }
 
+  function setArmMode(on: boolean): void {
+    setState("ui", "armMode", on);
+  }
+
   // ─── Multi-select ────────────────────────────────────────────────────────
 
   function markKey(ref: TaskRef): string {
@@ -914,6 +927,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     toggleGrab,
     exitGrab,
     armTimeline,
+    setArmMode,
     setFilter,
     applyBoardFilter,
     setZoomed,

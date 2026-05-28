@@ -74,11 +74,14 @@ export function handleKey(
     return;
   }
 
-  // Escape priority: timeline arm → grab mode → marks. Most disruptive first.
+  // Escape priority: arm mode / timeline arm → grab mode → marks. Most
+  // disruptive first.
   if (key.name === "escape") {
-    if (ui.armedTimelineRef) {
+    if (ui.armMode || ui.armedTimelineRef) {
+      const wasMode = ui.armMode;
+      store.setArmMode(false);
       store.armTimeline(undefined);
-      store.flashBanner("info", "Disarmed");
+      store.flashBanner("info", wasMode ? "Arm mode off" : "Disarmed");
       return;
     }
     if (ui.grabbing) {
@@ -559,30 +562,11 @@ function dispatchTaskAction(
     return true;
   }
 
-  // Calendar-arm (Shift+C): arm this task for the timeline and jump focus
-  // there so the user can immediately click a slot to place it. Works from
-  // the board, the virtual panel, or the timeline — wherever the cursor is.
-  // Replaces the removed sticky 'Unscheduled' list: instead of duplicating
-  // today's tasks at the top of the timeline, arm one in place and drop it.
+  // Copy task as a markdown line to the system clipboard (Shift+C). Mirrors
+  // Python kanban `action_copy_context`. Single-task only. Moved to Shift+C so
+  // lowercase `c` is free for calendar arm mode (below); Ctrl+C can't be used
+  // (it quits / is terminal-reserved), so Shift+C is the copy combo.
   if (key.name === "C" || (key.name === "c" && key.shift)) {
-    store.armTimeline(ref);
-    store.setZoneVisible("timeline", true);
-    store.setActiveZone("timeline");
-    const t = store.getTask(ref);
-    store.flashBanner(
-      "info",
-      t
-        ? `⤤ Armed "${t.displayTitle.slice(0, 32)}" — click a timeline slot to place`
-        : "⤤ Armed — click a timeline slot to place",
-    );
-    return true;
-  }
-
-  // Copy task as a markdown line to the system clipboard. Mirrors Python
-  // kanban `action_copy_context`. Single-task only (multi-select would
-  // require deciding how to join lines). Explicitly non-shift so Shift+C
-  // (calendar-arm, above) doesn't also trigger a clipboard copy.
-  if (key.name === "c" && !key.shift) {
     const t = store.getTask(ref);
     if (t) {
       copyToClipboard(t.rawLine).then(
@@ -590,6 +574,32 @@ function dispatchTaskAction(
         (err) => store.flashBanner("error", `Copy failed: ${err}`),
       );
     }
+    return true;
+  }
+
+  // Calendar arm mode (lowercase c): toggle a persistent mode for batch
+  // scheduling onto the timeline. Entering also arms the cursor task and
+  // focuses the timeline so you can immediately click a slot. While the mode
+  // is on, clicking ANY task (board / virtual) arms it — click a task, click a
+  // slot, repeat. `c` again or `Esc` exits. Works from any zone.
+  if (key.name === "c" && !key.shift) {
+    if (store.state.ui.armMode) {
+      store.setArmMode(false);
+      store.armTimeline(undefined);
+      store.flashBanner("info", "Arm mode off");
+      return true;
+    }
+    store.setArmMode(true);
+    store.armTimeline(ref);
+    store.setZoneVisible("timeline", true);
+    store.setActiveZone("timeline");
+    const t = store.getTask(ref);
+    store.flashBanner(
+      "info",
+      t
+        ? `◉ Arm mode — armed "${t.displayTitle.slice(0, 28)}". Click a task, then a slot. Esc to exit.`
+        : "◉ Arm mode — click a task, then a slot. Esc to exit.",
+    );
     return true;
   }
 

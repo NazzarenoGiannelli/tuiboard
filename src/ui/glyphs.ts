@@ -46,6 +46,9 @@ export const T = {
   // dotted/empty gutters around them. Just barely darker-than-cursor; on a
   // typical dark terminal it reads as "filled card", not as "highlighted".
   cardBlockBg: "#1c2030",
+  // Same idea but tinted faintly green for COMPLETED time blocks, matching
+  // the done-green title. Reads as "done" at a glance without shouting.
+  cardBlockBgDone: "#1a2a1d",
 
   // Foreground neutrals — readable mid-grays so dim chrome doesn't disappear
   text: undefined as string | undefined,    // terminal default fg

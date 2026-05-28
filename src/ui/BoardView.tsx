@@ -306,6 +306,12 @@ function ColumnView(props: ColumnViewProps) {
                   onClick={() => {
                     props.store.setActiveZone("board");
                     props.store.setCursor(props.columnIndex, ri());
+                    // In calendar arm mode, a click also arms the task so the
+                    // user can immediately drop it on a timeline slot.
+                    if (props.store.state.ui.armMode) {
+                      props.store.armTimeline(ref);
+                      props.store.setZoneVisible("timeline", true);
+                    }
                   }}
                 />
               </box>

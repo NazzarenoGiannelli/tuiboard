@@ -51,6 +51,7 @@ export const T = {
   text: undefined as string | undefined,    // terminal default fg
   textDim: "#8a90a8",     // bumped up from #6b7089 for legibility
   textDone: "#6b7089",    // formerly textDim — done tasks are dim but still readable
+  done: "#6aaf57",        // muted-but-clear green for completed task titles + ✓
 
   // Cool accents — used for active board columns and generic focus
   accent: "#7eb6d6",         // clearer blue-cyan, hue ~200°

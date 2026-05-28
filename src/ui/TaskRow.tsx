@@ -30,6 +30,12 @@ interface TaskRowProps {
   /** If true, hide the date suffix (used when group header already conveys date). */
   hideDateSuffix?: boolean;
   /**
+   * Optional title tint (e.g. the source-board accent in the virtual panel).
+   * Applies only to non-done, non-overdue, non-today rows — those keep their
+   * status color. Done-green always wins over any tint.
+   */
+  tintColor?: string;
+  /**
    * Total cell width available to this row, in terminal columns. When set,
    * TaskRow computes the exact title budget from this width minus the row's
    * actual overhead (cursor, marked dot, done check, priority emoji, context
@@ -46,7 +52,9 @@ interface TaskRowProps {
 export function TaskRow(props: TaskRowProps) {
   const status = createMemo(() => statusOf(props.task));
   const suffix = createMemo(() => buildSuffix(props.task, props.hideDateSuffix));
-  const titleColor = createMemo(() => titleColorFor(props.task, status()));
+  const titleColor = createMemo(() =>
+    titleColorFor(props.task, status(), props.tintColor),
+  );
   const suffixColor = createMemo(() => suffixColorFor(props.task, status()));
 
   // Compute the title budget from availableWidth + this row's actual overhead
@@ -111,7 +119,7 @@ export function TaskRow(props: TaskRowProps) {
           <span style={{ fg: T.accent }}>● </span>
         </Show>
         <Show when={props.task.done}>
-          <span style={{ fg: T.textDone }}>✓ </span>
+          <span style={{ fg: T.done }}>✓ </span>
         </Show>
         <Show when={props.task.priority !== "none"}>
           <span style={{ fg: PRIORITY_COLOR[props.task.priority] }}>
@@ -157,8 +165,18 @@ function statusOf(t: Task): TaskStatus {
   return "future";
 }
 
-function titleColorFor(task: Task, status: TaskStatus): string | undefined {
-  if (status === "done") return T.textDone;
+function titleColorFor(
+  task: Task,
+  status: TaskStatus,
+  tintColor?: string,
+): string | undefined {
+  // Done-green always wins so a completed task reads as "done" at a glance,
+  // regardless of which board it came from.
+  if (status === "done") return T.done;
+  // A board tint (virtual panel) takes precedence over the date-status colors:
+  // the panel's section headers (Overdue/Today/Tomorrow) already convey the
+  // date, so the row color is freed up to signal the *source board* instead.
+  if (tintColor) return tintColor;
   if (status === "overdue") return T.overdue;
   if (status === "today") return T.today;
   // future / unscheduled: terminal default fg (looks right on any theme).

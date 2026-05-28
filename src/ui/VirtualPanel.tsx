@@ -2,7 +2,7 @@
 
 import { For, Show, createEffect, createMemo } from "solid-js";
 
-import { ATTR, T } from "~/ui/glyphs";
+import { ATTR, T, boardColor } from "~/ui/glyphs";
 import { TaskRow } from "~/ui/TaskRow";
 import {
   buildVirtualItems,
@@ -168,6 +168,10 @@ function RenderGroups(props: {
                         cursor={props.isActive && item.flatIndex === props.cursorRow}
                         marked={props.isMarkedFn(item.ref)}
                         availableWidth={props.availableWidth}
+                        // Tint the title with the source board's accent so a
+                        // cross-cutting Today/Tomorrow item is recognizable by
+                        // its board at a glance (done-green still wins).
+                        tintColor={boardColor(item.boardIndex)}
                         // Today / Tomorrow sections already say so in their
                         // header — drop the redundant per-row "today"/"tmrw"
                         // date label (the ⌚ time block stays). Overdue rows
@@ -200,6 +204,7 @@ function RenderGroups(props: {
                             cursor={props.isActive && item.flatIndex === props.cursorRow}
                             marked={props.isMarkedFn(item.ref)}
                             availableWidth={props.availableWidth}
+                            tintColor={boardColor(item.boardIndex)}
                             hideDateSuffix={
                               group.section === "today" || group.section === "tomorrow"
                             }

@@ -21,7 +21,7 @@ import {
   type TaskRef,
   type TuiStore,
 } from "~/store/index";
-import type { PriorityLevel } from "~/types";
+import type { Board, PriorityLevel } from "~/types";
 import { buildTimelineEntries } from "~/store/timeline";
 import { buildVirtualItems } from "~/store/virtual-panel";
 import { jumpToKanban } from "~/ui/TimelineView";
@@ -346,6 +346,24 @@ function handleAgentsZone(store: TuiStore, key: KeyEvent): void {
   }
 }
 
+/**
+ * Find the next/previous *rendered* column index moving in `dir` (+1 right,
+ * -1 left) from `fromCol`, skipping the Archive column (which BoardView never
+ * displays). Returns a `board.columns` index, or undefined when there is no
+ * further visible column in that direction.
+ */
+function adjacentVisibleColumn(
+  board: Board,
+  archiveName: string,
+  fromCol: number,
+  dir: 1 | -1,
+): number | undefined {
+  for (let i = fromCol + dir; i >= 0 && i < board.columns.length; i += dir) {
+    if (board.columns[i]?.name !== archiveName) return i;
+  }
+  return undefined;
+}
+
 function handleBoardZone(
   store: TuiStore,
   key: KeyEvent,
@@ -431,16 +449,21 @@ function handleBoardZone(
   }
 
   if (key.name === "h" || key.name === "left") {
-    if (ui.col === 0) {
+    // Step left over rendered (non-archive) columns. The Archive column is
+    // never displayed, so navigating onto it would strand the cursor on an
+    // unrendered, unscrollable column.
+    const prev = adjacentVisibleColumn(board, store.config.archiveColumn, ui.col, -1);
+    if (prev === undefined) {
       store.setActiveZone("virtual");
     } else {
-      store.setCursor(ui.col - 1, 0);
+      store.setCursor(prev, 0);
     }
     return;
   }
   if (key.name === "l" || key.name === "right") {
-    if (ui.col < board.columns.length - 1) {
-      store.setCursor(ui.col + 1, 0);
+    const next = adjacentVisibleColumn(board, store.config.archiveColumn, ui.col, +1);
+    if (next !== undefined) {
+      store.setCursor(next, 0);
     }
     return;
   }

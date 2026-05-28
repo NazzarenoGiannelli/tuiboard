@@ -11,15 +11,27 @@
 import { For, Show, createEffect, createMemo } from "solid-js";
 
 import { isTask } from "~/parser/markdown";
+import { computeColumnScrollLeft } from "~/ui/board-scroll";
 import { T } from "~/ui/glyphs";
 import { TaskRow } from "~/ui/TaskRow";
 import type { TuiStore } from "~/store/index";
 import type { Board, Column } from "~/types";
 
 // Minimal structural typing for the scrollbox ref so we don't depend on
-// importing OpenTUI's internal Renderable types just to call one method.
+// importing OpenTUI's internal Renderable types just to call its methods.
 interface ScrollBoxLike {
   scrollChildIntoView(id: string): void;
+}
+
+/**
+ * Horizontal scrollbox: we drive `scrollLeft` directly from known column
+ * geometry rather than `scrollChildIntoView`, which relies on per-child
+ * layout being measured at call time (unreliable for fully off-screen
+ * columns). `viewport.width` is the visible width; `scrollLeft` is r/w.
+ */
+interface HScrollBoxLike {
+  scrollLeft: number;
+  readonly viewport: { width: number };
 }
 
 /** Fixed column width when not zoomed. Single source of truth for layout. */
@@ -42,25 +54,7 @@ function columnId(boardPath: string, idx: number): string {
 export function BoardView(props: BoardViewProps) {
   const ui = () => props.store.state.ui;
   const archiveName = () => props.store.config.archiveColumn;
-  let scrollBoxRef: ScrollBoxLike | undefined;
-
-  // Auto-scroll horizontally so the active column is always visible.
-  // scrollChildIntoView handles the axis automatically based on the
-  // scroll direction declared on the scrollbox.
-  createEffect(() => {
-    const colIdx = ui().col;
-    if (ui().activeZone === "virtual" || ui().zoomed || !scrollBoxRef) return;
-    // setTimeout(0) — full event-loop tick — is the only timing that
-    // reliably waits for OpenTUI to recompute child layout before
-    // requesting a scroll. queueMicrotask was too eager.
-    setTimeout(() => {
-      try {
-        scrollBoxRef?.scrollChildIntoView(columnId(props.board.filepath, colIdx));
-      } catch {
-        // Child not mounted yet on first paint — harmless.
-      }
-    }, 0);
-  });
+  let scrollBoxRef: (ScrollBoxLike & Partial<HScrollBoxLike>) | undefined;
 
   /**
    * Columns shown in the view — Archive is filtered out entirely
@@ -72,6 +66,43 @@ export function BoardView(props: BoardViewProps) {
     props.board.columns.filter((c) => c.name !== archiveName()),
   );
 
+  // Auto-scroll horizontally so the active column is always fully visible.
+  // We compute the target scrollLeft from the fixed column geometry
+  // (COL_WIDTH + COL_GAP) and the active column's position within the
+  // *rendered* (non-archive) column list. Driving scrollLeft directly is
+  // deterministic — unlike scrollChildIntoView it doesn't depend on each
+  // column's measured layout being current, which failed for columns that
+  // start fully off-screen.
+  createEffect(() => {
+    const colIdx = ui().col;
+    if (ui().activeZone === "virtual" || ui().zoomed || !scrollBoxRef) return;
+    // Map the board-columns index (what ui.col carries, used for task refs)
+    // to the index within the rendered, non-archive list the scrollbox lays
+    // out. They diverge once the Archive column is skipped.
+    const cols = props.board.columns;
+    const visibleIndex = visibleColumns().findIndex(
+      (c) => cols.indexOf(c) === colIdx,
+    );
+    if (visibleIndex < 0) return;
+    // setTimeout(0) — full event-loop tick — lets OpenTUI commit the current
+    // layout (so viewport.width is correct) before we read + set scrollLeft.
+    setTimeout(() => {
+      const box = scrollBoxRef;
+      if (!box || box.viewport === undefined) return;
+      try {
+        box.scrollLeft = computeColumnScrollLeft({
+          visibleIndex,
+          colWidth: COL_WIDTH,
+          colGap: COL_GAP,
+          viewportWidth: box.viewport.width,
+          currentScroll: box.scrollLeft ?? 0,
+        });
+      } catch {
+        // Scrollbox not mounted yet on first paint — harmless.
+      }
+    }, 0);
+  });
+
   /**
    * In zoom mode we render only the column under the cursor, expanded
    * to fill the board area. This is the "focus on one column" mode
@@ -80,14 +111,22 @@ export function BoardView(props: BoardViewProps) {
   const renderedColumns = createMemo(() => {
     if (!ui().zoomed || ui().activeZone === "virtual") return visibleColumns();
     const cols = visibleColumns();
-    const idx = Math.min(ui().col, cols.length - 1);
+    // ui.col is a board.columns index (carries Archive); map it to the
+    // rendered list so zoom focuses the column actually under the cursor.
+    const boardCols = props.board.columns;
+    const visibleIndex = cols.findIndex(
+      (c) => boardCols.indexOf(c) === ui().col,
+    );
+    const idx = visibleIndex >= 0 ? visibleIndex : Math.min(ui().col, cols.length - 1);
     return idx >= 0 ? [cols[idx]!] : cols;
   });
 
   return (
     <box style={{ flexDirection: "column", flexGrow: 1 }}>
       <scrollbox
-        ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}
+        ref={(r: ScrollBoxLike & Partial<HScrollBoxLike>) =>
+          (scrollBoxRef = r)
+        }
         style={{
           width: "100%",
           flexGrow: 1,

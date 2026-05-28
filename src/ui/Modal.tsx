@@ -525,7 +525,9 @@ function AgentDetailModal(props: { store: TuiStore; modal: Extract<NonNullable<T
             </Show>
             <box style={{ height: 1 }} />
             <text>
-              <span style={{ fg: T.textDim }}>resume command (copy by hand for now):</span>
+              <span style={{ fg: T.textDim }}>
+                resume — press Enter in the agents list to open this in WezTerm:
+              </span>
             </text>
             <text wrapMode="word">
               <span style={{ fg: T.scheduled }}>
@@ -588,6 +590,9 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  g                 Grab task — h/l then moves it between columns; g/Esc to drop\n"}</span>
         <span style={{ fg: T.text }}>{"  f                 Cycle board filter: all → today → overdue → tomorrow → followup\n"}</span>
         <span style={{ fg: T.text }}>{"  /                 Search task titles — jumps cursor to first match\n"}</span>
+        <span style={{ fg: T.textDim }}>{"\nAgents zone\n"}</span>
+        <span style={{ fg: T.text }}>{"  Enter             Open (resume) the selected session in a new WezTerm tab\n"}</span>
+        <span style={{ fg: T.text }}>{"  o                 Session detail (cwd, branch, last prompts, resume cmd)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nMulti-select\n"}</span>
         <span style={{ fg: T.text }}>{"  Space             Mark / unmark task — single-task actions then\n"}</span>
         <span style={{ fg: T.text }}>{"                    apply to ALL marked instead of just the cursor\n"}</span>

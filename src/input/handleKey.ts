@@ -333,11 +333,12 @@ function handleAgentsZone(store: TuiStore, key: KeyEvent): void {
     store.setCursor(0, Math.min(sessions.length - 1, ui.row + 1));
   } else if (key.name === "k" || key.name === "up") {
     store.setCursor(0, Math.max(0, ui.row - 1));
-  } else if (
-    key.name === "enter" ||
-    key.name === "return" ||
-    key.name === "o"
-  ) {
+  } else if (key.name === "enter" || key.name === "return") {
+    // Open (resume) the selected session in a new WezTerm tab.
+    const target = sessions[ui.row];
+    if (target) void openSessionInWezterm(store, target.cwd, target.sessionId);
+  } else if (key.name === "o") {
+    // Inspect the session in the detail modal.
     const target = sessions[ui.row];
     if (target) {
       setTimeout(
@@ -690,6 +691,38 @@ function fmtHm(m: number): string {
   const h = Math.floor(m / 60) % 24;
   const mm = m % 60;
   return `${h.toString().padStart(2, "0")}:${mm.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Open (resume) a Claude Code session in a new WezTerm tab.
+ *
+ * Uses `wezterm cli spawn`, which adds a tab to the WezTerm window tuiboard is
+ * already running in, sets its working directory to the session's cwd, and
+ * runs `claude --resume <id>` so you drop straight back into that conversation.
+ * Fire-and-forget (detached); a failed launch (e.g. not inside WezTerm, or
+ * `wezterm`/`claude` not on PATH) surfaces as a banner instead of throwing.
+ */
+async function openSessionInWezterm(
+  store: TuiStore,
+  cwd: string,
+  sessionId: string,
+): Promise<void> {
+  const { spawn } = await import("node:child_process");
+  try {
+    const child = spawn(
+      "wezterm",
+      ["cli", "spawn", "--cwd", cwd, "--", "claude", "--resume", sessionId],
+      { detached: true, stdio: "ignore" },
+    );
+    // ENOENT (wezterm not found) arrives as an async 'error' event, not a throw.
+    child.on("error", (e: NodeJS.ErrnoException) =>
+      store.flashBanner("error", `WezTerm launch failed: ${e.message}`),
+    );
+    child.unref();
+    store.flashBanner("info", `↗ Opening session in WezTerm (${sessionId.slice(0, 8)})`);
+  } catch (e) {
+    store.flashBanner("error", `WezTerm launch failed: ${String(e)}`);
+  }
 }
 
 /**

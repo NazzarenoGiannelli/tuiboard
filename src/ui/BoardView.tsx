@@ -12,7 +12,7 @@ import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 
 import { isHiddenColumn } from "~/config/loader";
 import { isTask } from "~/parser/markdown";
-import { computeColumnScrollLeft } from "~/ui/board-scroll";
+import { snapColumnScrollLeft } from "~/ui/board-scroll";
 import { T } from "~/ui/glyphs";
 import { TaskRow } from "~/ui/TaskRow";
 import type { TuiStore } from "~/store/index";
@@ -115,18 +115,18 @@ export function BoardView(props: BoardViewProps) {
       (c) => cols.indexOf(c) === colIdx,
     );
     if (visibleIndex < 0) return;
-    // Columns are uniform width today, so the active column's start offset is
-    // visibleIndex * stride. Passing an explicit start/width (rather than an
-    // index) keeps the geometry correct if columns ever become variable-width.
-    const colStart = visibleIndex * (COL_WIDTH + COL_GAP);
     // setTimeout(0) lets OpenTUI commit layout so viewportRef.width is current.
+    // Snap to column boundaries so the left edge always starts at a whole
+    // column (no chopped-word sliver); the rightmost column may still be cut
+    // as a "more →" hint.
     setTimeout(() => {
       const vw = viewportRef?.width ?? 0;
       if (vw <= 0) return;
       setScrollX((prev) =>
-        computeColumnScrollLeft({
-          colStart,
+        snapColumnScrollLeft({
+          visibleIndex,
           colWidth: COL_WIDTH,
+          colGap: COL_GAP,
           viewportWidth: vw,
           currentScroll: prev,
         }),

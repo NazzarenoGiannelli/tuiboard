@@ -47,3 +47,51 @@ export function computeColumnScrollLeft(input: ColumnScrollInput): number {
   }
   return currentScroll;
 }
+
+export interface ColumnSnapInput {
+  /** Active column index within the rendered (non-hidden) column list. */
+  visibleIndex: number;
+  /** Uniform column width in cells. */
+  colWidth: number;
+  /** Gap between columns in cells. */
+  colGap: number;
+  /** Currently visible width of the viewport in cells. */
+  viewportWidth: number;
+  /** Current horizontal scroll offset in cells. */
+  currentScroll: number;
+}
+
+/**
+ * Like computeColumnScrollLeft, but the result always lands on a column
+ * boundary (a multiple of the column stride). That keeps the LEFT edge of the
+ * viewport at the start of a whole column — no half-column "chopped word"
+ * sliver — while the rightmost visible column may still be cut off as a
+ * natural "more columns →" hint. Assumes uniform column widths (the rendered
+ * kanban columns are all COL_WIDTH; hidden/collapsed columns aren't drawn).
+ *
+ * Pure and side-effect free.
+ */
+export function snapColumnScrollLeft(input: ColumnSnapInput): number {
+  const { visibleIndex, colWidth, colGap, viewportWidth, currentScroll } = input;
+  if (visibleIndex < 0 || viewportWidth <= 0) return currentScroll;
+  const stride = colWidth + colGap;
+  if (stride <= 0) return currentScroll;
+
+  // Whole columns that fit (the last one needs no trailing gap).
+  const nfit = Math.max(1, Math.floor((viewportWidth + colGap) / stride));
+  // Reason in whole-column terms by snapping the current offset to a boundary.
+  const curStartIdx = Math.max(0, Math.round(currentScroll / stride));
+
+  // Active column already inside the current window → keep (snapped to a
+  // boundary, so a previously-unaligned scroll gets cleaned up too).
+  if (visibleIndex >= curStartIdx && visibleIndex <= curStartIdx + nfit - 1) {
+    return curStartIdx * stride;
+  }
+  // Scroll the minimum: active to the left edge if it's off the left, or make
+  // it the rightmost fully-visible column if it's off the right.
+  const startIdx =
+    visibleIndex < curStartIdx
+      ? visibleIndex
+      : Math.max(0, visibleIndex - nfit + 1);
+  return startIdx * stride;
+}

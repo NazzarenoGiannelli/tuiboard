@@ -2,7 +2,7 @@
  * Single-line render of an AgentSession. Used in both AgentsBar (compact
  * dashboard strip) and AgentsOnly (fullscreen list).
  *
- * Layout: cursor · status-dot · name · git branch · cwd_short · age
+ * Layout: cursor · status-dot · name · git branch  ……right-pinned: cwd_short · age
  */
 
 import { Show, createMemo } from "solid-js";
@@ -69,10 +69,13 @@ export function AgentRow(props: AgentRowProps) {
         <Show when={props.session.gitBranch}>
           <span style={{ fg: T.textDim }}>{"  "}{props.session.gitBranch}</span>
         </Show>
-        <span style={{ fg: T.textDim }}>{"  "}{props.session.cwdShort}</span>
       </text>
+      {/* cwd + age pinned together on the right, so the session titles align
+          cleanly on the left instead of being pushed around by the path. */}
       <text style={{ flexShrink: 0 }} wrapMode="none">
-        <span style={{ fg: T.textDim }}>{" "}{ageStr()}</span>
+        <span style={{ fg: T.textDim }}>
+          {props.session.cwdShort}{"   "}{ageStr()}
+        </span>
       </text>
     </box>
   );

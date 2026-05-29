@@ -28,7 +28,7 @@ const SECTION_HEADER: Record<string, { label: string; color: string }> = {
 // no header of its own — its items already sit under their own
 // `— board · column —` sub-dividers, so a generic label would be redundant.
 const BUCKET_HEADER: Record<string, { label: string; color: string }> = {
-  agenda: { label: "⏰ Agenda", color: T.accent },
+  agenda: { label: "⏰ Agenda", color: T.todayPale },
   priority: { label: "🔺 Priority", color: T.today },
 };
 

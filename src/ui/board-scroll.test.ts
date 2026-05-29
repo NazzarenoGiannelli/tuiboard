@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { computeColumnScrollLeft } from "~/ui/board-scroll";
+import { computeColumnScrollLeft, snapColumnScrollLeft } from "~/ui/board-scroll";
 
 const COL = 42;
 const GAP = 1;
@@ -59,5 +59,47 @@ describe("computeColumnScrollLeft", () => {
     expect(
       computeColumnScrollLeft({ colStart: 62, colWidth: 42, viewportWidth: 50, currentScroll: 0 }),
     ).toBe(54);
+  });
+});
+
+describe("snapColumnScrollLeft", () => {
+  // viewport 95 fits floor((95+1)/43) = 2 whole columns.
+  const snap = (visibleIndex: number, currentScroll: number, viewportWidth = 95) =>
+    snapColumnScrollLeft({ visibleIndex, colWidth: COL, colGap: GAP, viewportWidth, currentScroll });
+
+  test("result is always a column-boundary multiple of the stride", () => {
+    for (let i = 0; i < 6; i++) {
+      expect(snap(i, 0) % STRIDE).toBe(0);
+      expect(snap(i, 200) % STRIDE).toBe(0);
+    }
+  });
+
+  test("active column already in the window → keep (snapped)", () => {
+    expect(snap(0, 0)).toBe(0);
+    expect(snap(1, 0)).toBe(0); // cols 0,1 both fit at scroll 0
+  });
+
+  test("active off the right → it becomes the rightmost full column", () => {
+    // col 2 (Company) with 2 fitting → startIdx = 2-2+1 = 1 → scroll 43.
+    expect(snap(2, 0)).toBe(STRIDE);
+    // left edge is a clean boundary, col 0 fully off-screen (no sliver).
+  });
+
+  test("active off the left → it goes to the left edge", () => {
+    expect(snap(0, STRIDE)).toBe(0);
+  });
+
+  test("an unaligned current scroll is cleaned up to a boundary", () => {
+    // currentScroll 30 (mid-column) with active 0 → snaps to 0.
+    expect(snap(0, 30)).toBe(0);
+  });
+
+  test("wide viewport fits all columns → no scroll", () => {
+    expect(snap(2, 0, 200)).toBe(0);
+  });
+
+  test("negative index or zero viewport → unchanged", () => {
+    expect(snap(-1, 17)).toBe(17);
+    expect(snap(2, 17, 0)).toBe(17);
   });
 });

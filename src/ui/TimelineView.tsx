@@ -85,12 +85,13 @@ export function TimelineView(props: TimelineViewProps) {
   const armedRef = () => props.store.state.ui.armedTimelineRef;
   const armMode = () => props.store.state.ui.armMode;
 
-  const entries = createMemo(() =>
-    buildTimelineEntries(
+  const entries = createMemo(() => {
+    props.store.state.rev; // recompute on any board mutation
+    return buildTimelineEntries(
       props.store.state.boards.map((b) => b.board),
       isoToday(),
-    ),
-  );
+    );
+  });
 
   // Recompute the row map every minute so the "now" marker stays current.
   // No more sticky-unscheduled trimming — the unscheduled list lived at the

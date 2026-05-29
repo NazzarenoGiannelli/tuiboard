@@ -202,7 +202,13 @@ function taskRowId(boardPath: string, colIdx: number, rowIdx: number): string {
 }
 
 function ColumnView(props: ColumnViewProps) {
-  const allTasks = createMemo(() => props.column.children.filter(isTask));
+  const allTasks = createMemo(() => {
+    // Subscribe to the store's mutation counter so this list recomputes on
+    // any board change — fine-grained tracking of a nested children-array
+    // edit doesn't reliably re-render an already-mounted <For> here.
+    props.store.state.rev;
+    return props.column.children.filter(isTask);
+  });
   const openTasks = createMemo(() =>
     props.store.applyBoardFilter(allTasks().filter((t) => !t.done)),
   );

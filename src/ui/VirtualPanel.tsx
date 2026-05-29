@@ -34,6 +34,7 @@ const BUCKET_HEADER: Record<string, { label: string; color: string }> = {
 
 export function VirtualPanel(props: { store: TuiStore }) {
   const items = createMemo(() => {
+    props.store.state.rev; // recompute on any board mutation
     return buildVirtualItems(props.store.state.boards.map((b) => b.board));
   });
   const groups = createMemo(() => groupVirtualItems(items()));

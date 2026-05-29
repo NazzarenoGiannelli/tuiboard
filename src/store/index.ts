@@ -141,6 +141,16 @@ export interface StoreState {
   boards: LoadedBoard[];
   ui: UIState;
   undo: UndoEntry[];
+  /**
+   * Monotonic mutation counter. Bumped on every board mutation (via
+   * `saveBoard`). Derived views (board columns, virtual panel, timeline) read
+   * it so their memos recompute on any change — a reliable top-level signal
+   * dependency, since OpenTUI/Solid's fine-grained tracking of deeply-nested
+   * store edits (e.g. growing a column's `children` array) doesn't always
+   * propagate to an already-mounted `<For>`. This is the same mechanism that
+   * makes a board switch refresh everything.
+   */
+  rev: number;
 }
 
 // ─── Construction ───────────────────────────────────────────────────────────
@@ -168,6 +178,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       filter: "all",
     },
     undo: [],
+    rev: 0,
   });
 
   // ─── Watcher ─────────────────────────────────────────────────────────────
@@ -202,6 +213,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
           lb.mtimeMs = mtimeMs;
         }),
       );
+      setState("rev", (r) => r + 1);
       flashBanner("info", `Reloaded ${board.name} after external edit`);
     } catch (e) {
       flashBanner("error", `Reload failed: ${(e as Error).message}`);
@@ -266,6 +278,9 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   function saveBoard(boardPath: string): void {
     const lb = getBoardByPath(boardPath);
     if (!lb) return;
+    // Signal "data changed" to every derived view (see StoreState.rev). This
+    // runs for every mutation since they all persist through saveBoard.
+    setState("rev", (r) => r + 1);
     try {
       const content = serializeBoard(lb.board);
       // Record what we're writing so the watcher can recognize this exact

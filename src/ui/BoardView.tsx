@@ -66,6 +66,11 @@ export function BoardView(props: BoardViewProps) {
   // Horizontal scroll offset in cells, applied as a negative left margin on
   // the inner column row. A signal so the shift re-renders reactively.
   const [scrollX, setScrollX] = createSignal(0);
+  // Laid-out viewport width, captured alongside the scroll so we can tell
+  // which columns are fully visible (and blank the task rows of the ones that
+  // are only partly on-screen — keeps a clipped column's title as a "there's
+  // more" hint without the chopped-word task text).
+  const [viewportW, setViewportW] = createSignal(0);
 
   /**
    * Columns shown in the view — the Done and Archive columns are filtered
@@ -122,6 +127,7 @@ export function BoardView(props: BoardViewProps) {
     setTimeout(() => {
       const vw = viewportRef?.width ?? 0;
       if (vw <= 0) return;
+      setViewportW(vw);
       setScrollX((prev) =>
         computeColumnScrollLeft({
           colStart,
@@ -132,6 +138,19 @@ export function BoardView(props: BoardViewProps) {
       );
     }, 0);
   });
+
+  /**
+   * Is the column at rendered index `i` fully inside the viewport? Used to
+   * blank the task rows of a column that's only partly on-screen. Defaults to
+   * true while the viewport width is still unknown (first paint) and in zoom.
+   */
+  const columnFullyVisible = (i: number): boolean => {
+    const vw = viewportW();
+    if (vw <= 0 || ui().zoomed) return true;
+    const stride = COL_WIDTH + COL_GAP;
+    const start = i * stride;
+    return start >= scrollX() && start + COL_WIDTH <= scrollX() + vw;
+  };
 
   return (
     <box style={{ flexDirection: "column", flexGrow: 1 }}>
@@ -157,7 +176,7 @@ export function BoardView(props: BoardViewProps) {
           }}
         >
           <For each={renderedColumns()}>
-            {(col) => {
+            {(col, i) => {
               const originalIndex = props.board.columns.indexOf(col);
               const isActive = () =>
                 ui().activeZone === "board" && ui().col === originalIndex;
@@ -169,6 +188,7 @@ export function BoardView(props: BoardViewProps) {
                   columnIndex={originalIndex}
                   active={isActive()}
                   zoomed={ui().zoomed && isActive()}
+                  fullyVisible={columnFullyVisible(i())}
                   boxId={columnId(props.board.filepath, originalIndex)}
                 />
               );
@@ -191,6 +211,12 @@ interface ColumnViewProps {
    * shown inline because the user has explicitly focused this column.
    */
   zoomed: boolean;
+  /**
+   * False when the column is only partly on-screen (clipped by horizontal
+   * scroll). Its title still renders (clipped) as a "more columns" hint, but
+   * the task rows are blanked so no half-cut task text shows.
+   */
+  fullyVisible?: boolean;
   /** Stable DOM-equivalent id used by `scrollChildIntoView`. */
   boxId: string;
 }
@@ -312,6 +338,9 @@ function ColumnView(props: ColumnViewProps) {
           scrollbarOptions: { visible: false },
         }}
       >
+        {/* Blank the task rows when the column is only partly on-screen — its
+            (clipped) title still shows as a "more columns" hint. */}
+        <Show when={props.fullyVisible !== false}>
         {/*
           Keyed on the task-list signature so a structural change (add/delete/
           move) rebuilds the <For> fresh in the correct order, working around
@@ -374,6 +403,7 @@ function ColumnView(props: ColumnViewProps) {
               </span>
             </text>
           </box>
+        </Show>
         </Show>
       </scrollbox>
     </box>

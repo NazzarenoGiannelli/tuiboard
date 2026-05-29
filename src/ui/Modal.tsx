@@ -320,7 +320,7 @@ function ConfirmDeleteModal(props: { store: TuiStore; modal: Extract<NonNullable
   return (
     <DialogShell
       title={bulk ? `Delete ${markedCount} selected tasks?` : "Delete task?"}
-      hint="y to confirm · Esc/n to cancel"
+      hint="⏎/y confirm · Esc/n cancel"
       width={70}
     >
       <text>

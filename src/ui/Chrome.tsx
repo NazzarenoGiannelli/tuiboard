@@ -115,7 +115,7 @@ export function BottomBar(props: { store: TuiStore }) {
         */}
         <text wrapMode="none" truncate>
           <span style={{ fg: T.textDim }}>
-            {"hjkl move · Tab board · ⇧Tab zone · ⏎ done · n new · c schedule · ? help · q quit"}
+            {"hjkl move · Tab board · ⇧Tab zone · ⏎ done · n new · t today · b block · c schedule · z zoom · ? help · q quit"}
           </span>
         </text>
       </box>

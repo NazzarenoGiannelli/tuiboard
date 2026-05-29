@@ -624,7 +624,7 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  Enter             Open (resume) the selected session in a new WezTerm tab\n"}</span>
         <span style={{ fg: T.text }}>{"  o                 Session detail (cwd, branch, last prompts, resume cmd)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nMulti-select\n"}</span>
-        <span style={{ fg: T.text }}>{"  Space             Mark task + advance cursor — sweep a range with repeats\n"}</span>
+        <span style={{ fg: T.text }}>{"  Space             Mark / unmark task (cursor stays — mark in any order)\n"}</span>
         <span style={{ fg: T.text }}>{"                    Every task action (done/schedule/time block/assign/\n"}</span>
         <span style={{ fg: T.text }}>{"                    priority/archive/delete) then applies to ALL marked\n"}</span>
         <span style={{ fg: T.text }}>{"  Esc               Clear the selection (when no modal is open)\n"}</span>

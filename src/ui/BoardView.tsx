@@ -228,7 +228,25 @@ function ColumnView(props: ColumnViewProps) {
   // move) it changes, forcing the list to rebuild fresh in the correct order
   // (the same thing a board switch does). A plain text edit leaves ids/order
   // untouched → no remount → cheap in-place update.
-  const taskListKey = createMemo(() => visibleTasks().map((t) => t.id).join("|"));
+  const taskListKey = createMemo(() => {
+    props.store.state.rev; // recompute on any mutation, including mark changes
+    const ids = visibleTasks().map((t) => t.id).join("|");
+    // Fold the current selection into the key too. OpenTUI doesn't reliably
+    // re-render a per-row `marked` prop on a store change, so a selection
+    // change (mark / unmark / clear) must rebuild the list to repaint the ●
+    // dots — same remount trick the add fix relies on. Without this, cleared
+    // marks stayed stuck on whatever task now sits at that position.
+    const marks = props.store
+      .getMarkedRefs()
+      .filter(
+        (r) =>
+          r.boardPath === props.board.filepath &&
+          r.columnIndex === props.columnIndex,
+      )
+      .map((r) => r.taskIndex)
+      .join(",");
+    return `${ids}#${marks}`;
+  });
 
   const cursorRow = createMemo(() => props.store.state.ui.row);
 

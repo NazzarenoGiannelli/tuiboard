@@ -174,9 +174,11 @@ function titleColorFor(task: Task, status: TaskStatus): string | undefined {
   // today is the calm pale yellow instead.
   if (status === "done") return T.done;
   if (status === "overdue") return T.overdue;
+  // Tomorrow is uniformly grey — even priority tasks — so everything set for
+  // tomorrow reads consistently as "later, de-emphasized".
+  if (status === "tomorrow") return T.textDim;
   if (task.priority !== "none") return T.today;
   if (status === "today") return T.todayPale;
-  if (status === "tomorrow") return T.textDim;
   // future / unscheduled: terminal default fg (looks right on any theme).
   return T.text;
 }

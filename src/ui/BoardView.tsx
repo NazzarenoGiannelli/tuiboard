@@ -8,7 +8,7 @@
  * board width.
  */
 
-import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onMount } from "solid-js";
 
 import { isHiddenColumn } from "~/config/loader";
 import { isTask } from "~/parser/markdown";
@@ -151,6 +151,17 @@ export function BoardView(props: BoardViewProps) {
     const start = i * stride;
     return start >= scrollX() && start + COL_WIDTH <= scrollX() + vw;
   };
+
+  // Measure the viewport width once at mount, regardless of the active zone.
+  // Otherwise — since tuiboard now starts focused on the virtual panel — the
+  // scroll effect early-returns and viewportW stays 0, so partly-clipped
+  // columns briefly show their task rows until the board is first touched.
+  onMount(() => {
+    setTimeout(() => {
+      const vw = viewportRef?.width ?? 0;
+      if (vw > 0) setViewportW(vw);
+    }, 0);
+  });
 
   return (
     <box style={{ flexDirection: "column", flexGrow: 1 }}>

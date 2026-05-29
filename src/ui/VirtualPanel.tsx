@@ -179,7 +179,19 @@ function RenderGroups(props: {
             <Show when={bucketHeader}>
               <box style={{ paddingLeft: 1, paddingRight: 1 }}>
                 <text>
-                  <span style={{ fg: bucketHeader!.color }}>{"  "}{bucketHeader!.label}</span>
+                  {/* In the Tomorrow section everything is grey — including the
+                      Agenda / Priority bucket labels — so the whole section
+                      reads as "later". */}
+                  <span
+                    style={{
+                      fg:
+                        group.section === "tomorrow"
+                          ? T.textDim
+                          : bucketHeader!.color,
+                    }}
+                  >
+                    {"  "}{bucketHeader!.label}
+                  </span>
                 </text>
               </box>
             </Show>

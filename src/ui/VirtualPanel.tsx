@@ -148,13 +148,22 @@ function RenderGroups(props: {
   return (
     <For each={props.groups}>
       {(group, gi) => {
-        const sectionHeader = isFirstOfSection(props.groups, gi())
+        const firstOfSection = isFirstOfSection(props.groups, gi());
+        const sectionHeader = firstOfSection
           ? SECTION_HEADER[group.section]
           : undefined;
         const bucketHeader = BUCKET_HEADER[group.bucket];
 
         return (
-          <box style={{ flexDirection: "column" }}>
+          // Breathing room between the macro buckets within a section
+          // (Agenda → Priority → normal tasks). The first bucket of a section
+          // gets its gap from the section header's own marginTop instead.
+          <box
+            style={{
+              flexDirection: "column",
+              marginTop: firstOfSection ? 0 : 1,
+            }}
+          >
             <Show when={sectionHeader}>
               <box style={{ paddingLeft: 1, paddingRight: 1, marginTop: 1 }}>
                 <text>

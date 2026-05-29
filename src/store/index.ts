@@ -794,26 +794,46 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       if (m[key]) delete m[key];
       else m[key] = true;
     }));
+    // Bump rev so the ● indicators re-render. OpenTUI/Solid's fine-grained
+    // tracking of a dynamic-key Record doesn't reliably reach the mounted
+    // task rows; rev is the proven top-level signal (same as the cursor).
+    setState("rev", (r) => r + 1);
   }
 
   function isMarked(ref: TaskRef): boolean {
+    state.rev; // subscribe to the mutation counter (see toggleMark/clearMarks)
     return state.ui.marked[markKey(ref)] === true;
   }
 
   function clearMarks(): void {
     setState("ui", "marked", {});
+    setState("rev", (r) => r + 1);
   }
 
-  /** Decoded list of currently marked refs. */
+  /**
+   * Decoded list of currently marked refs, sorted by board, then column, then
+   * taskIndex DESCENDING. The descending order matters for index-shifting
+   * operations (delete, archive/move): processing the highest taskIndex first
+   * means earlier indices stay valid as later tasks are removed. Order is
+   * irrelevant for in-place edits (schedule, time block, priority, done).
+   */
   function getMarkedRefs(): TaskRef[] {
-    return Object.keys(state.ui.marked).map((k) => {
-      const [boardPath, ci, ti] = k.split("::");
-      return {
-        boardPath: boardPath!,
-        columnIndex: Number(ci),
-        taskIndex: Number(ti),
-      };
-    });
+    return Object.keys(state.ui.marked)
+      .map((k) => {
+        const [boardPath, ci, ti] = k.split("::");
+        return {
+          boardPath: boardPath!,
+          columnIndex: Number(ci),
+          taskIndex: Number(ti),
+        };
+      })
+      .sort((a, b) =>
+        a.boardPath !== b.boardPath
+          ? a.boardPath.localeCompare(b.boardPath)
+          : a.columnIndex !== b.columnIndex
+            ? a.columnIndex - b.columnIndex
+            : b.taskIndex - a.taskIndex,
+      );
   }
 
   /**

@@ -50,9 +50,10 @@ export function handleKey(
     }
     if (ui.modal.kind === "confirm-delete") {
       if (key.name === "y") {
-        const ref = ui.modal.ref;
-        store.deleteTask(ref);
+        // Delete the whole multi-selection if any, else just the cursor task.
+        const n = store.applyToMarkedOr(ui.modal.ref, (r) => store.deleteTask(r));
         store.closeModal();
+        if (n > 1) store.flashBanner("info", `Deleted ${n} tasks`);
       } else if (key.name === "n") {
         store.closeModal();
       }

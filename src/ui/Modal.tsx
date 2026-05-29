@@ -188,6 +188,7 @@ function EditModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiStore
 
 function ScheduleModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiStore["state"]["ui"]["modal"]>, { kind: "schedule" }> }) {
   const task = props.store.getTask(props.modal.ref);
+  const markedCount = props.store.getMarkedRefs().length;
   const [value, setValue] = createSignal(task?.scheduled ?? "");
   const [error, setError] = createSignal<string | undefined>();
 
@@ -197,13 +198,20 @@ function ScheduleModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiS
       setError(`Cannot parse "${text}". Try: t · tm · +3 · lun · 2026-06-15`);
       return;
     }
-    props.store.setScheduled(props.modal.ref, d ?? undefined);
+    const n = props.store.applyToMarkedOr(props.modal.ref, (r) =>
+      props.store.setScheduled(r, d ?? undefined),
+    );
+    if (n > 1) props.store.flashBanner("info", `${n} tasks scheduled`);
     props.store.closeModal();
   }
 
   return (
     <DialogShell
-      title={`Schedule: ${task?.displayTitle.slice(0, 50) ?? ""}`}
+      title={
+        markedCount > 1
+          ? `Schedule ${markedCount} selected tasks`
+          : `Schedule: ${task?.displayTitle.slice(0, 50) ?? ""}`
+      }
       hint="t = today · tm = tomorrow · +3 = in 3 days · lun = next Monday · 2026-06-15 · empty/-clear · Esc to cancel"
       width={70}
     >
@@ -226,6 +234,7 @@ function ScheduleModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiS
 
 function TimeBlockModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiStore["state"]["ui"]["modal"]>, { kind: "timeblock" }> }) {
   const task = props.store.getTask(props.modal.ref);
+  const markedCount = props.store.getMarkedRefs().length;
   const init = task?.timeBlock
     ? `${fmtMin(task.timeBlock.startMin)}-${fmtMin(task.timeBlock.endMin)}`
     : "";
@@ -238,13 +247,20 @@ function TimeBlockModal(props: { store: TuiStore; modal: Extract<NonNullable<Tui
       setError(`Cannot parse "${text}". Try: n · 9:00 · 9-11 · 09:30-10:45 · - to clear`);
       return;
     }
-    props.store.setTimeBlock(props.modal.ref, r ?? undefined);
+    const n = props.store.applyToMarkedOr(props.modal.ref, (ref) =>
+      props.store.setTimeBlock(ref, r ?? undefined),
+    );
+    if (n > 1) props.store.flashBanner("info", `${n} tasks time-blocked`);
     props.store.closeModal();
   }
 
   return (
     <DialogShell
-      title={`Time block: ${task?.displayTitle.slice(0, 50) ?? ""}`}
+      title={
+        markedCount > 1
+          ? `Time block ${markedCount} selected tasks`
+          : `Time block: ${task?.displayTitle.slice(0, 50) ?? ""}`
+      }
       hint="n = now+30 · 9:00 · 9-11 · 09:30-10:45 · - to clear · Esc to cancel"
       width={70}
     >
@@ -267,16 +283,24 @@ function TimeBlockModal(props: { store: TuiStore; modal: Extract<NonNullable<Tui
 
 function AssignModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiStore["state"]["ui"]["modal"]>, { kind: "assign" }> }) {
   const task = props.store.getTask(props.modal.ref);
+  const markedCount = props.store.getMarkedRefs().length;
   const [value, setValue] = createSignal(task?.assignee ?? "");
 
   function submit(text: string) {
     const t = text.trim().replace(/^@/, "");
-    props.store.setAssignee(props.modal.ref, t || undefined);
+    const n = props.store.applyToMarkedOr(props.modal.ref, (r) =>
+      props.store.setAssignee(r, t || undefined),
+    );
+    if (n > 1) props.store.flashBanner("info", `${n} tasks assigned`);
     props.store.closeModal();
   }
 
   return (
-    <DialogShell title="Assignee" hint="Name without @ · empty to clear · Esc to cancel" width={50}>
+    <DialogShell
+      title={markedCount > 1 ? `Assignee — ${markedCount} selected tasks` : "Assignee"}
+      hint="Name without @ · empty to clear · Esc to cancel"
+      width={50}
+    >
       <input
         focused
         value={value()}
@@ -291,14 +315,20 @@ function AssignModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiSto
 
 function ConfirmDeleteModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiStore["state"]["ui"]["modal"]>, { kind: "confirm-delete" }> }) {
   const task = props.store.getTask(props.modal.ref);
+  const markedCount = props.store.getMarkedRefs().length;
+  const bulk = markedCount > 1;
   return (
     <DialogShell
-      title="Delete task?"
+      title={bulk ? `Delete ${markedCount} selected tasks?` : "Delete task?"}
       hint="y to confirm · Esc/n to cancel"
       width={70}
     >
       <text>
-        <span style={{ fg: T.text }}>{task?.displayTitle ?? "(missing)"}</span>
+        <span style={{ fg: T.text }}>
+          {bulk
+            ? `${markedCount} marked tasks will be deleted.`
+            : task?.displayTitle ?? "(missing)"}
+        </span>
       </text>
     </DialogShell>
   );
@@ -594,9 +624,10 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  Enter             Open (resume) the selected session in a new WezTerm tab\n"}</span>
         <span style={{ fg: T.text }}>{"  o                 Session detail (cwd, branch, last prompts, resume cmd)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nMulti-select\n"}</span>
-        <span style={{ fg: T.text }}>{"  Space             Mark / unmark task — single-task actions then\n"}</span>
-        <span style={{ fg: T.text }}>{"                    apply to ALL marked instead of just the cursor\n"}</span>
-        <span style={{ fg: T.text }}>{"  Esc               Clear marks (when no modal is open)\n"}</span>
+        <span style={{ fg: T.text }}>{"  Space             Mark task + advance cursor — sweep a range with repeats\n"}</span>
+        <span style={{ fg: T.text }}>{"                    Every task action (done/schedule/time block/assign/\n"}</span>
+        <span style={{ fg: T.text }}>{"                    priority/archive/delete) then applies to ALL marked\n"}</span>
+        <span style={{ fg: T.text }}>{"  Esc               Clear the selection (when no modal is open)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nBulk\n"}</span>
         <span style={{ fg: T.text }}>{"  T                 Reset ALL overdue tasks (any board) to today\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nGlobal\n"}</span>

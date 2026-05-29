@@ -49,7 +49,7 @@ export function handleKey(
       return;
     }
     if (ui.modal.kind === "confirm-delete") {
-      if (key.name === "y") {
+      if (key.name === "y" || key.name === "enter" || key.name === "return") {
         // Delete the whole multi-selection if any, else just the cursor task.
         const n = store.applyToMarkedOr(ui.modal.ref, (r) => store.deleteTask(r));
         store.closeModal();

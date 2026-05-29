@@ -806,7 +806,13 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   }
 
   function clearMarks(): void {
-    setState("ui", "marked", {});
+    // Delete keys via produce (NOT `setState("ui","marked",{})`): replacing the
+    // whole object doesn't notify subscribers that read it via Object.keys(),
+    // so the ● indicators wouldn't repaint. A produce-mutation does notify
+    // granularly — same path toggleMark uses.
+    setState("ui", "marked", produce((m: Record<string, true>) => {
+      for (const k of Object.keys(m)) delete m[k];
+    }));
     setState("rev", (r) => r + 1);
   }
 

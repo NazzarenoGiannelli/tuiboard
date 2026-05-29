@@ -171,6 +171,9 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   });
 
   // ─── Watcher ─────────────────────────────────────────────────────────────
+  // Last content tuiboard itself wrote per board path — used by the watcher's
+  // self-write guard to ignore our own writes echoed back by the OS / sync.
+  const lastWrittenContent = new Map<string, string>();
   const watcher: BoardWatcher = createBoardWatcher(
     initialBoards.map((b) => b.board.filepath),
   );
@@ -181,17 +184,16 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   watcher.onChange((filepath) => {
     // External edit. Re-read this board from disk.
     try {
-      const mtimeMs = statMtime(filepath);
-      const existing = getBoardByPath(filepath);
-      // Robust self-write guard: if the on-disk mtime isn't newer than the
-      // watermark we set on our last save, this event is our own write (the
-      // timer-based markSelfWrite missed it — common on Windows with antivirus
-      // / Obsidian touching the file). The in-memory board is already
-      // authoritative, so re-reading would clobber a just-added/edited task
-      // with no net change. Skip. Only a genuinely newer file reloads.
-      if (existing && mtimeMs <= existing.mtimeMs + 1) return;
       const content = readFileSync(filepath, "utf-8");
+      // Robust self-write guard: if what's on disk is byte-identical to what we
+      // last wrote, this event is our own write echoed back — even if the mtime
+      // changed (Windows fs latency, antivirus, or Obsidian/vault-sync
+      // re-saving the same bytes). The in-memory board is authoritative, so
+      // reloading would only clobber a just-added/edited task with no net
+      // change — and spuriously flash "Reloaded after external edit". Skip.
+      if (lastWrittenContent.get(filepath) === content) return;
       const { board } = parseBoard(content, { filepath });
+      const mtimeMs = statMtime(filepath);
       setState(
         "boards",
         (b) => b.board.filepath === filepath,
@@ -266,6 +268,11 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     if (!lb) return;
     try {
       const content = serializeBoard(lb.board);
+      // Record what we're writing so the watcher can recognize this exact
+      // content echoed back (Obsidian / vault-sync may re-save the file with
+      // identical bytes but a fresh mtime — a content match means it's still
+      // our write, not a genuine external edit).
+      lastWrittenContent.set(boardPath, content);
       watcher.markSelfWrite(boardPath);
       const { mtimeMs } = writeBoardFile(boardPath, content, {
         expectedMtimeMs: lb.mtimeMs,
@@ -512,23 +519,24 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       timeBlockSource: init.timeBlock ? "watch-emoji" : undefined,
     };
 
-    let taskIndex = 0;
+    // Insert by REASSIGNING the children array (not an in-place unshift/push
+    // inside produce). A new array reference is what Solid's <For> reliably
+    // reconciles; the in-place mutation left the mounted column stale until the
+    // board was switched away and back. (Delete uses splice and happened to
+    // re-render, but reassignment is the dependable pattern for both grow and
+    // shrink.)
+    const prevTaskCount = listTasks(col).length;
     setState(
       "boards",
       (b) => b.board.filepath === boardPath,
       "board",
       "columns",
       columnIndex,
-      produce((c: Column) => {
-        if (insertPos === "top") {
-          c.children.unshift(newTask);
-          taskIndex = 0;
-        } else {
-          c.children.push(newTask);
-          taskIndex = listTasks(c).length - 1;
-        }
-      }),
+      "children",
+      (prev: Column["children"]) =>
+        insertPos === "top" ? [newTask, ...prev] : [...prev, newTask],
     );
+    const taskIndex = insertPos === "top" ? 0 : prevTaskCount;
 
     pushUndo({
       description: `add task: ${init.displayTitle.slice(0, 40)}`,

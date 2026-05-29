@@ -2,7 +2,7 @@
 
 import { For, Show, createEffect, createMemo } from "solid-js";
 
-import { ATTR, T, boardColor } from "~/ui/glyphs";
+import { ATTR, T } from "~/ui/glyphs";
 import { TaskRow } from "~/ui/TaskRow";
 import {
   buildVirtualItems,
@@ -20,7 +20,7 @@ const vpRowId = (flatIndex: number) => `${VP_ROW_PREFIX}${flatIndex}`;
 
 const SECTION_HEADER: Record<string, { label: string; color: string }> = {
   overdue: { label: "● Overdue", color: T.overdue },
-  today: { label: "● Today", color: T.today },
+  today: { label: "● Today", color: T.todayPale },
   tomorrow: { label: "→ Tomorrow", color: T.textDim },
 };
 
@@ -29,7 +29,7 @@ const SECTION_HEADER: Record<string, { label: string; color: string }> = {
 // `— board · column —` sub-dividers, so a generic label would be redundant.
 const BUCKET_HEADER: Record<string, { label: string; color: string }> = {
   agenda: { label: "⏰ Agenda", color: T.accent },
-  priority: { label: "🔺 Priority", color: T.highest },
+  priority: { label: "🔺 Priority", color: T.today },
 };
 
 export function VirtualPanel(props: { store: TuiStore }) {
@@ -77,9 +77,10 @@ export function VirtualPanel(props: { store: TuiStore }) {
         marginRight: 1,
         border: true,
         borderStyle: "rounded",
-        // Today/Tomorrow panel keeps its warm identity at all times — when
-        // focused it brightens, otherwise it dims, but never goes cool.
-        borderColor: isActive() ? T.warmActive : T.warm,
+        // Today/Tomorrow identity: a soft pale yellow. Brighter when focused,
+        // muted when not — but always the same calm hue (the title rides the
+        // border color too).
+        borderColor: isActive() ? T.todayPale : T.todayPaleDim,
         paddingLeft: 1,
         paddingRight: 1,
       }}
@@ -191,10 +192,6 @@ function RenderGroups(props: {
                         cursor={props.isActive && item.flatIndex === props.cursorRow}
                         marked={props.isMarkedFn(item.ref)}
                         availableWidth={props.availableWidth}
-                        // Tint the title with the source board's accent so a
-                        // cross-cutting Today/Tomorrow item is recognizable by
-                        // its board at a glance (done-green still wins).
-                        tintColor={boardColor(item.boardIndex)}
                         // Today / Tomorrow sections already say so in their
                         // header — drop the redundant per-row "today"/"tmrw"
                         // date label (the ⌚ time block stays). Overdue rows
@@ -227,7 +224,6 @@ function RenderGroups(props: {
                             cursor={props.isActive && item.flatIndex === props.cursorRow}
                             marked={props.isMarkedFn(item.ref)}
                             availableWidth={props.availableWidth}
-                            tintColor={boardColor(item.boardIndex)}
                             hideDateSuffix={
                               group.section === "today" || group.section === "tomorrow"
                             }

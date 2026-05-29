@@ -74,7 +74,10 @@ export const T = {
 
   // Status-based row colors — kept clearly distinct in hue + brightness
   overdue: "#e26a6a",        // hue 0°, sat 65%, light 65% — clearly red
-  today: "#e8a05c",          // hue 30°, sat 75%, light 64% — clearly orange
+  today: "#e8a05c",          // warm orange — now the PRIORITY accent (flagged tasks)
+  // Today/Tomorrow identity + today-scheduled task titles: a soft pale yellow.
+  todayPale: "#eaf6ad",      // bright, calm — the Today/Tomorrow zone accent
+  todayPaleDim: "#9aa06f",   // muted version for the unfocused panel border
   scheduled: "#c89a6a",      // dimmer warm for non-today future
   future: "#8a90a8",
 

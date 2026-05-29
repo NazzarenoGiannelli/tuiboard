@@ -30,12 +30,6 @@ interface TaskRowProps {
   /** If true, hide the date suffix (used when group header already conveys date). */
   hideDateSuffix?: boolean;
   /**
-   * Optional title tint (e.g. the source-board accent in the virtual panel).
-   * Applies only to non-done, non-overdue, non-today rows — those keep their
-   * status color. Done-green always wins over any tint.
-   */
-  tintColor?: string;
-  /**
    * Total cell width available to this row, in terminal columns. When set,
    * TaskRow computes the exact title budget from this width minus the row's
    * actual overhead (cursor, marked dot, done check, priority emoji, context
@@ -52,9 +46,7 @@ interface TaskRowProps {
 export function TaskRow(props: TaskRowProps) {
   const status = createMemo(() => statusOf(props.task));
   const suffix = createMemo(() => buildSuffix(props.task, props.hideDateSuffix));
-  const titleColor = createMemo(() =>
-    titleColorFor(props.task, status(), props.tintColor),
-  );
+  const titleColor = createMemo(() => titleColorFor(props.task, status()));
   const suffixColor = createMemo(() => suffixColorFor(props.task, status()));
 
   // Compute the title budget from availableWidth + this row's actual overhead
@@ -175,24 +167,18 @@ function statusOf(t: Task): TaskStatus {
   return "future";
 }
 
-function titleColorFor(
-  task: Task,
-  status: TaskStatus,
-  tintColor?: string,
-): string | undefined {
-  // Done-green always wins so a completed task reads as "done" at a glance.
+function titleColorFor(task: Task, status: TaskStatus): string | undefined {
+  // Precedence: done (green) > overdue (red) > priority (orange) > today
+  // (pale yellow) > tomorrow (grey) > default. The orange now *means*
+  // "priority flag" — only tasks with a priority get it; everything scheduled
+  // today is the calm pale yellow instead.
   if (status === "done") return T.done;
-  // Overdue is red and tomorrow is dim-grey ("not yet, de-emphasized") even in
-  // the virtual panel — these urgency signals override the per-board tint.
-  // Today (and farther future) still take the board tint when one is passed,
-  // so the Today section keeps its at-a-glance source-board color.
   if (status === "overdue") return T.overdue;
+  if (task.priority !== "none") return T.today;
+  if (status === "today") return T.todayPale;
   if (status === "tomorrow") return T.textDim;
-  if (tintColor) return tintColor;
-  if (status === "today") return T.today;
   // future / unscheduled: terminal default fg (looks right on any theme).
   return T.text;
-  void task;
 }
 
 /**
@@ -226,7 +212,7 @@ function buildSuffix(task: Task, hideDate?: boolean): string | undefined {
 function suffixColorFor(task: Task, status: TaskStatus): string | undefined {
   if (status === "done") return T.textDone;
   if (status === "overdue") return T.overdue;
-  if (status === "today") return T.today;
+  if (status === "today") return T.todayPale;
   if (status === "tomorrow") return T.textDim;
   if (status === "future") return T.scheduled;
   return T.textDim;

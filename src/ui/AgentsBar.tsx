@@ -58,7 +58,10 @@ export function AgentsBar(props: AgentsBarProps) {
         flexDirection: "column",
         height: props.height,
         flexGrow: props.height ? 0 : 1,
-        marginTop: 1,
+        // No top gap — the agents strip sits flush under the board columns so
+        // the columns reclaim that row (the 1-row gap read as ~double the
+        // timeline's 1-col gap because terminal cells are taller than wide).
+        marginTop: 0,
         border: true,
         borderStyle: "rounded",
         borderColor: isActive() ? T.borderActive : T.border,

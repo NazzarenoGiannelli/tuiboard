@@ -216,10 +216,19 @@ function ColumnView(props: ColumnViewProps) {
 
   // In zoom mode, show open tasks first, then a divider, then done tasks.
   // In normal mode, show only open tasks; done collapse to a counter.
-  const visibleTasks = createMemo(() => {
-    if (props.zoomed) return [...openTasks(), ...doneTasks()];
-    return openTasks();
-  });
+  const visibleTasks = createMemo(() =>
+    props.zoomed ? [...openTasks(), ...doneTasks()] : openTasks(),
+  );
+
+  // Structural signature of the visible task list (id + order). OpenTUI's <For>
+  // appends a prepended/inserted item to the END of the rendered container
+  // instead of placing it at its array index — so after an add the data is
+  // right but the on-screen order is wrong until a full remount. We key a
+  // <Show> on this signature: when membership/order changes (add / delete /
+  // move) it changes, forcing the list to rebuild fresh in the correct order
+  // (the same thing a board switch does). A plain text edit leaves ids/order
+  // untouched → no remount → cheap in-place update.
+  const taskListKey = createMemo(() => visibleTasks().map((t) => t.id).join("|"));
 
   const cursorRow = createMemo(() => props.store.state.ui.row);
 
@@ -286,44 +295,54 @@ function ColumnView(props: ColumnViewProps) {
           scrollbarOptions: { visible: false },
         }}
       >
-        <For each={visibleTasks()}>
-          {(task, ri) => {
-            const ref = {
-              boardPath: props.board.filepath,
-              columnIndex: props.columnIndex,
-              taskIndex: allTasks().indexOf(task),
-            };
-            return (
-              <box id={taskRowId(props.board.filepath, props.columnIndex, ri())}>
-                <TaskRow
-                  task={task}
-                  cursor={props.active && ri() === cursorRow()}
-                  marked={props.store.isMarked(ref)}
-                  grabbed={
-                    props.active &&
-                    ri() === cursorRow() &&
-                    props.store.state.ui.grabbing
-                  }
-                  // Column inner cell width for a TaskRow: COL_WIDTH 42 −
-                  // border 2 − col padding 2 − TaskRow padding 2 = 36 cols
-                  // (when not zoomed). Zoomed → column grows to fill, so
-                  // ~terminal width − some chrome.
-                  availableWidth={props.zoomed ? 100 : 36}
-                  onClick={() => {
-                    props.store.setActiveZone("board");
-                    props.store.setCursor(props.columnIndex, ri());
-                    // In calendar arm mode, a click also arms the task so the
-                    // user can immediately drop it on a timeline slot.
-                    if (props.store.state.ui.armMode) {
-                      props.store.armTimeline(ref);
-                      props.store.setZoneVisible("timeline", true);
-                    }
-                  }}
-                />
-              </box>
-            );
-          }}
-        </For>
+        {/*
+          Keyed on the task-list signature so a structural change (add/delete/
+          move) rebuilds the <For> fresh in the correct order, working around
+          OpenTUI's <For> appending inserted items to the end. Text-only edits
+          keep the same key → no rebuild → in-place update.
+        */}
+        <Show when={taskListKey()} keyed>
+          {() => (
+            <For each={visibleTasks()}>
+              {(task, ri) => {
+                const ref = {
+                  boardPath: props.board.filepath,
+                  columnIndex: props.columnIndex,
+                  taskIndex: allTasks().indexOf(task),
+                };
+                return (
+                  <box id={taskRowId(props.board.filepath, props.columnIndex, ri())}>
+                    <TaskRow
+                      task={task}
+                      cursor={props.active && ri() === cursorRow()}
+                      marked={props.store.isMarked(ref)}
+                      grabbed={
+                        props.active &&
+                        ri() === cursorRow() &&
+                        props.store.state.ui.grabbing
+                      }
+                      // Column inner cell width for a TaskRow: COL_WIDTH 42 −
+                      // border 2 − col padding 2 − TaskRow padding 2 = 36 cols
+                      // (when not zoomed). Zoomed → column grows to fill, so
+                      // ~terminal width − some chrome.
+                      availableWidth={props.zoomed ? 100 : 36}
+                      onClick={() => {
+                        props.store.setActiveZone("board");
+                        props.store.setCursor(props.columnIndex, ri());
+                        // In calendar arm mode, a click also arms the task so
+                        // the user can immediately drop it on a timeline slot.
+                        if (props.store.state.ui.armMode) {
+                          props.store.armTimeline(ref);
+                          props.store.setZoneVisible("timeline", true);
+                        }
+                      }}
+                    />
+                  </box>
+                );
+              }}
+            </For>
+          )}
+        </Show>
 
         <Show when={!props.zoomed && doneTasks().length > 0}>
           <box

@@ -236,7 +236,9 @@ function handleVirtualZone(
 
   // Task actions on the virtual cursor's target (works cross-board).
   if (target) {
-    dispatchTaskAction(store, key, target.ref, openLater);
+    dispatchTaskAction(store, key, target.ref, openLater, () =>
+      store.setCursor(ui.col, Math.min(virtualCount - 1, ui.row + 1)),
+    );
   }
 }
 
@@ -503,7 +505,9 @@ function handleBoardZone(
     taskIndex: allTasks.indexOf(cursorTask),
   };
 
-  dispatchTaskAction(store, key, cursorRef, openLater);
+  dispatchTaskAction(store, key, cursorRef, openLater, () =>
+    store.setCursor(ui.col, Math.min(visibleTasks.length - 1, ui.row + 1)),
+  );
 }
 
 // ─── Shared task-level action dispatcher ────────────────────────────────────
@@ -523,6 +527,7 @@ function dispatchTaskAction(
   key: KeyEvent,
   ref: TaskRef,
   openLater: (m: ModalKind) => void,
+  advanceCursor?: () => void,
 ): boolean {
   // Toggle done (Enter). Only meaningful for board/virtual; timeline has
   // its own Enter behavior (jump to kanban) which is handled earlier.
@@ -532,9 +537,12 @@ function dispatchTaskAction(
     return true;
   }
 
-  // Multi-select toggle
+  // Multi-select toggle. After marking, advance the cursor to the next task
+  // so you can sweep a contiguous range with repeated Space presses (the
+  // advance no-ops at the last row). Zone-specific, supplied by the caller.
   if (key.name === "space") {
     store.toggleMark(ref);
+    advanceCursor?.();
     return true;
   }
 

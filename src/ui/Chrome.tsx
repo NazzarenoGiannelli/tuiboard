@@ -30,44 +30,40 @@ export function TopBar(props: { store: TuiStore }) {
     return { open, done, cols };
   };
 
-  // Build a flat token list for the tab row so we can render as a single
-  // <text> without JSX fragments (which OpenTUI's Solid renderer doesn't
-  // play well with inside <text>).
-  const tabsText = () => {
-    const parts: Array<{ text: string; active: boolean; brand?: boolean }> = [];
-    parts.push({ text: "tuiboard", active: false, brand: true });
-    parts.push({ text: `  ${isoToday()}   `, active: false });
-    boards().forEach((b: { board: { name: string } }, i: number) => {
-      const isActive = i === active();
-      parts.push({
-        text: isActive ? `[${i + 1} ${b.board.name}]` : ` ${i + 1} ${b.board.name} `,
-        active: isActive,
-      });
-      parts.push({ text: " ", active: false });
-    });
-    return parts;
-  };
-
   return (
     <box style={{ flexDirection: "row", justifyContent: "space-between", height: 1 }}>
-      <text wrapMode="none" truncate style={{ flexGrow: 1, flexShrink: 1 }}>
-        <For each={tabsText()}>
-          {(p) => (
-            <span
-              style={{
-                fg: p.brand
-                  ? T.accent
-                  : p.active
-                    ? T.accent
-                    : T.textDim,
-                attributes: p.brand || p.active ? ATTR.bold : 0,
-              }}
-            >
-              {p.text}
-            </span>
-          )}
+      <box style={{ flexDirection: "row", flexShrink: 1, overflow: "hidden" }}>
+        {/* Brand + date */}
+        <text wrapMode="none" style={{ flexShrink: 0 }}>
+          <span style={{ fg: T.todayPale, attributes: ATTR.bold }}>tuiboard</span>
+          <span style={{ fg: T.textDim }}>{`  ${isoToday()}   `}</span>
+        </text>
+        {/* Clickable board tabs */}
+        <For each={boards()}>
+          {(b: { board: { name: string } }, i) => {
+            const isActive = () => i() === active();
+            return (
+              <box
+                style={{ flexShrink: 0, flexDirection: "row" }}
+                onMouseDown={() => props.store.setActiveBoard(i())}
+              >
+                <text wrapMode="none">
+                  <span
+                    style={{
+                      fg: isActive() ? T.accent : T.textDim,
+                      attributes: isActive() ? ATTR.bold : 0,
+                    }}
+                  >
+                    {isActive()
+                      ? `[${i() + 1} ${b.board.name}] `
+                      : ` ${i() + 1} ${b.board.name}  `}
+                  </span>
+                </text>
+              </box>
+            );
+          }}
         </For>
-      </text>
+      </box>
       <Show when={activeStats()}>
         <text wrapMode="none" style={{ flexShrink: 0, marginLeft: 2 }}>
           <span style={{ fg: T.textDim }}>

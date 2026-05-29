@@ -76,6 +76,13 @@ function applyResponsiveLayout(): void {
 applyResponsiveLayout();
 process.stdout.on("resize", applyResponsiveLayout);
 
+// Land on the Today/Tomorrow panel by default — for a daily-planning tool the
+// first question is "what's on my plate today", and that panel answers it. On
+// a narrow terminal where the panel auto-hides, fall back to the board.
+if (store.state.ui.visibleZones.virtual) {
+  store.setActiveZone("virtual");
+}
+
 const { view } = parseArgs(process.argv.slice(2));
 
 // ─── App shell ──────────────────────────────────────────────────────────────

@@ -71,8 +71,10 @@ export function VirtualPanel(props: { store: TuiStore }) {
     <box
       style={{
         flexDirection: "column",
-        width: isZoomed() ? undefined : 38,
-        minWidth: isZoomed() ? undefined : 38,
+        // Match the kanban column width (BoardView COL_WIDTH = 42) so the
+        // Today/Tomorrow panel reads as just another column.
+        width: isZoomed() ? undefined : 42,
+        minWidth: isZoomed() ? undefined : 42,
         flexGrow: isZoomed() ? 1 : 0,
         marginRight: 1,
         border: true,
@@ -111,12 +113,12 @@ export function VirtualPanel(props: { store: TuiStore }) {
             groups={groups()}
             isActive={isActive()}
             cursorRow={cursorRow()}
-            // Panel inner cell width seen by a TaskRow: panel 38 col
+            // Panel inner cell width seen by a TaskRow: panel 42 col
             // (or full width in zoom) − border 2 − panel padding 2 −
-            // TaskRow padding 2 = 32 cols normal, ~terminal width − 6
+            // TaskRow padding 2 = 36 cols normal, ~terminal width − 6
             // when zoomed. Pass that so TaskRow can budget the title
             // dynamically against the row's actual overhead.
-            availableWidth={isZoomed() ? 100 : 32}
+            availableWidth={isZoomed() ? 100 : 36}
             isMarkedFn={(r) => props.store.isMarked(r)}
             onClickItem={(flatIndex) => {
               props.store.setActiveZone("virtual");

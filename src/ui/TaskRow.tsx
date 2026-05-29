@@ -157,7 +157,13 @@ export function TaskRow(props: TaskRowProps) {
   );
 }
 
-type TaskStatus = "done" | "overdue" | "today" | "future" | "unscheduled";
+type TaskStatus =
+  | "done"
+  | "overdue"
+  | "today"
+  | "tomorrow"
+  | "future"
+  | "unscheduled";
 
 function statusOf(t: Task): TaskStatus {
   if (t.done) return "done";
@@ -165,6 +171,7 @@ function statusOf(t: Task): TaskStatus {
   if (!d) return "unscheduled";
   if (d < isoToday()) return "overdue";
   if (d === isoToday()) return "today";
+  if (d === isoTomorrow()) return "tomorrow";
   return "future";
 }
 
@@ -173,14 +180,15 @@ function titleColorFor(
   status: TaskStatus,
   tintColor?: string,
 ): string | undefined {
-  // Done-green always wins so a completed task reads as "done" at a glance,
-  // regardless of which board it came from.
+  // Done-green always wins so a completed task reads as "done" at a glance.
   if (status === "done") return T.done;
-  // A board tint (virtual panel) takes precedence over the date-status colors:
-  // the panel's section headers (Overdue/Today/Tomorrow) already convey the
-  // date, so the row color is freed up to signal the *source board* instead.
-  if (tintColor) return tintColor;
+  // Overdue is red and tomorrow is dim-grey ("not yet, de-emphasized") even in
+  // the virtual panel — these urgency signals override the per-board tint.
+  // Today (and farther future) still take the board tint when one is passed,
+  // so the Today section keeps its at-a-glance source-board color.
   if (status === "overdue") return T.overdue;
+  if (status === "tomorrow") return T.textDim;
+  if (tintColor) return tintColor;
   if (status === "today") return T.today;
   // future / unscheduled: terminal default fg (looks right on any theme).
   return T.text;
@@ -219,6 +227,7 @@ function suffixColorFor(task: Task, status: TaskStatus): string | undefined {
   if (status === "done") return T.textDone;
   if (status === "overdue") return T.overdue;
   if (status === "today") return T.today;
+  if (status === "tomorrow") return T.textDim;
   if (status === "future") return T.scheduled;
   return T.textDim;
   void task;

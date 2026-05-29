@@ -21,7 +21,7 @@ const vpRowId = (flatIndex: number) => `${VP_ROW_PREFIX}${flatIndex}`;
 const SECTION_HEADER: Record<string, { label: string; color: string }> = {
   overdue: { label: "● Overdue", color: T.overdue },
   today: { label: "● Today", color: T.today },
-  tomorrow: { label: "→ Tomorrow", color: T.warmDim },
+  tomorrow: { label: "→ Tomorrow", color: T.textDim },
 };
 
 // Only the agenda and priority buckets get a header. The "rest" bucket has

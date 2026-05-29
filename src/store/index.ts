@@ -181,9 +181,17 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   watcher.onChange((filepath) => {
     // External edit. Re-read this board from disk.
     try {
+      const mtimeMs = statMtime(filepath);
+      const existing = getBoardByPath(filepath);
+      // Robust self-write guard: if the on-disk mtime isn't newer than the
+      // watermark we set on our last save, this event is our own write (the
+      // timer-based markSelfWrite missed it — common on Windows with antivirus
+      // / Obsidian touching the file). The in-memory board is already
+      // authoritative, so re-reading would clobber a just-added/edited task
+      // with no net change. Skip. Only a genuinely newer file reloads.
+      if (existing && mtimeMs <= existing.mtimeMs + 1) return;
       const content = readFileSync(filepath, "utf-8");
       const { board } = parseBoard(content, { filepath });
-      const mtimeMs = statMtime(filepath);
       setState(
         "boards",
         (b) => b.board.filepath === filepath,

@@ -320,8 +320,8 @@ session (until the next terminal resize).
 ## Status
 
 - **v0.6** — adds the Agenda calendar overlay (Google + Microsoft 365,
-  read-only, BYO credentials) and day-navigation (`[` / `]` / `\`) so you can
-  page tasks and events across days.
+  read-only, BYO credentials), day-navigation (`[` / `]` / `\`) to page tasks
+  and events across days, and a manual full-refresh key (`r`).
 - **v0.5** — daily-driver ready. Kanban + virtual + timeline + agents
   all functional, multi-select, undo, atomic file roundtrip, mouse click,
   responsive layout. Tested on Windows with WezTerm; Linux/macOS should

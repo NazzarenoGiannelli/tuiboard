@@ -269,6 +269,7 @@ session (until the next terminal resize).
 | `Shift-Tab` | Cycle active zone (virtual → board → timeline → agents) |
 | `F1` / `F2` / `F3` | Toggle visibility of Virtual / Timeline / Agents zones |
 | `z` | Zoom active zone to full screen |
+| `r` | Refresh everything — reload boards from disk, rescan agents, force-refetch the agenda calendar (bypasses the 30-min cache) |
 
 ### Agenda (timeline zone)
 

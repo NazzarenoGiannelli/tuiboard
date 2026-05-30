@@ -143,9 +143,15 @@ async function googleAccessToken(tokenPath: string): Promise<string | null> {
   }
 }
 
-async function fetchGoogle(cfg: GoogleCalendarConfig, dateIso: string): Promise<CalEvent[]> {
-  const cached = loadCache("google", dateIso);
-  if (cached) return cached;
+async function fetchGoogle(
+  cfg: GoogleCalendarConfig,
+  dateIso: string,
+  force = false,
+): Promise<CalEvent[]> {
+  if (!force) {
+    const cached = loadCache("google", dateIso);
+    if (cached) return cached;
+  }
 
   const access = await googleAccessToken(cfg.token);
   if (!access) return [];
@@ -304,9 +310,15 @@ function ensureUtc(s: string): string {
   return `${s}Z`;
 }
 
-async function fetchMicrosoft(cfg: MicrosoftCalendarConfig, dateIso: string): Promise<CalEvent[]> {
-  const cached = loadCache("microsoft", dateIso);
-  if (cached) return cached;
+async function fetchMicrosoft(
+  cfg: MicrosoftCalendarConfig,
+  dateIso: string,
+  force = false,
+): Promise<CalEvent[]> {
+  if (!force) {
+    const cached = loadCache("microsoft", dateIso);
+    if (cached) return cached;
+  }
 
   const access = await microsoftAccessToken(cfg);
   if (!access) return [];
@@ -367,15 +379,16 @@ async function fetchMicrosoft(cfg: MicrosoftCalendarConfig, dateIso: string): Pr
 export async function fetchCalendarEvents(
   calendars: CalendarsConfig | undefined,
   dateIso: string,
+  force = false,
 ): Promise<CalEvent[]> {
   if (!calendars) return [];
   const out: CalEvent[] = [];
   const tasks: Array<Promise<CalEvent[]>> = [];
   if (calendars.google?.enabled && calendars.google.token) {
-    tasks.push(fetchGoogle(calendars.google, dateIso));
+    tasks.push(fetchGoogle(calendars.google, dateIso, force));
   }
   if (calendars.microsoft?.enabled && calendars.microsoft.config && calendars.microsoft.tokenCache) {
-    tasks.push(fetchMicrosoft(calendars.microsoft, dateIso));
+    tasks.push(fetchMicrosoft(calendars.microsoft, dateIso, force));
   }
   for (const arr of await Promise.all(tasks)) out.push(...arr);
   out.sort((a, b) => a.startMin - b.startMin);
@@ -389,8 +402,12 @@ export interface CalendarStore {
   events: () => CalEvent[];
   /** Switch which date's events `events()` exposes; fetches it (cache-first). */
   setActiveDate: (dateIso: string) => void;
-  /** Re-fetch the active date now (the 5-min interval calls this too). */
-  refresh: () => void;
+  /**
+   * Re-fetch the active date now (the 5-min interval calls this too). Pass
+   * `force` to bypass the 30-min disk cache — used by the manual `r` refresh
+   * so freshly-edited events show without waiting for the cache to expire.
+   */
+  refresh: (force?: boolean) => void;
   dispose: () => Promise<void>;
 }
 
@@ -409,10 +426,10 @@ export function createCalendarStore(
   let activeDate = initialDate();
   let timer: ReturnType<typeof setInterval> | undefined;
 
-  function refresh(): void {
+  function refresh(force = false): void {
     if (!calendars) return;
     const target = activeDate;
-    void fetchCalendarEvents(calendars, target)
+    void fetchCalendarEvents(calendars, target, force)
       .then((evs) => {
         // Guard against out-of-order resolves when the user pages quickly:
         // only apply if this is still the date the user is looking at.

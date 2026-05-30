@@ -819,6 +819,22 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "armedTimelineRef", undefined);
   }
 
+  /**
+   * Manual full refresh (the `r` key). Re-reads every board from disk, rescans
+   * Claude Code agents, and force-refetches the Agenda's calendar (bypassing
+   * the 30-min cache). Lets the user pull in external changes — a calendar
+   * event edited in the browser, a board touched elsewhere — without leaving
+   * tuiboard. Boards normally auto-reload via the file watcher; this also
+   * covers the agenda, whose feed is poll-based, not event-driven.
+   */
+  function refreshAll(): void {
+    setState("boards", loadAll(config));
+    setState("rev", (r) => r + 1);
+    agentsStore.refresh();
+    calendarStore.refresh(true);
+    flashBanner("info", "Refreshed boards · agents · agenda");
+  }
+
   // ─── Multi-select ────────────────────────────────────────────────────────
 
   function markKey(ref: TaskRef): string {
@@ -1027,6 +1043,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     agendaDate,
     shiftAgendaDay,
     resetAgendaDay,
+    refreshAll,
     setFilter,
     applyBoardFilter,
     setZoomed,

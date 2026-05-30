@@ -174,6 +174,15 @@ export function handleKey(
     return;
   }
 
+  // Manual full refresh: re-read boards from disk, rescan agents, force-
+  // refetch the agenda calendar (bypassing its 30-min cache). For pulling in
+  // external changes — e.g. a calendar event edited in the browser — without
+  // restarting. Shift+R is ignored here so it stays free for future use.
+  if (key.name === "r" && !key.ctrl && !key.shift) {
+    store.refreshAll();
+    return;
+  }
+
   // Zoom toggle: focus the active panel (board column or virtual panel)
   // at full width.
   if (key.name === "z") {

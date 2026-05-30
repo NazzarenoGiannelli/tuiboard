@@ -592,6 +592,7 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  Shift-Tab         Cycle active zone (virtual → board → timeline → agents)\n"}</span>
         <span style={{ fg: T.text }}>{"  F1 / F2 / F3      Toggle visibility of Virtual / Timeline / Agents zones\n"}</span>
         <span style={{ fg: T.text }}>{"  z                 Zoom active zone (or column) to full screen\n"}</span>
+        <span style={{ fg: T.text }}>{"  r                 Refresh everything (boards from disk, agents, agenda calendar)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nTask actions (work in board, virtual, AND timeline zones)\n"}</span>
         <span style={{ fg: T.text }}>{"  Enter             Toggle done\n"}</span>
         <span style={{ fg: T.text }}>{"  o                 Open detail view\n"}</span>

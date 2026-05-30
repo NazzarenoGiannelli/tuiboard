@@ -1,10 +1,9 @@
 /**
  * Read-only calendar feeds for the Agenda (timeline) zone.
  *
- * Dependency-light: raw `fetch` + direct OAuth token refresh, no SDKs. Reuses
- * the credential files the old r3tools integration produced
- * (`google_token.json`, `azure_config.json`, `ms_token_cache.json`), so
- * existing tokens work without re-auth.
+ * Dependency-light: raw `fetch` + direct OAuth token refresh, no SDKs. Reads
+ * the token files written by `tuiboard calendar-setup` (`google_token.json`
+ * for Google; `azure_config.json` + `ms_token.json` for Microsoft).
  *
  * Every fetch fails silently (returns []): a missing/expired/unconfigured
  * calendar must never break the board.

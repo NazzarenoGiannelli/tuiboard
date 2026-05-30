@@ -326,7 +326,7 @@ function extractBoardName(frontmatter: string, filepath: string): string {
   const m = frontmatter.match(/^name:\s*(.+?)\s*$/m);
   if (m) return m[1]!;
   const file = basename(filepath, extname(filepath));
-  // "Tasks - R3PLICA" → "R3PLICA"; otherwise use as-is.
+  // "Tasks - Work" → "Work"; otherwise use as-is.
   const dash = file.indexOf(" - ");
   return dash >= 0 ? file.slice(dash + 3) : file;
 }

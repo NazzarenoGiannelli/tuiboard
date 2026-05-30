@@ -53,7 +53,7 @@ describe("buildTimelineEntries", () => {
 
   it("returns empty when no tasks are time-blocked today", () => {
     const t = makeTask({ displayTitle: "no time block", scheduled: today });
-    const board = makeBoard("R3PLICA", "r3.md", [t]);
+    const board = makeBoard("Work", "work.md", [t]);
     expect(buildTimelineEntries([board], today)).toEqual([]);
   });
 
@@ -63,7 +63,7 @@ describe("buildTimelineEntries", () => {
       scheduled: today,
       timeBlock: { startMin: 9 * 60, endMin: 10 * 60 + 30 },
     });
-    const board = makeBoard("R3PLICA", "r3.md", [t]);
+    const board = makeBoard("Work", "work.md", [t]);
     const entries = buildTimelineEntries([board], today);
     expect(entries.length).toBe(1);
     expect(entries[0]!.startMin).toBe(540);
@@ -81,7 +81,7 @@ describe("buildTimelineEntries", () => {
       scheduled: today,
       timeBlock: { startMin: 9 * 60, endMin: 10 * 60 },
     });
-    const board = makeBoard("R3PLICA", "r3.md", [t]);
+    const board = makeBoard("Work", "work.md", [t]);
     const entries = buildTimelineEntries([board], today);
     expect(entries).toHaveLength(1);
     expect(entries[0]!.task.done).toBe(true);
@@ -93,7 +93,7 @@ describe("buildTimelineEntries", () => {
       scheduled: "2026-05-28",
       timeBlock: { startMin: 9 * 60, endMin: 10 * 60 },
     });
-    const board = makeBoard("R3PLICA", "r3.md", [t]);
+    const board = makeBoard("Work", "work.md", [t]);
     expect(buildTimelineEntries([board], today)).toEqual([]);
   });
 
@@ -104,7 +104,7 @@ describe("buildTimelineEntries", () => {
       // 6:30-7:30 → only 7:00-7:30 visible (rows 0-1)
       timeBlock: { startMin: 6 * 60 + 30, endMin: 7 * 60 + 30 },
     });
-    const board = makeBoard("R3PLICA", "r3.md", [t]);
+    const board = makeBoard("Work", "work.md", [t]);
     const entries = buildTimelineEntries([board], today);
     expect(entries.length).toBe(1);
     expect(entries[0]!.startRow).toBe(0); // clipped at top
@@ -116,7 +116,7 @@ describe("buildTimelineEntries", () => {
       scheduled: today,
       timeBlock: { startMin: 0, endMin: 30 },
     });
-    const board = makeBoard("R3PLICA", "r3.md", [t]);
+    const board = makeBoard("Work", "work.md", [t]);
     expect(buildTimelineEntries([board], today)).toEqual([]);
   });
 
@@ -131,7 +131,7 @@ describe("buildTimelineEntries", () => {
       scheduled: today,
       timeBlock: { startMin: 9 * 60, endMin: 10 * 60 },
     });
-    const board = makeBoard("R3PLICA", "r3.md", [t1, t2]);
+    const board = makeBoard("Work", "work.md", [t1, t2]);
     const entries = buildTimelineEntries([board], today);
     expect(entries.map((e) => e.task.displayTitle)).toEqual([
       "morning",
@@ -146,7 +146,7 @@ describe("buildRowMap", () => {
       kind: "task",
       ref: { boardPath: "x", columnIndex: 0, taskIndex: 0 },
       task: makeTask({ displayTitle: title }),
-      boardName: "R3PLICA",
+      boardName: "Work",
       boardIndex: 0,
       columnName: "Inbox",
       startMin: 0,

@@ -46,8 +46,7 @@ export interface Config {
   /**
    * Optional read-only calendar feeds merged into the Agenda (timeline) zone.
    * Paths support `~` and are resolved against the config dir if relative.
-   * Reuses the same credential files the old r3tools calendar integration
-   * produced, so existing tokens work as-is.
+   * Tokens are produced by `tuiboard calendar-setup`.
    */
   calendars?: CalendarsConfig;
 }

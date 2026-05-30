@@ -49,9 +49,9 @@ This works but has friction: three processes, three configs, three reload cycles
 ### 4.1 Default dashboard (≥150 cols)
 
 ```
-┌─tuiboard──[1 R3PLICA · 2 Personal · 3 Platform]──────open·done·cols──────────┐
+┌─tuiboard──[1 Work · 2 Personal · 3 Side]─────────────open·done·cols──────────┐
 │                                                                              │
-│ ┌─Today/Tomorrow─┐ ┌─Board (R3PLICA)─────────────────────┐ ┌──Timeline─────┐│
+│ ┌─Today/Tomorrow─┐ ┌─Board (Work)────────────────────────┐ ┌──Timeline─────┐│
 │ │● Overdue       │ │ Inbox 3   In Progress 5   Done 12   │ │ 07 ─────────  ││
 │ │ ⏰ Agenda      │ │                                     │ │ 08 ─────────  ││
 │ │  ⌚09:00 …     │ │ ▶ Task 1                            │ │ 09 ⌚ outreach││

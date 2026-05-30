@@ -1,15 +1,16 @@
 # tuiboard
 
 A terminal dashboard that unifies **kanban**, a **Today/Tomorrow virtual
-panel**, a **24-hour timeline**, and a **live agent view** for Claude Code
-sessions — all on top of plain markdown task files.
+panel**, a **24-hour agenda** (with a read-only Google / Microsoft 365
+calendar overlay), and a **live agent view** for Claude Code sessions — all
+on top of plain markdown task files.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun. Cross-platform
 (Linux, macOS, Windows). No vendor lock-in: boards are CommonMark with
 the Obsidian Tasks-plugin emoji vocabulary, so they open and edit fine in
 any markdown editor.
 
-![tuiboard — kanban board, Today/Tomorrow panel, 24h timeline, and live Claude Code agents in one terminal dashboard](docs/screenshot.png)
+![tuiboard — kanban board, Today/Tomorrow panel, 24h agenda with calendar overlay, and live Claude Code agents in one terminal dashboard](docs/screenshot.png)
 
 ## Install
 
@@ -24,7 +25,7 @@ bun install -g github:NazzarenoGiannelli/tuiboard
 tuiboard
 ```
 
-**Global, from npm** (once published):
+**Global, from npm:**
 
 ```bash
 bun install -g tuiboard      # or run once, no install: bunx tuiboard

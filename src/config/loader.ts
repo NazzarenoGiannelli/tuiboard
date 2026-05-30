@@ -43,6 +43,37 @@ export interface Config {
    * When unset, tuiboard falls back to opening a tab + `claude --resume <id>`.
    */
   resumeCommand?: string[];
+  /**
+   * Optional read-only calendar feeds merged into the Agenda (timeline) zone.
+   * Paths support `~` and are resolved against the config dir if relative.
+   * Reuses the same credential files the old r3tools calendar integration
+   * produced, so existing tokens work as-is.
+   */
+  calendars?: CalendarsConfig;
+}
+
+export interface GoogleCalendarConfig {
+  enabled?: boolean;
+  /** Path to the google_token.json authorized-user file. */
+  token: string;
+  /** Path to the OAuth client google_credentials.json (used by setup only). */
+  credentials?: string;
+  /** Fallback color when a calendar has none of its own. */
+  color?: string;
+}
+
+export interface MicrosoftCalendarConfig {
+  enabled?: boolean;
+  /** Path to azure_config.json ({ client_id, authority }). */
+  config: string;
+  /** Path to the MSAL serialized ms_token_cache.json. */
+  tokenCache: string;
+  color?: string;
+}
+
+export interface CalendarsConfig {
+  google?: GoogleCalendarConfig;
+  microsoft?: MicrosoftCalendarConfig;
 }
 
 export const DEFAULT_CONFIG: Omit<Config, "root" | "loaded" | "boards"> = {
@@ -91,6 +122,56 @@ interface RawConfig {
   done_column: string;
   archive_column: string;
   resume_command: string[];
+  calendars: {
+    google?: {
+      enabled?: boolean;
+      token?: string;
+      credentials?: string;
+      color?: string;
+    };
+    microsoft?: {
+      enabled?: boolean;
+      config?: string;
+      token_cache?: string;
+      color?: string;
+    };
+  };
+}
+
+/** Expand `~` to the home dir; resolve relative paths against the config dir. */
+function expandPath(p: string, root: string): string {
+  if (p === "~") return homedir();
+  if (p.startsWith("~/") || p.startsWith("~\\")) {
+    return join(homedir(), p.slice(2));
+  }
+  return isAbsolute(p) ? p : resolve(root, p);
+}
+
+function normalizeCalendars(
+  raw: RawConfig["calendars"] | undefined,
+  root: string,
+): CalendarsConfig | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: CalendarsConfig = {};
+  const g = raw.google;
+  if (g && g.token) {
+    out.google = {
+      enabled: g.enabled !== false,
+      token: expandPath(g.token, root),
+      credentials: g.credentials ? expandPath(g.credentials, root) : undefined,
+      color: g.color,
+    };
+  }
+  const m = raw.microsoft;
+  if (m && m.config && m.token_cache) {
+    out.microsoft = {
+      enabled: m.enabled !== false,
+      config: expandPath(m.config, root),
+      tokenCache: expandPath(m.token_cache, root),
+      color: m.color,
+    };
+  }
+  return out.google || out.microsoft ? out : undefined;
 }
 
 interface FoundConfig {
@@ -158,6 +239,7 @@ function normalize(raw: Partial<RawConfig>, root: string, loaded: boolean): Conf
       Array.isArray(raw.resume_command) && raw.resume_command.length > 0
         ? raw.resume_command.map(String)
         : undefined,
+    calendars: normalizeCalendars(raw.calendars, root),
   };
 }
 

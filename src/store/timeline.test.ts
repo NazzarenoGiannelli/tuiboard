@@ -6,6 +6,7 @@ import {
   MINS_PER_ROW,
   TOTAL_ROWS,
   buildRowMap,
+  buildCalendarEntries,
   buildTimelineEntries,
   countOverlaps,
   formatHm,
@@ -142,6 +143,7 @@ describe("buildTimelineEntries", () => {
 describe("buildRowMap", () => {
   function entryAt(startRow: number, endRow: number, title = "block"): TimelineEntry {
     return {
+      kind: "task",
       ref: { boardPath: "x", columnIndex: 0, taskIndex: 0 },
       task: makeTask({ displayTitle: title }),
       boardName: "R3PLICA",
@@ -153,6 +155,9 @@ describe("buildRowMap", () => {
       endRow,
     };
   }
+
+  const titleOf = (e: TimelineEntry | undefined) =>
+    e?.kind === "task" ? e.task.displayTitle : undefined;
 
   it("returns TOTAL_ROWS row pairs", () => {
     const result = buildRowMap([], 0);
@@ -190,13 +195,13 @@ describe("buildRowMap", () => {
     expect(overflow).toBe(0);
     // Lane 0 (left) gets A.
     expect(rows[5]!.left.kind).toBe("head");
-    expect(rows[5]!.left.entry?.task.displayTitle).toBe("A");
+    expect(titleOf(rows[5]!.left.entry)).toBe("A");
     // Lane 1 (right) gets B starting at row 7.
     expect(rows[7]!.right.kind).toBe("head");
-    expect(rows[7]!.right.entry?.task.displayTitle).toBe("B");
+    expect(titleOf(rows[7]!.right.entry)).toBe("B");
     // Row 10 is past A's end but inside B → left empty, right fill.
     expect(rows[10]!.left.kind).toBe("empty");
-    expect(rows[10]!.right.entry?.task.displayTitle).toBe("B");
+    expect(titleOf(rows[10]!.right.entry)).toBe("B");
   });
 
   it("counts third+ overlapping entry as overflow", () => {
@@ -214,8 +219,8 @@ describe("buildRowMap", () => {
     const c = entryAt(10, 15, "C");
     const { rows, overflow } = buildRowMap([a, c], 0);
     expect(overflow).toBe(0);
-    expect(rows[5]!.left.entry?.task.displayTitle).toBe("A");
-    expect(rows[10]!.left.entry?.task.displayTitle).toBe("C");
+    expect(titleOf(rows[5]!.left.entry)).toBe("A");
+    expect(titleOf(rows[10]!.left.entry)).toBe("C");
     // Right lane stayed empty throughout.
     for (let r = 0; r < TOTAL_ROWS; r++) {
       expect(rows[r]!.right.kind).toBe("empty");
@@ -239,6 +244,7 @@ describe("buildRowMap", () => {
 describe("countOverlaps", () => {
   function entry(s: number, e: number): TimelineEntry {
     return {
+      kind: "task",
       ref: { boardPath: "x", columnIndex: 0, taskIndex: 0 },
       task: makeTask({ displayTitle: "x" }),
       boardName: "X",
@@ -265,6 +271,35 @@ describe("countOverlaps", () => {
     expect(
       countOverlaps([entry(540, 660), entry(600, 720), entry(630, 700)]),
     ).toBe(3);
+  });
+});
+
+describe("buildCalendarEntries", () => {
+  const ev = (startMin: number, endMin: number, title = "Standup") => ({
+    title,
+    startMin,
+    endMin,
+    color: "#FF5F00",
+    source: "google" as const,
+  });
+
+  it("maps an in-window event to a calendar entry with rows", () => {
+    const out = buildCalendarEntries([ev(9 * 60, 10 * 60, "Standup")]);
+    expect(out).toHaveLength(1);
+    expect(out[0]!.kind).toBe("calendar");
+    expect(out[0]!.title).toBe("Standup");
+    expect(out[0]!.color).toBe("#FF5F00");
+    // 09:00 → (540 - DAY_START*60) / 15
+    expect(out[0]!.startRow).toBe((9 * 60 - DAY_START_HOUR * 60) / MINS_PER_ROW);
+  });
+
+  it("drops events entirely outside the rendered window", () => {
+    expect(buildCalendarEntries([ev(2 * 60, 3 * 60)])).toEqual([]);
+  });
+
+  it("sorts by start time", () => {
+    const out = buildCalendarEntries([ev(11 * 60, 12 * 60, "late"), ev(8 * 60, 9 * 60, "early")]);
+    expect(out.map((e) => e.title)).toEqual(["early", "late"]);
   });
 });
 

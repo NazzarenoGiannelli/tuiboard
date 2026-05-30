@@ -42,6 +42,7 @@ import {
   MINS_PER_ROW,
   TOTAL_ROWS,
   buildRowMap,
+  buildCalendarEntries,
   buildTimelineEntries,
   formatHm,
   type RowMapEntry,
@@ -85,6 +86,7 @@ export function TimelineView(props: TimelineViewProps) {
   const armedRef = () => props.store.state.ui.armedTimelineRef;
   const armMode = () => props.store.state.ui.armMode;
 
+  // Task entries drive the cursor + arm/keyboard interactions.
   const entries = createMemo(() => {
     props.store.state.rev; // recompute on any board mutation
     return buildTimelineEntries(
@@ -93,14 +95,20 @@ export function TimelineView(props: TimelineViewProps) {
     );
   });
 
+  // Read-only calendar events (Google / Microsoft), merged into the grid for
+  // display only — not cursor-navigable, not editable.
+  const calEntries = createMemo(() =>
+    buildCalendarEntries(props.store.calendar.events()),
+  );
+
   // Recompute the row map every minute so the "now" marker stays current.
-  // No more sticky-unscheduled trimming — the unscheduled list lived at the
-  // top of the timeline and caused unsolvable flex-overlap with the grid
-  // scrollbox below it. Replaced by the global `C` (calendar-arm) shortcut:
-  // arm a task from the board / virtual panel, then click a timeline slot
-  // to place it. The grid now owns the whole panel, clean and simple.
   const nowMin = useNowMin();
-  const rowMap = createMemo(() => buildRowMap(entries(), nowMin()));
+  const rowMap = createMemo(() => {
+    const merged: TimelineEntry[] = [...entries(), ...calEntries()].sort(
+      (a, b) => a.startMin - b.startMin,
+    );
+    return buildRowMap(merged, nowMin());
+  });
 
   /** Find the armed entry in the current entries list (if still present). */
   const armedEntry = createMemo<TimelineEntry | undefined>(() => {
@@ -168,6 +176,14 @@ export function TimelineView(props: TimelineViewProps) {
    */
   const onBlockClick = (entry: TimelineEntry, event: MouseEventLike) => {
     props.store.setActiveZone("timeline");
+
+    // Calendar events are read-only: they can't be armed or moved. A click on
+    // one while a task is armed just places the armed task at that slot;
+    // otherwise it's a no-op (beyond focusing the zone).
+    if (entry.kind !== "task") {
+      if (armedRef()) onEmptyRowClick(entry.startRow, event);
+      return;
+    }
 
     const arm = armedRef();
     const armedSame =
@@ -416,8 +432,10 @@ function TimelineRow(props: TimelineRowProps) {
   const rightIsArmed = () =>
     !!props.armedEntry && right().entry === props.armedEntry;
 
-  const leftIsDone = () => !!left().entry?.task.done;
-  const rightIsDone = () => !!right().entry?.task.done;
+  const entryDone = (e: TimelineEntry | undefined) =>
+    e?.kind === "task" && e.task.done;
+  const leftIsDone = () => entryDone(left().entry);
+  const rightIsDone = () => entryDone(right().entry);
 
   // Cell budget per lane, so RowContent can tail-truncate the title (keeping
   // the head readable) instead of leaning on OpenTUI's middle-ellipsis.
@@ -563,6 +581,18 @@ function RowContent(props: RowContentProps) {
   }
   if (r.kind === "head" && r.entry) {
     const e = r.entry;
+    if (e.kind === "calendar") {
+      // Read-only calendar event: time + 📅, in the calendar's own color.
+      return (
+        <>
+          <span style={{ fg: T.textDim }}>{prefix}</span>
+          <span style={{ fg: e.color, attributes: ATTR.bold }}>
+            {"┤ "}{formatHm(e.startMin)}{"-"}{formatHm(e.endMin)}{" "}
+          </span>
+          <span style={{ fg: e.color }}>{"📅 "}</span>
+        </>
+      );
+    }
     const bColor = boardColor(e.boardIndex);
     const priorityGlyph = e.task.priority !== "none" ? "🔺 " : "";
     return (
@@ -590,11 +620,21 @@ function RowContent(props: RowContentProps) {
   }
   if (r.kind === "body" && r.entry) {
     const e = r.entry;
+    const avail = props.laneWidth ?? 200;
+    if (e.kind === "calendar") {
+      const budget = Math.max(6, avail - (props.skipPrefix ? 0 : 3) - 2);
+      return (
+        <>
+          <span style={{ fg: T.textDim }}>{prefix}</span>
+          <span style={{ fg: e.color }}>{"│ "}</span>
+          <span style={{ fg: e.color }}>{tailTruncate(e.title, budget)}</span>
+        </>
+      );
+    }
     const bColor = boardColor(e.boardIndex);
     // Tail-truncate so the START of the title stays readable (the head/tail
     // ellipsis OpenTUI does otherwise chops the middle). Budget = lane width
     // minus the prefix, the "│ " gutter, and the done check.
-    const avail = props.laneWidth ?? 200;
     const budget = Math.max(
       6,
       avail - (props.skipPrefix ? 0 : 3) - 2 - (e.task.done ? 2 : 0),
@@ -614,15 +654,15 @@ function RowContent(props: RowContentProps) {
   }
   if (r.kind === "fill" && r.entry) {
     const e = r.entry;
-    const bColor = boardColor(e.boardIndex);
+    const color = e.kind === "calendar" ? e.color : boardColor(e.boardIndex);
     const isLast = props.rowIndex === e.endRow - 1;
     return (
       <>
         <span style={{ fg: T.textDim }}>{prefix}</span>
-        <span style={{ fg: bColor }}>{isLast ? "╰" : "│"}</span>
+        <span style={{ fg: color }}>{isLast ? "╰" : "│"}</span>
         <Show when={isLast}>
           {/* Bottom edge of the block — clear visual cap. */}
-          <span style={{ fg: bColor }}>{"─".repeat(120)}</span>
+          <span style={{ fg: color }}>{"─".repeat(120)}</span>
         </Show>
       </>
     );

@@ -25,18 +25,53 @@ export const TOTAL_ROWS =
 /** Minimum block height in rows — single-row blocks are unreadable. */
 export const MIN_BLOCK_ROWS = 2;
 
-export interface TimelineEntry {
-  ref: TaskRef;
-  task: Task;
-  boardName: string;
-  boardIndex: number;
-  columnName: string;
+interface BaseEntry {
   startMin: number;
   endMin: number;
   /** Vertical position in the row grid (clipped to [0, TOTAL_ROWS)). */
   startRow: number;
   /** Exclusive end row. */
   endRow: number;
+}
+
+/** A time-blocked task placed on the grid. */
+export interface TaskTimelineEntry extends BaseEntry {
+  kind: "task";
+  ref: TaskRef;
+  task: Task;
+  boardName: string;
+  boardIndex: number;
+  columnName: string;
+}
+
+/** A read-only calendar event (Google / Microsoft) placed on the grid. */
+export interface CalTimelineEntry extends BaseEntry {
+  kind: "calendar";
+  title: string;
+  color: string;
+  source: "google" | "microsoft";
+}
+
+export type TimelineEntry = TaskTimelineEntry | CalTimelineEntry;
+
+/**
+ * Map an event's start/end (minutes since midnight) to grid rows, or null if
+ * it falls entirely outside the rendered [DAY_START_HOUR, DAY_END_HOUR] window.
+ */
+function rowsFor(
+  startMin: number,
+  endMin: number,
+): { startRow: number; endRow: number } | null {
+  const windowStart = DAY_START_HOUR * 60;
+  const windowEnd = DAY_END_HOUR * 60;
+  if (endMin <= windowStart || startMin >= windowEnd) return null;
+  const startRow = Math.floor((startMin - windowStart) / MINS_PER_ROW);
+  const naturalHeight = Math.max(
+    MIN_BLOCK_ROWS,
+    Math.floor((endMin - startMin) / MINS_PER_ROW),
+  );
+  const endRow = startRow + naturalHeight;
+  return { startRow: Math.max(0, startRow), endRow: Math.min(TOTAL_ROWS, endRow) };
 }
 
 export type RowKind = "empty" | "hour" | "head" | "body" | "fill" | "now";
@@ -85,8 +120,8 @@ export interface BuildRowMapResult {
 export function buildTimelineEntries(
   boards: Board[],
   date: string,
-): TimelineEntry[] {
-  const out: TimelineEntry[] = [];
+): TaskTimelineEntry[] {
+  const out: TaskTimelineEntry[] = [];
   for (let bi = 0; bi < boards.length; bi++) {
     const board = boards[bi]!;
     for (let ci = 0; ci < board.columns.length; ci++) {
@@ -102,19 +137,11 @@ export function buildTimelineEntries(
         if (t.scheduled !== date) continue;
 
         const { startMin, endMin } = t.timeBlock;
-        const windowStart = DAY_START_HOUR * 60;
-        const windowEnd = DAY_END_HOUR * 60;
-        // Skip blocks that fall entirely outside the rendered window.
-        if (endMin <= windowStart || startMin >= windowEnd) continue;
-
-        const startRow = Math.floor((startMin - windowStart) / MINS_PER_ROW);
-        const naturalHeight = Math.max(
-          MIN_BLOCK_ROWS,
-          Math.floor((endMin - startMin) / MINS_PER_ROW),
-        );
-        const endRow = startRow + naturalHeight;
+        const rows = rowsFor(startMin, endMin);
+        if (!rows) continue; // entirely outside the rendered window
 
         out.push({
+          kind: "task",
           ref: {
             boardPath: board.filepath,
             columnIndex: ci,
@@ -126,11 +153,37 @@ export function buildTimelineEntries(
           columnName: col.name,
           startMin,
           endMin,
-          startRow: Math.max(0, startRow),
-          endRow: Math.min(TOTAL_ROWS, endRow),
+          startRow: rows.startRow,
+          endRow: rows.endRow,
         });
       }
     }
+  }
+  out.sort((a, b) => a.startMin - b.startMin);
+  return out;
+}
+
+/**
+ * Turn read-only calendar events (already mapped to minutes-since-midnight for
+ * the target day) into grid entries, clipped to the rendered window.
+ */
+export function buildCalendarEntries(
+  events: Array<{ title: string; startMin: number; endMin: number; color: string; source: "google" | "microsoft" }>,
+): CalTimelineEntry[] {
+  const out: CalTimelineEntry[] = [];
+  for (const e of events) {
+    const rows = rowsFor(e.startMin, e.endMin);
+    if (!rows) continue;
+    out.push({
+      kind: "calendar",
+      title: e.title,
+      color: e.color,
+      source: e.source,
+      startMin: e.startMin,
+      endMin: e.endMin,
+      startRow: rows.startRow,
+      endRow: rows.endRow,
+    });
   }
   out.sort((a, b) => a.startMin - b.startMin);
   return out;

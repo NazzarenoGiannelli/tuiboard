@@ -270,6 +270,16 @@ session (until the next terminal resize).
 | `F1` / `F2` / `F3` | Toggle visibility of Virtual / Timeline / Agents zones |
 | `z` | Zoom active zone to full screen |
 
+### Agenda (timeline zone)
+
+| Key | Action |
+|---|---|
+| `[` / `]` | Previous / next day — shows that day's tasks **and** calendar events |
+| `\` | Jump back to today |
+| `c` | Arm mode: click a task, then click a slot to schedule (works from any zone) |
+| `j` / `k` | While armed: nudge the block ±15 min |
+| `+` / `-` | While armed: resize the block's end ±15 min |
+
 ### Task actions (work in board, virtual, AND timeline zones)
 
 | Key | Action |
@@ -308,6 +318,9 @@ session (until the next terminal resize).
 
 ## Status
 
+- **v0.6** — adds the Agenda calendar overlay (Google + Microsoft 365,
+  read-only, BYO credentials) and day-navigation (`[` / `]` / `\`) so you can
+  page tasks and events across days.
 - **v0.5** — daily-driver ready. Kanban + virtual + timeline + agents
   all functional, multi-select, undo, atomic file roundtrip, mouse click,
   responsive layout. Tested on Windows with WezTerm; Linux/macOS should

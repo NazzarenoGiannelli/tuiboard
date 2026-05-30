@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import type { Config } from "~/config/loader";
-import { createTuiStore } from "./index";
+import { createTuiStore, isoAddDays, isoToday } from "./index";
 
 describe("test runner smoke", () => {
   it("can run a trivial assertion", () => {
@@ -106,5 +106,53 @@ describe("UI cycleActiveZone", () => {
     store.setZoneVisible("agents", false);
     store.cycleActiveZone();
     expect(store.state.ui.activeZone).toBe("board");
+  });
+});
+
+describe("isoAddDays", () => {
+  it("adds and subtracts days", () => {
+    expect(isoAddDays("2026-05-30", 1)).toBe("2026-05-31");
+    expect(isoAddDays("2026-05-30", -1)).toBe("2026-05-29");
+    expect(isoAddDays("2026-05-30", 0)).toBe("2026-05-30");
+  });
+
+  it("rolls over month and year boundaries", () => {
+    expect(isoAddDays("2026-05-31", 1)).toBe("2026-06-01");
+    expect(isoAddDays("2026-12-31", 1)).toBe("2027-01-01");
+    expect(isoAddDays("2026-03-01", -1)).toBe("2026-02-28");
+  });
+});
+
+describe("Agenda day navigation", () => {
+  it("defaults to today (offset 0)", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    expect(store.state.ui.agendaOffset).toBe(0);
+    expect(store.agendaDate()).toBe(isoToday());
+  });
+
+  it("shifts the viewed day and reflects it in agendaDate()", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.shiftAgendaDay(1);
+    expect(store.state.ui.agendaOffset).toBe(1);
+    expect(store.agendaDate()).toBe(isoAddDays(isoToday(), 1));
+    store.shiftAgendaDay(-3);
+    expect(store.state.ui.agendaOffset).toBe(-2);
+  });
+
+  it("resets to today and clamps to ±365", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.shiftAgendaDay(1000);
+    expect(store.state.ui.agendaOffset).toBe(365);
+    store.resetAgendaDay();
+    expect(store.state.ui.agendaOffset).toBe(0);
+    store.shiftAgendaDay(-1000);
+    expect(store.state.ui.agendaOffset).toBe(-365);
+  });
+
+  it("resets the timeline cursor when changing day", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setCursor(0, 5);
+    store.shiftAgendaDay(1);
+    expect(store.state.ui.row).toBe(0);
   });
 });

@@ -328,6 +328,26 @@ export function buildUnscheduledToday(
   return out;
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/**
+ * Human label for the Agenda's viewed day. Relative words for the near days
+ * (Today / Tomorrow / Yesterday), else a "Mon 02 Jun" stamp. `dateIso` is the
+ * already-resolved date so this stays pure (no clock access).
+ */
+export function formatAgendaDay(offset: number, dateIso: string): string {
+  if (offset === 0) return "Today";
+  if (offset === 1) return "Tomorrow";
+  if (offset === -1) return "Yesterday";
+  const [y, m, d] = dateIso.split("-").map(Number);
+  const dt = new Date(y!, (m ?? 1) - 1, d ?? 1);
+  return `${WEEKDAYS[dt.getDay()]} ${String(d).padStart(2, "0")} ${MONTHS[(m ?? 1) - 1]}`;
+}
+
 /** Format minutes since midnight as "HH:MM". */
 export function formatHm(mins: number): string {
   const h = Math.floor(mins / 60) % 24;

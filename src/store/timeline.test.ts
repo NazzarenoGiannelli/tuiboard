@@ -9,6 +9,7 @@ import {
   buildCalendarEntries,
   buildTimelineEntries,
   countOverlaps,
+  formatAgendaDay,
   formatHm,
   type TimelineEntry,
 } from "./timeline";
@@ -271,6 +272,21 @@ describe("countOverlaps", () => {
     expect(
       countOverlaps([entry(540, 660), entry(600, 720), entry(630, 700)]),
     ).toBe(3);
+  });
+});
+
+describe("formatAgendaDay", () => {
+  it("uses relative words for the near days", () => {
+    expect(formatAgendaDay(0, "2026-05-30")).toBe("Today");
+    expect(formatAgendaDay(1, "2026-05-31")).toBe("Tomorrow");
+    expect(formatAgendaDay(-1, "2026-05-29")).toBe("Yesterday");
+  });
+
+  it("stamps weekday + day + month for farther days", () => {
+    // 2026-06-02 is a Tuesday.
+    expect(formatAgendaDay(3, "2026-06-02")).toBe("Tue 02 Jun");
+    // 2026-05-25 is a Monday.
+    expect(formatAgendaDay(-5, "2026-05-25")).toBe("Mon 25 May");
   });
 });
 

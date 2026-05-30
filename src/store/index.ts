@@ -115,6 +115,12 @@ export interface UIState {
    * `armedTimelineRef`, which is the single task currently armed.
    */
   armMode: boolean;
+  /**
+   * Which day the Agenda (timeline) zone is showing, as a signed offset from
+   * today (0 = today, +1 = tomorrow, -1 = yesterday). Drives both the task
+   * entries and the calendar overlay. Changed with `[` / `]`; `\` resets to 0.
+   */
+  agendaOffset: number;
   view: ViewMode;
   /**
    * Tasks marked for bulk ops (`Space`). Key format:
@@ -174,6 +180,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       zoomed: false,
       grabbing: false,
       armMode: false,
+      agendaOffset: 0,
       view: "kanban",
       marked: {},
       filter: "all",
@@ -786,6 +793,32 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "armMode", on);
   }
 
+  /** ISO date the Agenda is currently showing (today + offset). Reactive. */
+  function agendaDate(): string {
+    return isoAddDays(isoToday(), state.ui.agendaOffset);
+  }
+
+  /**
+   * Move the Agenda's viewed day. `delta` shifts relative to the current day;
+   * pass `0`-reset behavior via `resetAgendaDay`. Clamped to ±365 days so the
+   * calendar fetch can't run away. Resets the timeline cursor and disarms,
+   * since the prior day's armed block no longer renders.
+   */
+  function shiftAgendaDay(delta: number): void {
+    const next = Math.max(-365, Math.min(365, state.ui.agendaOffset + delta));
+    if (next === state.ui.agendaOffset) return;
+    setState("ui", "agendaOffset", next);
+    setState("ui", "row", 0);
+    setState("ui", "armedTimelineRef", undefined);
+  }
+
+  function resetAgendaDay(): void {
+    if (state.ui.agendaOffset === 0) return;
+    setState("ui", "agendaOffset", 0);
+    setState("ui", "row", 0);
+    setState("ui", "armedTimelineRef", undefined);
+  }
+
   // ─── Multi-select ────────────────────────────────────────────────────────
 
   function markKey(ref: TaskRef): string {
@@ -991,6 +1024,9 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     exitGrab,
     armTimeline,
     setArmMode,
+    agendaDate,
+    shiftAgendaDay,
+    resetAgendaDay,
     setFilter,
     applyBoardFilter,
     setZoomed,
@@ -1039,6 +1075,12 @@ export function isoTomorrow(): string {
   const d = new Date();
   d.setDate(d.getDate() + 1);
   return isoDate(d);
+}
+
+/** Add `n` days to an ISO date string (handles month/year/DST rollover). */
+export function isoAddDays(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return isoDate(new Date(y!, (m ?? 1) - 1, (d ?? 1) + n));
 }
 
 export function isoDate(d: Date): string {

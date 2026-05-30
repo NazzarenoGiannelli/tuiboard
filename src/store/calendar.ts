@@ -385,27 +385,47 @@ export async function fetchCalendarEvents(
 // ─── Reactive store ─────────────────────────────────────────────────────────
 
 export interface CalendarStore {
+  /** Events for the currently active date. */
   events: () => CalEvent[];
+  /** Switch which date's events `events()` exposes; fetches it (cache-first). */
+  setActiveDate: (dateIso: string) => void;
+  /** Re-fetch the active date now (the 5-min interval calls this too). */
   refresh: () => void;
   dispose: () => Promise<void>;
 }
 
 /**
- * Reactive store of today's calendar events. Fetches eagerly, then refreshes
- * every 5 minutes (cheap thanks to the 30-min disk cache) — which also picks
- * up the day rollover via the `today` accessor. No-op when no calendars are
- * configured.
+ * Reactive store of one day's calendar events at a time — the "active date",
+ * driven by the Agenda's day-navigation. Fetches eagerly for the initial date,
+ * refreshes the active date every 5 minutes (cheap thanks to the 30-min disk
+ * cache), and re-fetches immediately when the active date changes. No-op when
+ * no calendars are configured.
  */
 export function createCalendarStore(
   calendars: CalendarsConfig | undefined,
-  today: () => string,
+  initialDate: () => string,
 ): CalendarStore {
   const [events, setEvents] = createSignal<CalEvent[]>([]);
+  let activeDate = initialDate();
   let timer: ReturnType<typeof setInterval> | undefined;
 
   function refresh(): void {
     if (!calendars) return;
-    void fetchCalendarEvents(calendars, today()).then(setEvents).catch(() => {});
+    const target = activeDate;
+    void fetchCalendarEvents(calendars, target)
+      .then((evs) => {
+        // Guard against out-of-order resolves when the user pages quickly:
+        // only apply if this is still the date the user is looking at.
+        if (target === activeDate) setEvents(evs);
+      })
+      .catch(() => {});
+  }
+
+  function setActiveDate(dateIso: string): void {
+    if (dateIso === activeDate) return;
+    activeDate = dateIso;
+    setEvents([]); // drop stale events immediately; the fetch repopulates
+    refresh();
   }
 
   refresh();
@@ -415,5 +435,5 @@ export function createCalendarStore(
     if (timer) clearInterval(timer);
   }
 
-  return { events, refresh, dispose };
+  return { events, setActiveDate, refresh, dispose };
 }

@@ -36,7 +36,7 @@ import {
   onMount,
 } from "solid-js";
 
-import { isoToday, type TaskRef } from "~/store/index";
+import type { TaskRef } from "~/store/index";
 import {
   DAY_START_HOUR,
   MINS_PER_ROW,
@@ -44,6 +44,7 @@ import {
   buildRowMap,
   buildCalendarEntries,
   buildTimelineEntries,
+  formatAgendaDay,
   formatHm,
   type RowMapEntry,
   type RowMapPair,
@@ -86,13 +87,23 @@ export function TimelineView(props: TimelineViewProps) {
   const armedRef = () => props.store.state.ui.armedTimelineRef;
   const armMode = () => props.store.state.ui.armMode;
 
+  // Which day the Agenda is showing (today + offset). Drives task entries,
+  // the calendar overlay, and the "now" line.
+  const viewedDate = () => props.store.agendaDate();
+  const isToday = () => props.store.state.ui.agendaOffset === 0;
+
   // Task entries drive the cursor + arm/keyboard interactions.
   const entries = createMemo(() => {
     props.store.state.rev; // recompute on any board mutation
     return buildTimelineEntries(
       props.store.state.boards.map((b) => b.board),
-      isoToday(),
+      viewedDate(),
     );
+  });
+
+  // Tell the calendar store which day to fetch whenever the viewed day changes.
+  createEffect(() => {
+    props.store.calendar.setActiveDate(viewedDate());
   });
 
   // Read-only calendar events (Google / Microsoft), merged into the grid for
@@ -102,12 +113,13 @@ export function TimelineView(props: TimelineViewProps) {
   );
 
   // Recompute the row map every minute so the "now" marker stays current.
+  // The now-line only renders on today's view (a sentinel hides it elsewhere).
   const nowMin = useNowMin();
   const rowMap = createMemo(() => {
     const merged: TimelineEntry[] = [...entries(), ...calEntries()].sort(
       (a, b) => a.startMin - b.startMin,
     );
-    return buildRowMap(merged, nowMin());
+    return buildRowMap(merged, isToday() ? nowMin() : -1);
   });
 
   /** Find the armed entry in the current entries list (if still present). */
@@ -234,9 +246,10 @@ export function TimelineView(props: TimelineViewProps) {
       const startMin = Math.max(0, targetMin);
       const endMin = Math.min(24 * 60 - 1, startMin + DEFAULT_BLOCK_MIN);
       // A time block only renders on the timeline when the task is also
-      // scheduled for today — so arming a task from ANY board and dropping it
-      // here pins it to today (otherwise it'd vanish: block set, wrong date).
-      props.store.setScheduled(ref, isoToday());
+      // scheduled for the viewed day — so arming a task from ANY board and
+      // dropping it here pins it to whatever day the Agenda is showing
+      // (otherwise it'd vanish: block set, wrong date).
+      props.store.setScheduled(ref, viewedDate());
       props.store.setTimeBlock(ref, { startMin, endMin });
       props.store.flashBanner(
         "info",
@@ -294,7 +307,7 @@ export function TimelineView(props: TimelineViewProps) {
         paddingLeft: 1,
         paddingRight: 1,
       }}
-      title={`┤ Agenda · ${entries().length}${armMode() ? "  ◉ ARM" : ""} ├`}
+      title={`┤ Agenda · ${formatAgendaDay(props.store.state.ui.agendaOffset, viewedDate())} · ${entries().length}${armMode() ? "  ◉ ARM" : ""} ├`}
       titleAlignment="left"
     >
       <Show when={armMode()}>
@@ -320,6 +333,12 @@ export function TimelineView(props: TimelineViewProps) {
               ? "  click row to place · Esc to cancel"
               : "  click row to move · shift+click to resize · Esc"}
           </span>
+        </text>
+      </Show>
+      <Show when={!isToday()}>
+        <text wrapMode="none">
+          <span style={{ fg: T.warm }}>{"◷ "}</span>
+          <span style={{ fg: T.textDim }}>{"[ prev · ] next · \\ today"}</span>
         </text>
       </Show>
       <Show when={!armedTask() && rowMap().overflow > 0}>

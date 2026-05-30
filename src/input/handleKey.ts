@@ -23,7 +23,7 @@ import {
   type TuiStore,
 } from "~/store/index";
 import type { Board, PriorityLevel } from "~/types";
-import { buildTimelineEntries } from "~/store/timeline";
+import { buildTimelineEntries, formatAgendaDay } from "~/store/timeline";
 import { buildVirtualItems } from "~/store/virtual-panel";
 import { jumpToKanban } from "~/ui/TimelineView";
 
@@ -247,9 +247,29 @@ function handleTimelineZone(
   openLater: (m: ModalKind) => void,
 ): void {
   const ui = store.state.ui;
+
+  // Day navigation: page the Agenda to other days (tasks + calendar events).
+  // `[` previous, `]` next, `\` back to today. Handled first so they work
+  // regardless of arm/cursor state.
+  if (key.name === "[" || key.sequence === "[") {
+    store.shiftAgendaDay(-1);
+    store.flashBanner("info", `◀ ${formatAgendaDay(store.state.ui.agendaOffset, store.agendaDate())}`);
+    return;
+  }
+  if (key.name === "]" || key.sequence === "]") {
+    store.shiftAgendaDay(1);
+    store.flashBanner("info", `▶ ${formatAgendaDay(store.state.ui.agendaOffset, store.agendaDate())}`);
+    return;
+  }
+  if (key.name === "\\" || key.sequence === "\\") {
+    store.resetAgendaDay();
+    store.flashBanner("info", "Agenda → Today");
+    return;
+  }
+
   const entries = buildTimelineEntries(
     store.state.boards.map((b) => b.board),
-    isoToday(),
+    store.agendaDate(),
   );
   const target = entries[ui.row];
 

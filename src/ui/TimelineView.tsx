@@ -335,10 +335,14 @@ export function TimelineView(props: TimelineViewProps) {
           </span>
         </text>
       </Show>
-      <Show when={!isToday()}>
+      {/* Day-navigation hint — always visible in the resting state (not while
+          arming) so the [ ] day-switch is discoverable. Off-today, the
+          "\ today" reset is highlighted to pull the eye back. */}
+      <Show when={!armMode() && !armedTask()}>
         <text wrapMode="none">
           <span style={{ fg: T.warm }}>{"◷ "}</span>
-          <span style={{ fg: T.textDim }}>{"[ prev · ] next · \\ today"}</span>
+          <span style={{ fg: T.textDim }}>{"[ ] change day · "}</span>
+          <span style={{ fg: isToday() ? T.textDim : T.warm }}>{"\\ today"}</span>
         </text>
       </Show>
       <Show when={!armedTask() && rowMap().overflow > 0}>

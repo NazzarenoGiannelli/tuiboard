@@ -70,11 +70,13 @@ export function AgentRow(props: AgentRowProps) {
           <span style={{ fg: T.textDim }}>{"  "}{props.session.gitBranch}</span>
         </Show>
       </text>
-      {/* cwd + age pinned together on the right, so the session titles align
-          cleanly on the left instead of being pushed around by the path. */}
+      {/* cwd + age pinned together on the right. The age is right-aligned in a
+          fixed-width field (pad to 3: "59m" / "23h" / "10d") so the END of each
+          cwd lands on the same column across rows — a 1- vs 2-digit age no
+          longer shoves the directory names out of vertical alignment. */}
       <text style={{ flexShrink: 0 }} wrapMode="none">
         <span style={{ fg: T.textDim }}>
-          {props.session.cwdShort}{"   "}{ageStr()}
+          {props.session.cwdShort}{"  "}{ageStr().padStart(3)}
         </span>
       </text>
     </box>

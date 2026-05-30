@@ -68,7 +68,7 @@ Starting fresh — no Obsidian, no special folders required:
    ```
    Or skip the config entirely and just run `tuiboard` inside a folder that
    already contains `.md` files with `- [ ]` tasks — it auto-discovers them.
-4. **Run it:** `tuiboard`.
+4. **Run it:** `tuiboard` (or the short alias `tb`).
 
 **The Agent view needs zero setup.** tuiboard reads your local Claude Code
 sessions from `~/.claude/` automatically, so the live agent strip fills in as

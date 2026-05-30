@@ -28,7 +28,8 @@
     "bun": ">=1.2.0"
   },
   "bin": {
-    "tuiboard": "./bin/tuiboard.ts"
+    "tuiboard": "./bin/tuiboard.ts",
+    "tb": "./bin/tuiboard.ts"
   },
   "files": [
     "src/",

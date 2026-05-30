@@ -98,7 +98,12 @@ https://github.com/NazzarenoGiannelli/tuiboard). Set it up for me from scratch:
    home path) with a `boards:` list pointing at those files by ABSOLUTE path,
    plus `assignees: [...]`, `done_column: Done`, `archive_column: Archive`.
 4. Do NOT configure the Agent view — tuiboard reads `~/.claude` automatically.
-5. Show me the final config, then tell me to run `tuiboard`, and how to add a
+5. Ask me whether I want to overlay my Google Calendar or Microsoft 365 events
+   on the Agenda. If yes, tell me to run `tuiboard calendar-setup google` (or
+   `microsoft`) — it interviews me, opens the browser, and prints the exact
+   `calendars:` YAML block to add. Don't try to do the OAuth yourself. If no,
+   skip it (it's optional and can be added later).
+6. Show me the final config, then tell me to run `tuiboard`, and how to add a
    board later (create a new `.md` and append it to the `boards:` list).
 
 Confirm the directory and file names with me before writing any files.
@@ -136,6 +141,48 @@ archive_column: Archive
 # opening a WezTerm tab with `claude --resume <id>`. For a custom layout:
 # resume_command: ["nu", "C:/Users/you/.config/tuiboard/code-resume.nu", "{cwd}", "{sessionId}"]
 ```
+
+## Calendars (Agenda overlay)
+
+The **Agenda** zone (the 24h timeline) can overlay read-only events from Google
+Calendar and Microsoft 365 alongside your time-blocked tasks — rendered as
+colored `📅` blocks you can't edit, so the day's real shape is visible at a
+glance. All-day events are skipped; each calendar keeps its own color. Events
+are cached 30 min on disk and refreshed every 5 min. **Bring your own
+credentials** — there's nothing to sign up for and nothing leaves your machine.
+
+Connect a calendar with the built-in setup command:
+
+```bash
+tuiboard calendar-setup google      # opens your browser (read-only scope)
+tuiboard calendar-setup microsoft   # device-code flow, no redirect
+```
+
+**Google** needs a one-time OAuth client (free): Google Cloud Console → enable
+*Google Calendar API* → create an *OAuth client ID* (type **Desktop app**) →
+download the JSON to `~/.config/tuiboard/google_credentials.json`, then run the
+command above. **Microsoft** needs an Azure app registration (Public client,
+`Calendars.Read` delegated) whose client ID goes in
+`~/.config/tuiboard/azure_config.json` — running `calendar-setup microsoft` with
+no config writes a template that walks you through it.
+
+After connecting, the command prints the exact YAML to paste into your config:
+
+```yaml
+calendars:
+  google:
+    enabled: true
+    token: ~/.config/tuiboard/google_token.json
+  microsoft:
+    enabled: true
+    config: ~/.config/tuiboard/azure_config.json
+    token_cache: ~/.config/tuiboard/ms_token.json
+```
+
+Paths support `~` and resolve against the config dir if relative. A missing,
+expired, or unconfigured calendar never breaks the board — it just shows no
+events. Set either provider's `enabled: false` (or drop the block) to turn it
+off; add a `color:` to override the fallback block color.
 
 ## Markdown board format
 

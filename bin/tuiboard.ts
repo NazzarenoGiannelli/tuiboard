@@ -17,6 +17,13 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appPath = join(here, "..", "src", "app.tsx");
+
+// Subcommands that run as a plain CLI (no TUI, no preload needed). Handle them
+// here before re-exec'ing bun for the dashboard.
+if (process.argv[2] === "calendar-setup") {
+  const { runCalendarSetup } = await import("../src/calendar/setup.ts");
+  process.exit(await runCalendarSetup(process.argv.slice(3)));
+}
 const preload = fileURLToPath(import.meta.resolve("@opentui/solid/preload"));
 
 const result = spawnSync(

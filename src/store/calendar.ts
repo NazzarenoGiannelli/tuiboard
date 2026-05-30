@@ -16,7 +16,11 @@ import { join } from "node:path";
 
 import { createSignal } from "solid-js";
 
-import type { CalendarsConfig, GoogleCalendarConfig } from "~/config/loader";
+import type {
+  CalendarsConfig,
+  GoogleCalendarConfig,
+  MicrosoftCalendarConfig,
+} from "~/config/loader";
 
 /** A calendar event mapped onto the target day's minute grid. */
 export interface CalEvent {
@@ -29,6 +33,8 @@ export interface CalEvent {
 }
 
 const GOOGLE_FALLBACK_COLOR = "#e8a05c";
+const MS_FALLBACK_COLOR = "#b39ddb";
+const MS_GRAPH_SCOPE = "Calendars.Read offline_access";
 const CACHE_DIR = join(homedir(), ".config", "tuiboard", "cal_cache");
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -222,6 +228,137 @@ async function fetchGoogle(cfg: GoogleCalendarConfig, dateIso: string): Promise<
   }
 }
 
+// ─── Microsoft 365 ────────────────────────────────────────────────────────────
+
+interface AzureConfig {
+  client_id?: string;
+  authority?: string;
+}
+
+interface MsToken {
+  access_token?: string;
+  refresh_token?: string;
+  expiry?: string;
+}
+
+/**
+ * Refresh the Microsoft Graph access token if missing/expired. Returns a usable
+ * token or null. Reads the Azure app config (client_id + authority) and the
+ * token file written by `tuiboard calendar-setup microsoft`.
+ */
+async function microsoftAccessToken(cfg: MicrosoftCalendarConfig): Promise<string | null> {
+  let azure: AzureConfig;
+  try {
+    azure = JSON.parse(readFileSync(cfg.config, "utf-8")) as AzureConfig;
+  } catch {
+    return null;
+  }
+  const clientId = azure.client_id;
+  if (!clientId || clientId === "YOUR_AZURE_APP_CLIENT_ID") return null;
+  const authority = azure.authority || "https://login.microsoftonline.com/common";
+
+  let tok: MsToken;
+  try {
+    tok = JSON.parse(readFileSync(cfg.tokenCache, "utf-8")) as MsToken;
+  } catch {
+    return null;
+  }
+  const notExpired = tok.expiry ? Date.parse(tok.expiry) - Date.now() > 60_000 : false;
+  if (tok.access_token && notExpired) return tok.access_token;
+  if (!tok.refresh_token) return null;
+
+  try {
+    const res = await fetch(`${authority}/oauth2/v2.0/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        grant_type: "refresh_token",
+        refresh_token: tok.refresh_token,
+        scope: MS_GRAPH_SCOPE,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+    };
+    if (!data.access_token) return null;
+    try {
+      tok.access_token = data.access_token;
+      if (data.refresh_token) tok.refresh_token = data.refresh_token;
+      if (data.expires_in) tok.expiry = new Date(Date.now() + data.expires_in * 1000).toISOString();
+      writeFileSync(cfg.tokenCache, JSON.stringify(tok), "utf-8");
+    } catch {
+      // token still usable in-memory even if write-back fails
+    }
+    return data.access_token;
+  } catch {
+    return null;
+  }
+}
+
+/** Append a `Z` to a Graph dateTime that has no timezone designator. */
+function ensureUtc(s: string): string {
+  if (s.endsWith("Z") || /[+-]\d\d:\d\d$/.test(s)) return s;
+  return `${s}Z`;
+}
+
+async function fetchMicrosoft(cfg: MicrosoftCalendarConfig, dateIso: string): Promise<CalEvent[]> {
+  const cached = loadCache("microsoft", dateIso);
+  if (cached) return cached;
+
+  const access = await microsoftAccessToken(cfg);
+  if (!access) return [];
+  const base = dayStartMs(dateIso);
+  const { min, max } = dayBoundsIso(dateIso);
+  const color = cfg.color || MS_FALLBACK_COLOR;
+
+  try {
+    const url =
+      "https://graph.microsoft.com/v1.0/me/calendarView" +
+      `?startDateTime=${encodeURIComponent(min)}&endDateTime=${encodeURIComponent(max)}` +
+      `&%24orderby=${encodeURIComponent("start/dateTime")}&%24top=50`;
+    const r = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${access}`,
+        // Ask Graph to return times in UTC so our base-offset math is exact.
+        Prefer: 'outlook.timezone="UTC"',
+      },
+    });
+    if (!r.ok) return [];
+    const data = (await r.json()) as {
+      value?: Array<{
+        subject?: string;
+        isAllDay?: boolean;
+        start?: { dateTime?: string };
+        end?: { dateTime?: string };
+      }>;
+    };
+    const events: CalEvent[] = [];
+    for (const it of data.value ?? []) {
+      if (it.isAllDay) continue; // mirror Google: skip all-day events
+      const s = it.start?.dateTime;
+      const e = it.end?.dateTime;
+      if (!s || !e) continue;
+      const { startMin, endMin } = toMinutes(Date.parse(ensureUtc(s)), Date.parse(ensureUtc(e)), base);
+      events.push({
+        title: it.subject ?? "(no title)",
+        startMin,
+        endMin,
+        color,
+        source: "microsoft",
+      });
+    }
+    events.sort((a, b) => a.startMin - b.startMin);
+    saveCache("microsoft", dateIso, events);
+    return events;
+  } catch {
+    return [];
+  }
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
@@ -234,10 +371,14 @@ export async function fetchCalendarEvents(
 ): Promise<CalEvent[]> {
   if (!calendars) return [];
   const out: CalEvent[] = [];
+  const tasks: Array<Promise<CalEvent[]>> = [];
   if (calendars.google?.enabled && calendars.google.token) {
-    out.push(...(await fetchGoogle(calendars.google, dateIso)));
+    tasks.push(fetchGoogle(calendars.google, dateIso));
   }
-  // Microsoft 365 — wired in phase 2.
+  if (calendars.microsoft?.enabled && calendars.microsoft.config && calendars.microsoft.tokenCache) {
+    tasks.push(fetchMicrosoft(calendars.microsoft, dateIso));
+  }
+  for (const arr of await Promise.all(tasks)) out.push(...arr);
   out.sort((a, b) => a.startMin - b.startMin);
   return out;
 }

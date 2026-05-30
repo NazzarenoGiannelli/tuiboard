@@ -278,7 +278,7 @@ export function TimelineView(props: TimelineViewProps) {
         paddingLeft: 1,
         paddingRight: 1,
       }}
-      title={`┤ Timeline · ${entries().length}${armMode() ? "  ◉ ARM" : ""} ├`}
+      title={`┤ Agenda · ${entries().length}${armMode() ? "  ◉ ARM" : ""} ├`}
       titleAlignment="left"
     >
       <Show when={armMode()}>

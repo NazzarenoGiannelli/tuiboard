@@ -606,7 +606,7 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  d                 Delete task (with confirm)\n"}</span>
         <span style={{ fg: T.text }}>{"  X                 Archive task → moves to Archive column\n"}</span>
         <span style={{ fg: T.text }}>{"  C                 Copy task to clipboard (markdown line)\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nTimeline scheduling\n"}</span>
+        <span style={{ fg: T.textDim }}>{"\nAgenda (timeline) scheduling\n"}</span>
         <span style={{ fg: T.text }}>{"  c (any zone)       Toggle ARM MODE — then click a task, click a slot, repeat\n"}</span>
         <span style={{ fg: T.text }}>{"  click empty row    Place the armed task here (30-min block, or move if it has one)\n"}</span>
         <span style={{ fg: T.text }}>{"  click band         Arm an existing block (or place the armed task at its start)\n"}</span>

@@ -39,6 +39,71 @@ bun install
 bun run dev          # or: bun link  → then `tuiboard` globally, live-linked
 ```
 
+## Quick start
+
+Starting fresh — no Obsidian, no special folders required:
+
+1. **Install Bun** ([bun.sh](https://bun.sh)), then `bun install -g tuiboard`.
+2. **Make one or more board files.** A board is a plain `.md` file: every `##`
+   heading is a column, every `- [ ]` line is a task. The simplest board:
+   ```markdown
+   ## To Do
+   - [ ] My first task
+
+   ## In Progress
+
+   ## Done
+   ```
+   Create one file per tab you want (e.g. `Work.md`, `Personal.md`). Columns
+   named exactly `Done` and `Archive` are treated specially (hidden from the
+   board view but used by the done-stats and the archive action).
+3. **Point tuiboard at them.** Create `~/.config/tuiboard/config.yaml` (found
+   from any directory) with **absolute** paths:
+   ```yaml
+   boards:
+     - path: /home/you/notes/Work.md
+       name: Work
+     - path: /home/you/notes/Personal.md
+       name: Personal
+   ```
+   Or skip the config entirely and just run `tuiboard` inside a folder that
+   already contains `.md` files with `- [ ]` tasks — it auto-discovers them.
+4. **Run it:** `tuiboard`.
+
+**The Agent view needs zero setup.** tuiboard reads your local Claude Code
+sessions from `~/.claude/` automatically, so the live agent strip fills in as
+soon as you've used Claude Code — nothing to connect or configure. (Tools that
+don't write to `~/.claude`, like Codex, won't show up there.)
+
+See [Configure](#configure) for assignees, the done/archive column names, and
+the optional custom "open session in your terminal" command.
+
+### Let an AI agent set it up for you
+
+Paste this into **Claude Code** (or Codex / Cursor) from any directory — it
+interviews you and wires everything up:
+
+```text
+I just installed `tuiboard` (a terminal kanban dashboard:
+https://github.com/NazzarenoGiannelli/tuiboard). Set it up for me from scratch:
+
+1. Ask me: (a) which directory should hold my board markdown files,
+   (b) how many boards/tabs I want and their names (e.g. Work, Personal),
+   (c) any assignee names I use.
+2. Create one markdown file per board in that directory. Each file: a few `##`
+   column headings — default `## To Do`, `## In Progress`, `## Done` — and no
+   tasks yet. Always include a `## Done` column (tuiboard treats columns named
+   `Done` and `Archive` specially and hides them from the board view).
+3. Create a global config at `~/.config/tuiboard/config.yaml` (resolve the real
+   home path) with a `boards:` list pointing at those files by ABSOLUTE path,
+   plus `assignees: [...]`, `done_column: Done`, `archive_column: Archive`.
+4. Do NOT configure the Agent view — tuiboard reads `~/.claude` automatically.
+5. Show me the final config, then tell me to run `tuiboard`, and how to add a
+   board later (create a new `.md` and append it to the `boards:` list).
+
+Confirm the directory and file names with me before writing any files.
+```
+
 ## Configure
 
 Copy `.tuiboard/config.example.yaml` to a config location and edit the
@@ -97,6 +162,10 @@ kanban-plugin: board
 
 ## Done
 ```
+
+The `kanban-plugin: board` frontmatter is **optional** — it's only there so the
+file also renders as a board in Obsidian's Kanban plugin. tuiboard itself needs
+just the `##` column headings and `- [ ]` task lines.
 
 ### Metadata vocabulary
 

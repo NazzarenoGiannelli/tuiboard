@@ -274,7 +274,7 @@ session (until the next terminal resize).
 
 | Key | Action |
 |---|---|
-| `[` / `]` | Previous / next day — shows that day's tasks **and** calendar events |
+| `[` / `]` | Previous / next day — shows that day's tasks **and** calendar events (works from any zone) |
 | `\` | Jump back to today |
 | `c` | Arm mode: click a task, then click a slot to schedule (works from any zone) |
 | `j` / `k` | While armed: nudge the block ±15 min |

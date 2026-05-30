@@ -606,7 +606,7 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  d                 Delete task (with confirm)\n"}</span>
         <span style={{ fg: T.text }}>{"  X                 Archive task → moves to Archive column\n"}</span>
         <span style={{ fg: T.text }}>{"  C                 Copy task to clipboard (markdown line)\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nAgenda (timeline) day navigation\n"}</span>
+        <span style={{ fg: T.textDim }}>{"\nAgenda (timeline) day navigation — works from any zone\n"}</span>
         <span style={{ fg: T.text }}>{"  [ / ]              Previous / next day (tasks + calendar events)\n"}</span>
         <span style={{ fg: T.text }}>{"  \\                  Jump back to today\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nAgenda (timeline) scheduling\n"}</span>

@@ -181,6 +181,35 @@ export function handleKey(
     return;
   }
 
+  // Agenda day navigation works from ANY zone — these keys only ever affect
+  // the Agenda, so there's no need to be focused there first. `[` previous
+  // day, `]` next day, `\` back to today. Pressing one also moves focus to
+  // the Agenda so you can keep paging/navigating. Guarded on the zone being
+  // visible — never steal focus to a hidden zone (F2 can hide it).
+  if (
+    ui.visibleZones.timeline &&
+    (key.name === "[" ||
+      key.sequence === "[" ||
+      key.name === "]" ||
+      key.sequence === "]" ||
+      key.name === "\\" ||
+      key.sequence === "\\")
+  ) {
+    store.setActiveZone("timeline");
+    if (key.name === "\\" || key.sequence === "\\") {
+      store.resetAgendaDay();
+      store.flashBanner("info", "Agenda → Today");
+    } else {
+      const delta = key.name === "]" || key.sequence === "]" ? 1 : -1;
+      store.shiftAgendaDay(delta);
+      store.flashBanner(
+        "info",
+        `${delta > 0 ? "▶" : "◀"} ${formatAgendaDay(store.state.ui.agendaOffset, store.agendaDate())}`,
+      );
+    }
+    return;
+  }
+
   // Defer modal opens by one macrotask so the OpenTUI <input> mounts after
   // the current key event has been fully dispatched.
   const openLater = (m: ModalKind) => {
@@ -247,26 +276,8 @@ function handleTimelineZone(
   openLater: (m: ModalKind) => void,
 ): void {
   const ui = store.state.ui;
-
-  // Day navigation: page the Agenda to other days (tasks + calendar events).
-  // `[` previous, `]` next, `\` back to today. Handled first so they work
-  // regardless of arm/cursor state.
-  if (key.name === "[" || key.sequence === "[") {
-    store.shiftAgendaDay(-1);
-    store.flashBanner("info", `◀ ${formatAgendaDay(store.state.ui.agendaOffset, store.agendaDate())}`);
-    return;
-  }
-  if (key.name === "]" || key.sequence === "]") {
-    store.shiftAgendaDay(1);
-    store.flashBanner("info", `▶ ${formatAgendaDay(store.state.ui.agendaOffset, store.agendaDate())}`);
-    return;
-  }
-  if (key.name === "\\" || key.sequence === "\\") {
-    store.resetAgendaDay();
-    store.flashBanner("info", "Agenda → Today");
-    return;
-  }
-
+  // Note: Agenda day-nav (`[` / `]` / `\`) is handled globally in handleKey
+  // before zone dispatch, so it works from any zone — not repeated here.
   const entries = buildTimelineEntries(
     store.state.boards.map((b) => b.board),
     store.agendaDate(),

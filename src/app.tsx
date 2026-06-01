@@ -4,7 +4,7 @@
  * Loads config, builds the reactive store, parses argv, and dispatches
  * to one of four root views:
  *   - undefined → Dashboard (all 4 zones)
- *   - "board"   → BoardOnly  (kanban + virtual fullscreen)
+ *   - "board"   → BoardOnly  (kanban + planner fullscreen)
  *   - "timeline"→ TimelineOnly
  *   - "agents"  → AgentsOnly
  *
@@ -22,7 +22,7 @@ import {
   createTuiStore,
   type TuiStore,
 } from "~/store/index";
-import { buildVirtualItems } from "~/store/virtual-panel";
+import { buildPlannerItems } from "~/store/planner-panel";
 import { T } from "~/ui/glyphs";
 import { TopBar, BottomBar } from "~/ui/Chrome";
 import { ModalLayer } from "~/ui/Modal";
@@ -62,16 +62,21 @@ process.on("SIGTERM", () => {
 //   ≥ 150 col → all four zones
 //   120–149   → hide timeline
 //   100–119   → hide agents too
-//   < 100     → hide virtual too (board is non-hideable)
+//   < 100     → hide planner too (board is non-hideable)
 //
-// User F1/F2/F3 toggles still work — they last until the next resize, at
-// which point auto re-evaluates. Acceptable trade-off: resize events are
-// rare, predictable layout > sticky overrides.
+// This only reports what FITS. The store combines it with each zone's enabled
+// flag and the user's desired visibility, so F1/F2/F3 toggles persist across
+// resizes and a disabled/hidden zone is never force-shown.
 function applyResponsiveLayout(): void {
   const width = process.stdout.columns ?? 200;
-  store.setZoneVisible("timeline", width >= 150);
-  store.setZoneVisible("agents", width >= 120);
-  store.setZoneVisible("virtual", width >= 100);
+  // Report which zones FIT at this width. The store ANDs this with each zone's
+  // enabled flag and the user's desired visibility, so a disabled or
+  // intentionally-hidden zone is never force-shown just because there's room.
+  store.applyResponsiveFits({
+    planner: width >= 100,
+    timeline: width >= 150,
+    agents: width >= 120,
+  });
 }
 applyResponsiveLayout();
 process.stdout.on("resize", applyResponsiveLayout);
@@ -79,8 +84,8 @@ process.stdout.on("resize", applyResponsiveLayout);
 // Land on the Today/Tomorrow panel by default — for a daily-planning tool the
 // first question is "what's on my plate today", and that panel answers it. On
 // a narrow terminal where the panel auto-hides, fall back to the board.
-if (store.state.ui.visibleZones.virtual) {
-  store.setActiveZone("virtual");
+if (store.state.ui.visibleZones.planner) {
+  store.setActiveZone("planner");
 }
 
 const { view } = parseArgs(process.argv.slice(2));
@@ -97,11 +102,11 @@ function rootViewFor(v: ViewKind | undefined, s: TuiStore) {
 }
 
 function App() {
-  const virtualItems = createMemo(() =>
-    buildVirtualItems(store.state.boards.map((b) => b.board)),
+  const plannerItems = createMemo(() =>
+    buildPlannerItems(store.state.boards.map((b) => b.board)),
   );
 
-  useKeyboard((key) => handleKey(store, key, virtualItems().length));
+  useKeyboard((key) => handleKey(store, key, plannerItems().length));
 
   return (
     <box

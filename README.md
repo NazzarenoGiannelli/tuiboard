@@ -1,6 +1,6 @@
 # tuiboard
 
-A terminal dashboard that unifies **kanban**, a **Today/Tomorrow virtual
+A terminal dashboard that unifies **kanban**, a **Today/Tomorrow planner
 panel**, a **24-hour agenda** (with a read-only Google / Microsoft 365
 calendar overlay), and a **live agent view** for Claude Code sessions — all
 on top of plain markdown task files.
@@ -98,12 +98,17 @@ https://github.com/NazzarenoGiannelli/tuiboard). Set it up for me from scratch:
 3. Create a global config at `~/.config/tuiboard/config.yaml` (resolve the real
    home path) with a `boards:` list pointing at those files by ABSOLUTE path,
    plus `assignees: [...]`, `done_column: Done`, `archive_column: Archive`.
-4. Do NOT configure the Agent view — tuiboard reads `~/.claude` automatically.
+4. Ask me which zones I want besides the kanban board: the Today/Tomorrow
+   planner, the 24h agenda, and the live Claude Code agents view. For any I
+   don't want, add a `zones:` block setting it to `off` (e.g. someone who
+   doesn't use Claude Code would set `agents: off`). If I want them all, omit
+   the block. Do NOT configure the agents view beyond on/off — it reads
+   `~/.claude` automatically when enabled.
 5. Ask me whether I want to overlay my Google Calendar or Microsoft 365 events
-   on the Agenda. If yes, tell me to run `tuiboard calendar-setup google` (or
-   `microsoft`) — it interviews me, opens the browser, and prints the exact
-   `calendars:` YAML block to add. Don't try to do the OAuth yourself. If no,
-   skip it (it's optional and can be added later).
+   on the Agenda (skip this if I turned the agenda off). If yes, tell me to run
+   `tuiboard calendar-setup google` (or `microsoft`) — it interviews me, opens
+   the browser, and prints the exact `calendars:` YAML block to add. Don't try
+   to do the OAuth yourself. If no, skip it (it's optional and can be added later).
 6. Show me the final config, then tell me to run `tuiboard`, and how to add a
    board later (create a new `.md` and append it to the `boards:` list).
 
@@ -142,6 +147,34 @@ archive_column: Archive
 # opening a WezTerm tab with `claude --resume <id>`. For a custom layout:
 # resume_command: ["nu", "C:/Users/you/.config/tuiboard/code-resume.nu", "{cwd}", "{sessionId}"]
 ```
+
+## Zones
+
+tuiboard is four zones — **board** (kanban), **planner** (Today/Tomorrow across
+all boards), **agenda** (24h timeline + calendar overlay), and **agents** (live
+Claude Code sessions). Only want some of them? The board is always on; the other
+three are yours to configure:
+
+```yaml
+zones:
+  planner: on      # Today/Tomorrow panel          (toggle at runtime with F1)
+  agenda: on       # 24h agenda + calendars        (F2)
+  agents: off      # live Claude Code view         (F3)
+```
+
+Each zone takes one of:
+
+| Value | Behavior |
+|---|---|
+| `on` | Enabled and shown at launch (the default). |
+| `off` | **Disabled entirely** — never rendered, skipped by `Shift-Tab`, its F-key is inert, and its background work never starts (no calendar fetch, no `~/.claude` reads). |
+| `hidden` | Enabled but **collapsed at launch** — reveal it any time with its F-key. |
+
+`true`/`false` work as aliases for `on`/`off`. So a pure kanban is just
+`agenda: off` and `agents: off`; kanban + calendar is `agents: off`. The
+difference between `off` and the F-key hide: `off` means the feature never runs
+at all — handy if you don't use Claude Code and don't want tuiboard reading
+`~/.claude`.
 
 ## Calendars (Agenda overlay)
 
@@ -241,7 +274,7 @@ Launch `tuiboard` with no flag for the default 4-zone dashboard.
 | Flag | View | Use case |
 |---|---|---|
 | (none) | **Dashboard** — all 4 zones | Default; everything in one terminal |
-| `--view=board` | Kanban + virtual panel only | Focus mode, or a single WezTerm pane |
+| `--view=board` | Kanban + planner panel only | Focus mode, or a single WezTerm pane |
 | `--view=timeline` | Timeline fullscreen | Wall-mounted "what's now" |
 | `--view=agents` | Agent view fullscreen | Cross-machine session monitor |
 
@@ -249,9 +282,9 @@ The dashboard auto-collapses optional zones on narrow terminals:
 
 | Terminal width | Default zones visible |
 |---|---|
-| ≥ 150 cols | virtual + board + timeline + agents |
-| 120–149 | virtual + board + agents |
-| 100–119 | virtual + board |
+| ≥ 150 cols | planner + board + timeline + agents |
+| 120–149 | planner + board + agents |
+| 100–119 | planner + board |
 | < 100 | board only |
 
 `F1` / `F2` / `F3` toggles override the auto-collapse for the current
@@ -266,9 +299,9 @@ session (until the next terminal resize).
 | `h j k l` / arrows | Move cursor inside the active zone |
 | `Tab` | Cycle to next board |
 | `1`..`9` | Jump to board N |
-| `v` | Toggle Today/Tomorrow virtual panel focus |
-| `Shift-Tab` | Cycle active zone (virtual → board → timeline → agents) |
-| `F1` / `F2` / `F3` | Toggle visibility of Virtual / Timeline / Agents zones |
+| `v` | Toggle Today/Tomorrow planner panel focus |
+| `Shift-Tab` | Cycle active zone (planner → board → timeline → agents) |
+| `F1` / `F2` / `F3` | Toggle visibility of Planner / Timeline / Agents zones |
 | `z` | Zoom active zone to full screen |
 | `r` | Refresh everything — reload boards from disk, rescan agents, force-refetch the agenda calendar (bypasses the 30-min cache) |
 
@@ -282,7 +315,7 @@ session (until the next terminal resize).
 | `j` / `k` | While armed: nudge the block ±15 min |
 | `+` / `-` | While armed: resize the block's end ±15 min |
 
-### Task actions (work in board, virtual, AND timeline zones)
+### Task actions (work in board, planner, AND timeline zones)
 
 | Key | Action |
 |---|---|
@@ -320,10 +353,13 @@ session (until the next terminal resize).
 
 ## Status
 
+- **v0.7** — configurable zones: turn the planner, agenda, or agents view off
+  (or start it collapsed) via the `zones:` config, so tuiboard can be a pure
+  kanban, kanban + calendar, or any mix.
 - **v0.6** — adds the Agenda calendar overlay (Google + Microsoft 365,
   read-only, BYO credentials), day-navigation (`[` / `]` / `\`) to page tasks
   and events across days, and a manual full-refresh key (`r`).
-- **v0.5** — daily-driver ready. Kanban + virtual + timeline + agents
+- **v0.5** — daily-driver ready. Kanban + planner + timeline + agents
   all functional, multi-select, undo, atomic file roundtrip, mouse click,
   responsive layout. Tested on Windows with WezTerm; Linux/macOS should
   work via the same OpenTUI binaries (untested).

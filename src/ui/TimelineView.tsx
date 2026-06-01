@@ -354,7 +354,7 @@ export function TimelineView(props: TimelineViewProps) {
       </Show>
 
       {/* The 24h grid now owns the whole panel — no sticky section above
-          it. Tasks are armed for scheduling from the board / virtual panel
+          it. Tasks are armed for scheduling from the board / planner panel
           via the `C` shortcut, then placed by clicking a slot here. */}
       <scrollbox
         ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}

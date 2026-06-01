@@ -1,14 +1,14 @@
-/** The fixed Today/Tomorrow virtual panel — always on the left. */
+/** The fixed Today/Tomorrow planner panel — always on the left. */
 
 import { For, Show, createEffect, createMemo } from "solid-js";
 
 import { ATTR, T } from "~/ui/glyphs";
 import { TaskRow } from "~/ui/TaskRow";
 import {
-  buildVirtualItems,
-  groupVirtualItems,
-  type VirtualGroup,
-} from "~/store/virtual-panel";
+  buildPlannerItems,
+  groupPlannerItems,
+  type PlannerGroup,
+} from "~/store/planner-panel";
 import type { TuiStore } from "~/store/index";
 
 interface ScrollBoxLike {
@@ -32,15 +32,15 @@ const BUCKET_HEADER: Record<string, { label: string; color: string }> = {
   priority: { label: "🔺 Priority", color: T.today },
 };
 
-export function VirtualPanel(props: { store: TuiStore }) {
+export function PlannerPanel(props: { store: TuiStore }) {
   const items = createMemo(() => {
     props.store.state.rev; // recompute on any board mutation
-    return buildVirtualItems(props.store.state.boards.map((b) => b.board));
+    return buildPlannerItems(props.store.state.boards.map((b) => b.board));
   });
-  const groups = createMemo(() => groupVirtualItems(items()));
-  const isActive = createMemo(() => props.store.state.ui.activeZone === "virtual");
+  const groups = createMemo(() => groupPlannerItems(items()));
+  const isActive = createMemo(() => props.store.state.ui.activeZone === "planner");
   const isZoomed = createMemo(
-    () => props.store.state.ui.zoomed && props.store.state.ui.activeZone === "virtual",
+    () => props.store.state.ui.zoomed && props.store.state.ui.activeZone === "planner",
   );
   const cursorRow = createMemo(() => props.store.state.ui.row);
   let scrollBoxRef: ScrollBoxLike | undefined;
@@ -121,7 +121,7 @@ export function VirtualPanel(props: { store: TuiStore }) {
             availableWidth={isZoomed() ? 100 : 36}
             isMarkedFn={(r) => props.store.isMarked(r)}
             onClickItem={(flatIndex) => {
-              props.store.setActiveZone("virtual");
+              props.store.setActiveZone("planner");
               props.store.setCursor(0, flatIndex);
               // In calendar arm mode, a click also arms the task for the
               // timeline (click a task, then a slot to place it).
@@ -141,7 +141,7 @@ export function VirtualPanel(props: { store: TuiStore }) {
 }
 
 function RenderGroups(props: {
-  groups: VirtualGroup[];
+  groups: PlannerGroup[];
   isActive: boolean;
   cursorRow: number;
   availableWidth: number;
@@ -258,7 +258,7 @@ function RenderGroups(props: {
 }
 
 function isFirstOfSection(
-  groups: VirtualGroup[],
+  groups: PlannerGroup[],
   idx: number,
 ): boolean {
   if (idx === 0) return true;

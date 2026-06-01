@@ -1,7 +1,7 @@
 /**
  * Kanban board view — horizontal scrolling row of full-height columns.
  *
- * Mirrors the Today/Tomorrow virtual panel: each column has a fixed width
+ * Mirrors the Today/Tomorrow planner panel: each column has a fixed width
  * and stretches vertically to fill the board area. Columns that don't fit
  * the available horizontal space are reached via horizontal scroll. Zoom
  * mode collapses everything down to the single active column at full
@@ -88,7 +88,7 @@ export function BoardView(props: BoardViewProps) {
    * (Python kanban `z`).
    */
   const renderedColumns = createMemo(() => {
-    if (!ui().zoomed || ui().activeZone === "virtual") return visibleColumns();
+    if (!ui().zoomed || ui().activeZone === "planner") return visibleColumns();
     const cols = visibleColumns();
     // ui.col is a board.columns index (carries Archive); map it to the
     // rendered list so zoom focuses the column actually under the cursor.
@@ -111,7 +111,7 @@ export function BoardView(props: BoardViewProps) {
   // geometry used everywhere (COL_WIDTH + COL_GAP).
   createEffect(() => {
     const colIdx = ui().col;
-    if (ui().zoomed || ui().activeZone === "virtual") {
+    if (ui().zoomed || ui().activeZone === "planner") {
       setScrollX(0);
       return;
     }
@@ -153,7 +153,7 @@ export function BoardView(props: BoardViewProps) {
   };
 
   // Measure the viewport width once at mount, regardless of the active zone.
-  // Otherwise — since tuiboard now starts focused on the virtual panel — the
+  // Otherwise — since tuiboard now starts focused on the planner panel — the
   // scroll effect early-returns and viewportW stays 0, so partly-clipped
   // columns briefly show their task rows until the board is first touched.
   onMount(() => {
@@ -328,7 +328,7 @@ function ColumnView(props: ColumnViewProps) {
         flexShrink: 0,
         // No explicit height — Yoga stretches us along the row's cross
         // axis, so the column always fills the full board height. Same
-        // contract as the Today/Tomorrow virtual panel next door.
+        // contract as the Today/Tomorrow planner panel next door.
         marginRight: COL_GAP,
         border: true,
         borderStyle: "rounded",

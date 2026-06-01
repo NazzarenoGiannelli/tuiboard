@@ -8,7 +8,7 @@
  * The store also owns:
  *   - The list of loaded boards (with their original mtime watermark)
  *   - UI state: active board index, cursor (col/row), collapse flags,
- *     filter, mode (kanban / virtual / list)
+ *     filter, mode (kanban / planner / list)
  *   - The undo log
  *
  * Mutations always:
@@ -71,17 +71,28 @@ export type ModalKind =
   | { kind: "help" };
 
 /** Which dashboard zone owns the keyboard cursor. */
-export type ActiveZone = "virtual" | "board" | "timeline" | "agents";
+export type ActiveZone = "planner" | "board" | "timeline" | "agents";
 
 /** Fixed cycling order for Shift+Tab navigation. */
-const ZONE_ORDER: readonly ActiveZone[] = ["virtual", "board", "timeline", "agents"];
+const ZONE_ORDER: readonly ActiveZone[] = ["planner", "board", "timeline", "agents"];
 
 export interface UIState {
   activeBoardIndex: number;
   /** Which dashboard zone owns the keyboard cursor right now. */
   activeZone: ActiveZone;
-  /** Which zones are currently rendered. `board` cannot be hidden (load-bearing). */
+  /**
+   * Which zones are actually rendered right now. Derived from
+   * `enabledZones ∧ desiredVisible ∧ fits-at-current-width`. Read by the views;
+   * never set directly — go through setZoneVisible / toggleZoneDesired /
+   * applyResponsiveFits, which recompute it.
+   */
   visibleZones: Record<ActiveZone, boolean>;
+  /**
+   * Which zones are enabled at all (from the `zones:` config). A disabled zone
+   * is never rendered, is skipped by Shift-Tab, has an inert F-key, and its
+   * background work never started. `board` is always enabled.
+   */
+  enabledZones: Record<ActiveZone, boolean>;
   /** Column index (within active board) — meaningful only when `activeZone === "board"`. */
   col: number;
   /** Row index inside the active zone. */
@@ -109,7 +120,7 @@ export interface UIState {
   armedTimelineRef?: TaskRef;
   /**
    * Persistent calendar "arm mode" (toggled with `c`). While on, clicking any
-   * task in the board / virtual panel arms it for the timeline, so you can
+   * task in the board / planner panel arms it for the timeline, so you can
    * schedule several tasks in a row — click a task, click a slot, repeat —
    * without re-pressing `c`. `Esc` (or `c` again) exits. Distinct from
    * `armedTimelineRef`, which is the single task currently armed.
@@ -150,7 +161,7 @@ export interface StoreState {
   undo: UndoEntry[];
   /**
    * Monotonic mutation counter. Bumped on every board mutation (via
-   * `saveBoard`). Derived views (board columns, virtual panel, timeline) read
+   * `saveBoard`). Derived views (board columns, planner panel, timeline) read
    * it so their memos recompute on any change — a reliable top-level signal
    * dependency, since OpenTUI/Solid's fine-grained tracking of deeply-nested
    * store edits (e.g. growing a column's `children` array) doesn't always
@@ -169,12 +180,43 @@ export interface CreateStoreOptions {
 export function createTuiStore({ config }: CreateStoreOptions) {
   const initialBoards = loadAll(config);
 
+  // ─── Zone enablement (from `zones:` config) ──────────────────────────────
+  // `enabledZones` is a hard gate; `desiredVisible` is the user's runtime
+  // intent (F-keys flip it); `lastFits` is the terminal-width fit cache. The
+  // rendered `visibleZones` is the AND of all three. The board is always on.
+  const z = config.zones;
+  const enabledZones: Record<ActiveZone, boolean> = {
+    board: true,
+    planner: z.planner !== "off",
+    timeline: z.agenda !== "off",
+    agents: z.agents !== "off",
+  };
+  const desiredVisible: Record<ActiveZone, boolean> = {
+    board: true,
+    planner: z.planner === "on",
+    timeline: z.agenda === "on",
+    agents: z.agents === "on",
+  };
+  let lastFits: Record<ActiveZone, boolean> = {
+    board: true,
+    planner: true,
+    timeline: true,
+    agents: true,
+  };
+  const computeVisible = (): Record<ActiveZone, boolean> => ({
+    board: true,
+    planner: enabledZones.planner && desiredVisible.planner && lastFits.planner,
+    timeline: enabledZones.timeline && desiredVisible.timeline && lastFits.timeline,
+    agents: enabledZones.agents && desiredVisible.agents && lastFits.agents,
+  });
+
   const [state, setState] = createStore<StoreState>({
     boards: initialBoards,
     ui: {
       activeBoardIndex: 0,
       activeZone: "board",
-      visibleZones: { virtual: true, board: true, timeline: true, agents: true },
+      visibleZones: computeVisible(),
+      enabledZones,
       col: 0,
       row: 0,
       zoomed: false,
@@ -198,11 +240,17 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   );
 
   // Agents store has its own lifecycle (chokidar watcher on ~/.claude).
-  // Shared dispose() boundary below so SIGINT cleans both.
-  const agentsStore: AgentsStore = createAgentsStore();
-  // Calendar feeds (read-only) merged into the Agenda zone. No-op when no
-  // `calendars:` block is configured.
-  const calendarStore: CalendarStore = createCalendarStore(config.calendars, isoToday);
+  // Shared dispose() boundary below so SIGINT cleans both. When the agents
+  // zone is disabled we skip the watcher entirely (no `~/.claude` reads at all)
+  // and hand back an inert stub.
+  const agentsStore: AgentsStore = enabledZones.agents
+    ? createAgentsStore()
+    : noopAgentsStore();
+  // Calendar feeds (read-only) merged into the Agenda zone. Skipped entirely
+  // (no network) when the agenda zone is disabled.
+  const calendarStore: CalendarStore = enabledZones.timeline
+    ? createCalendarStore(config.calendars, isoToday)
+    : noopCalendarStore();
   watcher.onChange((filepath) => {
     // External edit. Re-read this board from disk.
     try {
@@ -716,19 +764,46 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   function setActiveZone(zone: ActiveZone): void {
     setState("ui", "activeZone", zone);
-    // Moving to a vertical-list zone (virtual / agents / timeline) resets
+    // Moving to a vertical-list zone (planner / agents / timeline) resets
     // the row cursor to the top so the user always lands somewhere sensible.
     if (zone !== "board") setState("ui", "row", 0);
   }
 
+  /** Recompute `visibleZones` from enabled ∧ desired ∧ fits; bounce the cursor
+   *  to the board if the active zone just became invisible. */
+  function recomputeVisible(): void {
+    const v = computeVisible();
+    setState("ui", "visibleZones", v);
+    if (!v[state.ui.activeZone]) setActiveZone("board");
+  }
+
+  /** Set a zone's desired visibility (user intent). Showing a disabled zone is
+   *  ignored; the board can never be hidden. Used by direct reveals (day-nav,
+   *  arm flow) and the responsive layout's per-zone calls. */
   function setZoneVisible(zone: ActiveZone, visible: boolean): void {
-    // Board is the load-bearing zone — never allow it to be hidden.
     if (zone === "board" && !visible) return;
-    setState("ui", "visibleZones", zone, visible);
-    // If we just hid the active zone, bounce the cursor to "board".
-    if (!visible && state.ui.activeZone === zone) {
-      setActiveZone("board");
-    }
+    if (visible && !enabledZones[zone]) return; // can't reveal a disabled zone
+    desiredVisible[zone] = visible;
+    recomputeVisible();
+  }
+
+  /** Flip a zone's visibility (the F1/F2/F3 toggles). No-op if disabled. */
+  function toggleZoneDesired(zone: ActiveZone): void {
+    if (zone === "board" || !enabledZones[zone]) return;
+    desiredVisible[zone] = !desiredVisible[zone];
+    recomputeVisible();
+  }
+
+  /** Update the terminal-width fit cache (called by the responsive layout) and
+   *  recompute. Never overrides enablement or the user's desired visibility. */
+  function applyResponsiveFits(fits: Partial<Record<ActiveZone, boolean>>): void {
+    lastFits = {
+      board: true,
+      planner: fits.planner !== false,
+      timeline: fits.timeline !== false,
+      agents: fits.agents !== false,
+    };
+    recomputeVisible();
   }
 
   function cycleActiveZone(): void {
@@ -1034,6 +1109,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setCursor,
     setActiveZone,
     setZoneVisible,
+    toggleZoneDesired,
+    applyResponsiveFits,
     cycleActiveZone,
     toggleZoom,
     toggleGrab,
@@ -1068,6 +1145,22 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 export type TuiStore = ReturnType<typeof createTuiStore>;
 
 // ─── Load helpers ────────────────────────────────────────────────────────────
+
+/** Inert agents store for when the agents zone is disabled — no chokidar
+ *  watcher, no `~/.claude` reads at all. */
+function noopAgentsStore(): AgentsStore {
+  return { sessions: () => [], refresh: () => {}, dispose: async () => {} };
+}
+
+/** Inert calendar store for when the agenda zone is disabled — no fetching. */
+function noopCalendarStore(): CalendarStore {
+  return {
+    events: () => [],
+    setActiveDate: () => {},
+    refresh: () => {},
+    dispose: async () => {},
+  };
+}
 
 function loadAll(config: Config): LoadedBoard[] {
   const out: LoadedBoard[] = [];

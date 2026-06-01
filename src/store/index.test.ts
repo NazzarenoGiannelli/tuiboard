@@ -10,7 +10,7 @@ describe("test runner smoke", () => {
 });
 
 /** Builds a minimal config with no boards — enough to exercise pure UI actions. */
-function emptyConfig(): Config {
+function emptyConfig(overrides: Partial<Config> = {}): Config {
   return {
     root: process.cwd(),
     loaded: false,
@@ -18,6 +18,8 @@ function emptyConfig(): Config {
     assignees: [],
     doneColumn: "Done",
     archiveColumn: "Archive",
+    zones: { planner: "on", agenda: "on", agents: "on" },
+    ...overrides,
   };
 }
 
@@ -29,16 +31,16 @@ describe("UI activeZone", () => {
 
   it("setActiveZone updates the zone", () => {
     const store = createTuiStore({ config: emptyConfig() });
-    store.setActiveZone("virtual");
-    expect(store.state.ui.activeZone).toBe("virtual");
+    store.setActiveZone("planner");
+    expect(store.state.ui.activeZone).toBe("planner");
     store.setActiveZone("timeline");
     expect(store.state.ui.activeZone).toBe("timeline");
   });
 
-  it("setActiveZone('virtual') resets row to 0", () => {
+  it("setActiveZone('planner') resets row to 0", () => {
     const store = createTuiStore({ config: emptyConfig() });
     store.setCursor(0, 7);
-    store.setActiveZone("virtual");
+    store.setActiveZone("planner");
     expect(store.state.ui.row).toBe(0);
   });
 });
@@ -47,7 +49,7 @@ describe("UI visibleZones", () => {
   it("defaults to all four zones visible", () => {
     const store = createTuiStore({ config: emptyConfig() });
     expect(store.state.ui.visibleZones).toEqual({
-      virtual: true,
+      planner: true,
       board: true,
       timeline: true,
       agents: true,
@@ -58,7 +60,7 @@ describe("UI visibleZones", () => {
     const store = createTuiStore({ config: emptyConfig() });
     store.setZoneVisible("timeline", false);
     expect(store.state.ui.visibleZones.timeline).toBe(false);
-    expect(store.state.ui.visibleZones.virtual).toBe(true);
+    expect(store.state.ui.visibleZones.planner).toBe(true);
     expect(store.state.ui.visibleZones.board).toBe(true);
     expect(store.state.ui.visibleZones.agents).toBe(true);
   });
@@ -80,7 +82,7 @@ describe("UI visibleZones", () => {
 describe("UI cycleActiveZone", () => {
   it("cycles through all visible zones in fixed order", () => {
     const store = createTuiStore({ config: emptyConfig() });
-    store.setActiveZone("virtual");
+    store.setActiveZone("planner");
     store.cycleActiveZone();
     expect(store.state.ui.activeZone).toBe("board");
     store.cycleActiveZone();
@@ -88,7 +90,7 @@ describe("UI cycleActiveZone", () => {
     store.cycleActiveZone();
     expect(store.state.ui.activeZone).toBe("agents");
     store.cycleActiveZone();
-    expect(store.state.ui.activeZone).toBe("virtual"); // wrap
+    expect(store.state.ui.activeZone).toBe("planner"); // wrap
   });
 
   it("skips hidden zones", () => {
@@ -101,7 +103,7 @@ describe("UI cycleActiveZone", () => {
 
   it("is a no-op when only one zone is visible (board only)", () => {
     const store = createTuiStore({ config: emptyConfig() });
-    store.setZoneVisible("virtual", false);
+    store.setZoneVisible("planner", false);
     store.setZoneVisible("timeline", false);
     store.setZoneVisible("agents", false);
     store.cycleActiveZone();
@@ -154,5 +156,69 @@ describe("Agenda day navigation", () => {
     store.setCursor(0, 5);
     store.shiftAgendaDay(1);
     expect(store.state.ui.row).toBe(0);
+  });
+});
+
+describe("zones config", () => {
+  it("enables and shows all zones by default", () => {
+    const s = createTuiStore({ config: emptyConfig() });
+    expect(s.state.ui.enabledZones).toEqual({ board: true, planner: true, timeline: true, agents: true });
+    expect(s.state.ui.visibleZones).toEqual({ board: true, planner: true, timeline: true, agents: true });
+  });
+
+  it("disables a zone set to off (never enabled, never visible)", () => {
+    const s = createTuiStore({
+      config: emptyConfig({ zones: { planner: "on", agenda: "off", agents: "off" } }),
+    });
+    expect(s.state.ui.enabledZones.timeline).toBe(false);
+    expect(s.state.ui.enabledZones.agents).toBe(false);
+    expect(s.state.ui.visibleZones.timeline).toBe(false);
+    expect(s.state.ui.visibleZones.agents).toBe(false);
+  });
+
+  it("a hidden zone is enabled but not visible at start; F-key reveals it", () => {
+    const s = createTuiStore({
+      config: emptyConfig({ zones: { planner: "hidden", agenda: "on", agents: "on" } }),
+    });
+    expect(s.state.ui.enabledZones.planner).toBe(true);
+    expect(s.state.ui.visibleZones.planner).toBe(false);
+    s.toggleZoneDesired("planner");
+    expect(s.state.ui.visibleZones.planner).toBe(true);
+  });
+
+  it("F-key toggle is a no-op on a disabled zone", () => {
+    const s = createTuiStore({
+      config: emptyConfig({ zones: { planner: "on", agenda: "off", agents: "on" } }),
+    });
+    s.toggleZoneDesired("timeline");
+    expect(s.state.ui.visibleZones.timeline).toBe(false);
+  });
+
+  it("Shift-Tab cycle skips disabled zones", () => {
+    const s = createTuiStore({
+      config: emptyConfig({ zones: { planner: "on", agenda: "off", agents: "off" } }),
+    });
+    s.setActiveZone("board");
+    s.cycleActiveZone();
+    expect(s.state.ui.activeZone).toBe("planner");
+    s.cycleActiveZone();
+    expect(s.state.ui.activeZone).toBe("board"); // timeline + agents skipped
+  });
+
+  it("responsive fits never force-show a disabled zone", () => {
+    const s = createTuiStore({
+      config: emptyConfig({ zones: { planner: "on", agenda: "off", agents: "on" } }),
+    });
+    s.applyResponsiveFits({ planner: true, timeline: true, agents: true });
+    expect(s.state.ui.visibleZones.timeline).toBe(false); // disabled stays off
+    expect(s.state.ui.visibleZones.agents).toBe(true);
+  });
+
+  it("responsive hides a zone that doesn't fit; it returns when it fits again", () => {
+    const s = createTuiStore({ config: emptyConfig() });
+    s.applyResponsiveFits({ planner: true, timeline: false, agents: true });
+    expect(s.state.ui.visibleZones.timeline).toBe(false);
+    s.applyResponsiveFits({ planner: true, timeline: true, agents: true });
+    expect(s.state.ui.visibleZones.timeline).toBe(true);
   });
 });

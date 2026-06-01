@@ -31,6 +31,20 @@ done_column: Done
 # doesn't exist in a board, tuiboard creates it on the fly.
 archive_column: Archive
 
+# Optional: pick which zones you want. The board is always on; the other three
+# are yours to turn off. Each takes one of:
+#   on      enabled and shown at launch (the default)
+#   off     disabled entirely — never rendered, skipped by Shift-Tab, its F-key
+#           is inert, and its background work never runs (no calendar fetch, no
+#           ~/.claude reads). Use this for a pure kanban, or kanban + one panel.
+#   hidden  enabled but collapsed at launch — reveal it any time with its F-key
+# Want just a kanban? Set agenda and agents to off. (true/false also work.)
+#
+# zones:
+#   planner: on      # Today/Tomorrow cross-board panel        (F1)
+#   agenda: on       # 24h agenda + calendar overlay           (F2)
+#   agents: on       # live Claude Code session view           (F3)
+
 # Optional: override what Enter does in the Agents zone ("open the selected
 # Claude Code session"). An argv array — the tokens {cwd} and {sessionId} are
 # substituted, then it's run directly (no shell). Point it at your own script

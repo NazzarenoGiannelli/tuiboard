@@ -1,5 +1,5 @@
 /**
- * Standalone fullscreen view for the kanban board (with virtual panel).
+ * Standalone fullscreen view for the kanban board (with planner panel).
  * Mounted when the user launches `tuiboard --view=board`, AND used inside
  * the dashboard via composition.
  *
@@ -13,7 +13,7 @@
 import { Show, createMemo } from "solid-js";
 
 import { BoardView } from "~/ui/BoardView";
-import { VirtualPanel } from "~/ui/VirtualPanel";
+import { PlannerPanel } from "~/ui/PlannerPanel";
 import type { TuiStore } from "~/store/index";
 
 export function BoardOnly(props: { store: TuiStore }) {
@@ -24,10 +24,10 @@ export function BoardOnly(props: { store: TuiStore }) {
 
   return (
     <box style={{ flexDirection: "row", flexGrow: 1 }}>
-      <Show when={!ui().zoomed || ui().activeZone === "virtual"}>
-        <VirtualPanel store={props.store} />
+      <Show when={!ui().zoomed || ui().activeZone === "planner"}>
+        <PlannerPanel store={props.store} />
       </Show>
-      <Show when={(!ui().zoomed || ui().activeZone !== "virtual") && activeBoard()}>
+      <Show when={(!ui().zoomed || ui().activeZone !== "planner") && activeBoard()}>
         <BoardView store={props.store} board={activeBoard()!} />
       </Show>
     </box>

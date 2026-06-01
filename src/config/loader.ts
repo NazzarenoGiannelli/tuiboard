@@ -49,6 +49,30 @@ export interface Config {
    * Tokens are produced by `tuiboard calendar-setup`.
    */
   calendars?: CalendarsConfig;
+  /**
+   * Which optional zones are enabled and how they start. The board zone is
+   * always on (load-bearing) and not configurable here.
+   */
+  zones: ZonesConfig;
+}
+
+/**
+ * Per-zone startup mode:
+ *   - "on"     → enabled and visible at launch (default)
+ *   - "off"    → disabled entirely: never rendered, skipped by Shift-Tab, its
+ *                F-key is inert, and its background work (calendar fetch /
+ *                `~/.claude` watcher) never starts
+ *   - "hidden" → enabled but collapsed at launch; reveal it with its F-key
+ */
+export type ZoneMode = "on" | "off" | "hidden";
+
+export interface ZonesConfig {
+  /** Today/Tomorrow cross-board panel. */
+  planner: ZoneMode;
+  /** 24h agenda + calendar overlay (internally the "timeline" zone). */
+  agenda: ZoneMode;
+  /** Live Claude Code session view. */
+  agents: ZoneMode;
 }
 
 export interface GoogleCalendarConfig {
@@ -79,6 +103,7 @@ export const DEFAULT_CONFIG: Omit<Config, "root" | "loaded" | "boards"> = {
   assignees: [],
   doneColumn: "Done",
   archiveColumn: "Archive",
+  zones: { planner: "on", agenda: "on", agents: "on" },
 };
 
 /**
@@ -135,6 +160,13 @@ interface RawConfig {
       color?: string;
     };
   };
+  // Values may be boolean (js-yaml parses on/off/yes/no → boolean) or the
+  // string "hidden"/"collapsed". Anything else falls back to "on".
+  zones: {
+    planner?: boolean | string;
+    agenda?: boolean | string;
+    agents?: boolean | string;
+  };
 }
 
 /** Expand `~` to the home dir; resolve relative paths against the config dir. */
@@ -171,6 +203,24 @@ function normalizeCalendars(
     };
   }
   return out.google || out.microsoft ? out : undefined;
+}
+
+/** Normalize one zone's raw value to a ZoneMode. Default (undefined) → "on". */
+function normalizeZoneMode(v: boolean | string | undefined): ZoneMode {
+  if (v === undefined || v === true) return "on";
+  if (v === false) return "off";
+  const s = String(v).toLowerCase();
+  if (s === "off" || s === "false" || s === "no" || s === "none") return "off";
+  if (s === "hidden" || s === "collapsed" || s === "closed") return "hidden";
+  return "on";
+}
+
+function normalizeZones(raw: RawConfig["zones"] | undefined): ZonesConfig {
+  return {
+    planner: normalizeZoneMode(raw?.planner),
+    agenda: normalizeZoneMode(raw?.agenda),
+    agents: normalizeZoneMode(raw?.agents),
+  };
 }
 
 interface FoundConfig {
@@ -239,6 +289,7 @@ function normalize(raw: Partial<RawConfig>, root: string, loaded: boolean): Conf
         ? raw.resume_command.map(String)
         : undefined,
     calendars: normalizeCalendars(raw.calendars, root),
+    zones: normalizeZones(raw.zones),
   };
 }
 

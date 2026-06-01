@@ -1,7 +1,7 @@
 /**
  * Compact agent status strip for the dashboard. The non-archived sessions
  * render inside a vertical scrollbox so the list scrolls with the mouse wheel
- * (like the board / virtual / timeline zones) AND follows the keyboard cursor
+ * (like the board / planner / timeline zones) AND follows the keyboard cursor
  * via scrollChildIntoView — same pattern as BoardView's columns.
  *
  * The border color reflects activeZone === "agents" so the cursor ring is

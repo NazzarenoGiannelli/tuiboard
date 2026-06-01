@@ -29,7 +29,7 @@ export const ATTR = {
  *    instead of raw ANSI names like "red"/"yellow" — those tend to render
  *    as fully-saturated traffic-light colors in most themes and clash
  *    with everything around them.
- *  - The Today/Tomorrow virtual panel has its own *warm* identity
+ *  - The Today/Tomorrow planner panel has its own *warm* identity
  *    (peach/orange) so the user instantly knows "this is the time zone";
  *    everything else uses a *cool* identity (soft cyan) for active focus.
  *  - Cursor row highlight is the only opaque paint outside the modal.
@@ -137,7 +137,7 @@ export function cellWidth(s: string): number {
 }
 
 /**
- * Per-board accent palette. Used by the virtual panel to color-code the
+ * Per-board accent palette. Used by the planner panel to color-code the
  * source-board tag on priority/agenda items, so the user can recognize
  * which board a cross-cutting item came from at a glance.
  *

@@ -2,11 +2,11 @@
  * Centralized keyboard input handler. Dispatches based on:
  *   1. modal state (modal eats most keys)
  *   2. global keys (quit, help, undo, board switch, escape, zone cycle)
- *   3. active zone (virtual / board / timeline / agents)
+ *   3. active zone (planner / board / timeline / agents)
  *
  * Task-level actions (`t`/`m`/`s`/`b`/`a`/`o`/`Space`/`X`/`d`/`p`/`.`/`Enter`)
  * all route through `dispatchTaskAction`, so they work identically on a
- * cursor task whether you reach it via the kanban board, the virtual
+ * cursor task whether you reach it via the kanban board, the planner
  * panel, or a timeline block.
  *
  * Extracted from app.tsx so every root view (Dashboard, BoardOnly, etc.)
@@ -24,7 +24,7 @@ import {
 } from "~/store/index";
 import type { Board, PriorityLevel } from "~/types";
 import { buildTimelineEntries, formatAgendaDay } from "~/store/timeline";
-import { buildVirtualItems } from "~/store/virtual-panel";
+import { buildPlannerItems } from "~/store/planner-panel";
 import { jumpToKanban } from "~/ui/TimelineView";
 
 interface KeyEvent {
@@ -37,7 +37,7 @@ interface KeyEvent {
 export function handleKey(
   store: TuiStore,
   key: KeyEvent,
-  virtualCount: number,
+  plannerCount: number,
 ): void {
   const ui = store.state.ui;
   const board = store.state.boards[ui.activeBoardIndex]?.board;
@@ -125,17 +125,18 @@ export function handleKey(
     return;
   }
 
-  // F1/F2/F3 toggle zone visibility. Board cannot be hidden.
+  // F1/F2/F3 toggle zone visibility. Board cannot be hidden; a disabled zone's
+  // key is inert (toggleZoneDesired no-ops).
   if (key.name === "f1") {
-    store.setZoneVisible("virtual", !ui.visibleZones.virtual);
+    store.toggleZoneDesired("planner");
     return;
   }
   if (key.name === "f2") {
-    store.setZoneVisible("timeline", !ui.visibleZones.timeline);
+    store.toggleZoneDesired("timeline");
     return;
   }
   if (key.name === "f3") {
-    store.setZoneVisible("agents", !ui.visibleZones.agents);
+    store.toggleZoneDesired("agents");
     return;
   }
 
@@ -150,9 +151,9 @@ export function handleKey(
     return;
   }
 
-  // Switch in/out of virtual panel with `v`
+  // Switch in/out of planner panel with `v`
   if (key.name === "v") {
-    store.setActiveZone(ui.activeZone === "virtual" ? "board" : "virtual");
+    store.setActiveZone(ui.activeZone === "planner" ? "board" : "planner");
     return;
   }
 
@@ -183,7 +184,7 @@ export function handleKey(
     return;
   }
 
-  // Zoom toggle: focus the active panel (board column or virtual panel)
+  // Zoom toggle: focus the active panel (board column or planner panel)
   // at full width.
   if (key.name === "z") {
     store.toggleZoom();
@@ -227,8 +228,8 @@ export function handleKey(
 
   // ─── Per-zone dispatching ───────────────────────────────────────────────
 
-  if (ui.activeZone === "virtual") {
-    handleVirtualZone(store, key, virtualCount, openLater);
+  if (ui.activeZone === "planner") {
+    handlePlannerZone(store, key, plannerCount, openLater);
     return;
   }
 
@@ -249,19 +250,19 @@ export function handleKey(
 
 // ─── Zone handlers ──────────────────────────────────────────────────────────
 
-function handleVirtualZone(
+function handlePlannerZone(
   store: TuiStore,
   key: KeyEvent,
-  virtualCount: number,
+  plannerCount: number,
   openLater: (m: ModalKind) => void,
 ): void {
   const ui = store.state.ui;
-  const items = buildVirtualItems(store.state.boards.map((b) => b.board));
+  const items = buildPlannerItems(store.state.boards.map((b) => b.board));
   const target = items[ui.row];
 
   // Navigation
   if (key.name === "j" || key.name === "down") {
-    store.setCursor(ui.col, Math.min(virtualCount - 1, ui.row + 1));
+    store.setCursor(ui.col, Math.min(plannerCount - 1, ui.row + 1));
     return;
   }
   if (key.name === "k" || key.name === "up") {
@@ -273,7 +274,7 @@ function handleVirtualZone(
     return;
   }
 
-  // Task actions on the virtual cursor's target (works cross-board).
+  // Task actions on the planner cursor's target (works cross-board).
   if (target) {
     dispatchTaskAction(store, key, target.ref, openLater);
   }
@@ -501,7 +502,7 @@ function handleBoardZone(
     // unrendered, unscrollable column.
     const prev = adjacentVisibleColumn(store, board, ui.col, -1);
     if (prev === undefined) {
-      store.setActiveZone("virtual");
+      store.setActiveZone("planner");
     } else {
       store.setCursor(prev, 0);
     }
@@ -551,7 +552,7 @@ function handleBoardZone(
 
 /**
  * Apply a task-level action to the given cursorRef. Used by every zone
- * (board / virtual / timeline) so the keys feel identical wherever the
+ * (board / planner / timeline) so the keys feel identical wherever the
  * cursor lives. Multi-select aware: when there are marked tasks, the
  * action operates on all of them via `applyToMarkedOr`.
  *
@@ -565,7 +566,7 @@ function dispatchTaskAction(
   ref: TaskRef,
   openLater: (m: ModalKind) => void,
 ): boolean {
-  // Toggle done (Enter). Only meaningful for board/virtual; timeline has
+  // Toggle done (Enter). Only meaningful for board/planner; timeline has
   // its own Enter behavior (jump to kanban) which is handled earlier.
   if (key.name === "enter" || key.name === "return") {
     const n = store.applyToMarkedOr(ref, (r) => store.toggleDone(r));
@@ -623,7 +624,7 @@ function dispatchTaskAction(
   // Calendar arm mode (lowercase c): toggle a persistent mode for batch
   // scheduling onto the timeline. Entering also arms the cursor task and
   // focuses the timeline so you can immediately click a slot. While the mode
-  // is on, clicking ANY task (board / virtual) arms it — click a task, click a
+  // is on, clicking ANY task (board / planner) arms it — click a task, click a
   // slot, repeat. `c` again or `Esc` exits. Works from any zone.
   if (key.name === "c" && !key.shift) {
     if (store.state.ui.armMode) {

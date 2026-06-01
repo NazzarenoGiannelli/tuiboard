@@ -1,7 +1,7 @@
 /**
  * The default tuiboard view: a 4-zone dashboard.
  *
- *   ┌─Virtual─┬─Board────────┬─Timeline─┐
+ *   ┌─Planner─┬─Board────────┬─Timeline─┐
  *   │         │              │          │
  *   │         │              │          │
  *   │         ├──────────────┤          │
@@ -24,7 +24,7 @@ import { Show, createMemo } from "solid-js";
 import { AgentsBar } from "~/ui/AgentsBar";
 import { BoardView } from "~/ui/BoardView";
 import { TimelineView } from "~/ui/TimelineView";
-import { VirtualPanel } from "~/ui/VirtualPanel";
+import { PlannerPanel } from "~/ui/PlannerPanel";
 import { AgentsOnly } from "~/views/AgentsOnly";
 import { BoardOnly } from "~/views/BoardOnly";
 import { TimelineOnly } from "~/views/TimelineOnly";
@@ -53,7 +53,7 @@ export function Dashboard(props: { store: TuiStore }) {
  * standalone view wrappers so a `z` press in the dashboard produces
  * the same visual as launching `tuiboard --view=<zone>`.
  *
- * Board + virtual share BoardOnly because both live in the top-left
+ * Board + planner share BoardOnly because both live in the top-left
  * zone of the normal layout and BoardOnly already respects ui.zoomed
  * to render only the active panel between them.
  */
@@ -80,12 +80,12 @@ function FourZoneLayout(props: { store: TuiStore }) {
 
   return (
     <box style={{ flexDirection: "row", flexGrow: 1 }}>
-      {/* Left column: virtual + board on top, agents on bottom */}
+      {/* Left column: planner + board on top, agents on bottom */}
       <box style={{ flexDirection: "column", flexGrow: 1 }}>
         {/* Top zone */}
         <box style={{ flexDirection: "row", flexGrow: 1 }}>
-          <Show when={visible().virtual}>
-            <VirtualPanel store={props.store} />
+          <Show when={visible().planner}>
+            <PlannerPanel store={props.store} />
           </Show>
           <Show when={visible().board && activeBoard()}>
             <BoardView store={props.store} board={activeBoard()!} />

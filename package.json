@@ -36,6 +36,7 @@
     "bin/",
     ".tuiboard/config.example.yaml",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {

@@ -353,6 +353,8 @@ session (until the next terminal resize).
 
 ## Status
 
+See [CHANGELOG.md](CHANGELOG.md) for the full release history.
+
 - **v0.7** — configurable zones: turn the planner, agenda, or agents view off
   (or start it collapsed) via the `zones:` config, so tuiboard can be a pure
   kanban, kanban + calendar, or any mix.

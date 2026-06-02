@@ -5,6 +5,13 @@ All notable changes to **tuiboard** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-06-02
+
+### Changed
+- Documentation: the intro and npm description now lead with the modular pitch
+  (a kanban with three optional panels you switch on or off) instead of a
+  bundled four-zone dashboard.
+
 ## [0.7.1] - 2026-06-02
 
 ### Changed
@@ -91,6 +98,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.7.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.2
 [0.7.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.1
 [0.7.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.0
 [0.6.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.6.2

@@ -20,13 +20,13 @@ import {
   parseTimeBlockShortcut,
 } from "~/store/parsers";
 import { ATTR, T } from "~/ui/glyphs";
-import { TIMELINE_WIDTH } from "~/views/Dashboard";
+import { AGENDA_WIDTH } from "~/ui/layout";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
 
 /** The modal panel matches the Agenda's width so it can drop into the Agenda's
- *  slot (which the Dashboard vacates while a modal is open) with no reflow. */
-const MODAL_WIDTH = TIMELINE_WIDTH;
+ *  slot (the Dashboard renders it there while a modal is open) with no reflow. */
+const MODAL_WIDTH = AGENDA_WIDTH;
 
 export function ModalLayer(props: { store: TuiStore }) {
   const modal = createMemo(() => props.store.state.ui.modal);
@@ -69,16 +69,14 @@ function DialogShell(props: DialogShellProps) {
   return (
     <box
       style={{
-        // The modal panel: same width + marginLeft as the Agenda so it occupies
-        // the Agenda's slot (the Dashboard hides the Agenda while a modal is
-        // open) with no reflow. The title rides in the top border, exactly like
-        // the board columns and the other zones.
+        // Byte-identical layout to the Agenda panel (TimelineView): same width,
+        // marginLeft, flexGrow, border and padding, so it occupies the Agenda's
+        // slot at the exact same size and the dashboard doesn't shift when a
+        // modal opens. The title rides in the top border like the columns/zones.
         flexDirection: "column",
         width: MODAL_WIDTH,
         minWidth: MODAL_WIDTH,
         flexGrow: 0,
-        flexShrink: 0,
-        alignSelf: "stretch",
         marginLeft: 1,
         backgroundColor: T.panelBgActive,
         border: true,
@@ -86,8 +84,6 @@ function DialogShell(props: DialogShellProps) {
         borderColor: T.borderActive,
         paddingLeft: 1,
         paddingRight: 1,
-        paddingTop: 1,
-        paddingBottom: 1,
       }}
       title={`┤ ${props.title} ├`}
       titleAlignment="left"

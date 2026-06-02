@@ -115,23 +115,35 @@ function App() {
         width: "100%",
         height: "100%",
         backgroundColor: T.bg,
-        padding: 1,
+        // No bottom padding: the keyboard cheat-sheet sits flush on the last
+        // row, which gives the board + agenda one extra row of height. Safe
+        // thanks to the flexBasis:0 main row — the content just fills the space.
+        paddingTop: 1,
+        paddingLeft: 1,
+        paddingRight: 1,
+        paddingBottom: 0,
       }}
     >
       <TopBar store={store} />
       <box style={{ height: 1 }} />
       {/*
-        rootView + ModalLayer are flex-row siblings. The modal panel is exactly
-        the Agenda's width, and the Dashboard hides the Agenda while a modal is
-        open — so the modal drops into the Agenda's slot with zero reflow of the
-        left side (board / planner / agents). When no modal is open ModalLayer
-        renders nothing and rootView gets the whole row.
+        The default Dashboard renders its modal inside the Agenda's slot, so the
+        layout stays put when a modal opens. The standalone `--view=` modes have
+        no Agenda slot, so they get the modal here as a right-hand panel.
+        (`view` is fixed at launch, never reactive.)
+
+        `flexBasis: 0` + `minHeight: 0` are load-bearing: without them the row's
+        flex-basis is `auto`, so the Agenda's tall scrollbox inflates the row to
+        its content height (1 row past the terminal). That overflow vanishes
+        when a modal (no scrollbox) takes the slot — which is exactly the 1-row
+        "shift" the whole bottom strip used to do. Basis 0 makes the row grow
+        purely from the available space, ignoring content, so it's stable.
       */}
-      <box style={{ flexDirection: "row", flexGrow: 1 }}>
+      <box style={{ flexDirection: "row", flexGrow: 1, flexBasis: 0, minHeight: 0 }}>
         <box style={{ flexDirection: "column", flexGrow: 1 }}>
           {rootViewFor(view, store)}
         </box>
-        <ModalLayer store={store} />
+        {view ? <ModalLayer store={store} /> : null}
       </box>
       <BottomBar store={store} />
     </box>

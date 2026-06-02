@@ -5,6 +5,21 @@ All notable changes to **tuiboard** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-06-02
+
+### Fixed
+- Opening a modal no longer shifts the whole dashboard up by a row. The Agenda's
+  tall scrollbox was inflating the main row one line past the terminal (flex
+  basis `auto` takes the content height); a modal in its place removed that
+  overflow, which read as a jump. The main row now grows purely from the
+  available space (`flex-basis: 0`), so the layout is steady whatever's on
+  screen. Modals also render in the Agenda's exact slot, so there's no
+  horizontal reflow either.
+
+### Changed
+- Reclaimed a row: the board and agenda are one row taller, and the keyboard
+  cheat-sheet sits flush on the bottom line.
+
 ## [0.7.2] - 2026-06-02
 
 ### Changed
@@ -98,6 +113,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.7.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.3
 [0.7.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.2
 [0.7.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.1
 [0.7.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.0

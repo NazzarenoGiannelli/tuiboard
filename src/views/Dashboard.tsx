@@ -25,19 +25,13 @@ import { AgentsBar } from "~/ui/AgentsBar";
 import { BoardView } from "~/ui/BoardView";
 import { TimelineView } from "~/ui/TimelineView";
 import { PlannerPanel } from "~/ui/PlannerPanel";
+import { ModalLayer } from "~/ui/Modal";
+import { AGENDA_WIDTH, AGENTS_HEIGHT } from "~/ui/layout";
 import { AgentsOnly } from "~/views/AgentsOnly";
 import { BoardOnly } from "~/views/BoardOnly";
 import { TimelineOnly } from "~/views/TimelineOnly";
 import type { TuiStore } from "~/store/index";
 
-/**
- * Width (in cells) for the right-column Agenda panel on a wide terminal. The
- * modal panel matches this so it can drop into the Agenda's slot (see
- * ModalLayer) without reflowing the rest of the dashboard.
- */
-export const TIMELINE_WIDTH = 50;
-/** Row height for the bottom Agents strip — enough for ~5 sessions. */
-const AGENTS_HEIGHT = 7;
 
 export function Dashboard(props: { store: TuiStore }) {
   const ui = () => props.store.state.ui;
@@ -100,10 +94,19 @@ function FourZoneLayout(props: { store: TuiStore }) {
           <AgentsBar store={props.store} height={AGENTS_HEIGHT} />
         </Show>
       </box>
-      {/* Right column: Agenda (full height). Hidden while a modal is open so
-          the modal panel takes its slot with no reflow. */}
-      <Show when={visible().timeline && !ui().modal}>
-        <TimelineView store={props.store} width={TIMELINE_WIDTH} />
+      {/* Right column: the Agenda — or, while a modal is open, the modal panel
+          in the Agenda's exact slot (same parent, same width). Swapping them in
+          place keeps the whole layout and every height constant; nothing
+          shifts. The modal still appears here even if the Agenda is disabled. */}
+      <Show
+        when={ui().modal}
+        fallback={
+          <Show when={visible().timeline}>
+            <TimelineView store={props.store} width={AGENDA_WIDTH} />
+          </Show>
+        }
+      >
+        <ModalLayer store={props.store} />
       </Show>
       {/* ModalLayer rendered at App level so it can sit beside any view */}
     </box>

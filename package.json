@@ -1,7 +1,7 @@
 {
   "name": "tuiboard",
   "version": "0.7.1",
-  "description": "Terminal dashboard for markdown task boards. Kanban + Today/Tomorrow + 24h timeline + Claude Code agent view, all in one TUI.",
+  "description": "Terminal kanban for markdown task boards, with optional Today/Tomorrow planner, 24h agenda + calendar overlay, and a live Claude Code agent view. Use only the panels you want.",
   "type": "module",
   "license": "MIT",
   "author": "Nazzareno Giannelli <nazzareno.giannelli@gmail.com>",

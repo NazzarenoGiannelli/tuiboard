@@ -1,9 +1,10 @@
 # tuiboard
 
-A terminal dashboard that unifies **kanban**, a **Today/Tomorrow planner
-panel**, a **24-hour agenda** (with a read-only Google / Microsoft 365
-calendar overlay), and a **live agent view** for Claude Code sessions — all
-on top of plain markdown task files.
+A terminal **kanban** board on plain markdown files, with three optional panels
+you switch on or off: a **Today/Tomorrow planner** across all your boards, a
+**24-hour agenda** with a read-only Google / Microsoft 365 calendar overlay, and
+a **live view of your Claude Code sessions**. Run it as a pure kanban, or any mix
+of the four. The board is always on; the rest is opt-in (see [Zones](#zones)).
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun. Cross-platform
 (Linux, macOS, Windows). No vendor lock-in: boards are CommonMark with
@@ -269,11 +270,11 @@ are rebuilt only after an in-app mutation.
 
 ## Layouts
 
-Launch `tuiboard` with no flag for the default 4-zone dashboard.
+Launch `tuiboard` with no flag for the default dashboard (every enabled zone).
 
 | Flag | View | Use case |
 |---|---|---|
-| (none) | **Dashboard** — all 4 zones | Default; everything in one terminal |
+| (none) | **Dashboard** — every enabled zone | Default; your configured layout |
 | `--view=board` | Kanban + planner panel only | Focus mode, or a single WezTerm pane |
 | `--view=timeline` | Timeline fullscreen | Wall-mounted "what's now" |
 | `--view=agents` | Agent view fullscreen | Cross-machine session monitor |

@@ -30,8 +30,12 @@ import { BoardOnly } from "~/views/BoardOnly";
 import { TimelineOnly } from "~/views/TimelineOnly";
 import type { TuiStore } from "~/store/index";
 
-/** Width (in cells) for the right-column Timeline panel on a wide terminal. */
-const TIMELINE_WIDTH = 50;
+/**
+ * Width (in cells) for the right-column Agenda panel on a wide terminal. The
+ * modal panel matches this so it can drop into the Agenda's slot (see
+ * ModalLayer) without reflowing the rest of the dashboard.
+ */
+export const TIMELINE_WIDTH = 50;
 /** Row height for the bottom Agents strip — enough for ~5 sessions. */
 const AGENTS_HEIGHT = 7;
 
@@ -96,8 +100,9 @@ function FourZoneLayout(props: { store: TuiStore }) {
           <AgentsBar store={props.store} height={AGENTS_HEIGHT} />
         </Show>
       </box>
-      {/* Right column: timeline (full height) */}
-      <Show when={visible().timeline}>
+      {/* Right column: Agenda (full height). Hidden while a modal is open so
+          the modal panel takes its slot with no reflow. */}
+      <Show when={visible().timeline && !ui().modal}>
         <TimelineView store={props.store} width={TIMELINE_WIDTH} />
       </Show>
       {/* ModalLayer rendered at App level so it can sit beside any view */}

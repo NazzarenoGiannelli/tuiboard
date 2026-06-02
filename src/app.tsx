@@ -121,11 +121,11 @@ function App() {
       <TopBar store={store} />
       <box style={{ height: 1 }} />
       {/*
-        rootView and ModalLayer are siblings inside a flex-row so the
-        modal can sit beside the view as a fixed-width, full-height
-        side panel. ModalLayer renders only when ui.modal is set,
-        otherwise its <Show> resolves to nothing and the rootView gets
-        the whole row.
+        rootView + ModalLayer are flex-row siblings. The modal panel is exactly
+        the Agenda's width, and the Dashboard hides the Agenda while a modal is
+        open — so the modal drops into the Agenda's slot with zero reflow of the
+        left side (board / planner / agents). When no modal is open ModalLayer
+        renders nothing and rootView gets the whole row.
       */}
       <box style={{ flexDirection: "row", flexGrow: 1 }}>
         <box style={{ flexDirection: "column", flexGrow: 1 }}>

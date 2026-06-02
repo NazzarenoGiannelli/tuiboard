@@ -32,6 +32,13 @@ interface SizedBoxLike {
 /** Fixed column width when not zoomed. Single source of truth for layout. */
 const COL_WIDTH = 42;
 /**
+ * Minimum fraction of a column that must be inside the viewport for its task
+ * rows to render. Above this, a column that's mostly on-screen keeps its tasks
+ * (the last one may be cut at the edge); below it — a thin sliver clipped at the
+ * edge — only the title shows as a "more columns →" hint.
+ */
+const MIN_TASKS_VISIBLE_FRACTION = 0.5;
+/**
  * Width of a collapsed column — one with no OPEN tasks (an all-done lane like
  * "Done", or an empty column). It shows just the `✓ N` counter; zoom (`z`)
  * expands it back to full width so the done tasks can be scrolled on demand.
@@ -140,16 +147,22 @@ export function BoardView(props: BoardViewProps) {
   });
 
   /**
-   * Is the column at rendered index `i` fully inside the viewport? Used to
-   * blank the task rows of a column that's only partly on-screen. Defaults to
-   * true while the viewport width is still unknown (first paint) and in zoom.
+   * Should the column at rendered index `i` render its task rows? Yes unless
+   * it's clipped down to a thin sliver at the viewport edge (less than
+   * MIN_TASKS_VISIBLE_FRACTION on-screen) — then only its title shows as a
+   * "more columns →" hint. A mostly-visible column keeps its tasks even if the
+   * last one is cut at the edge. Defaults to true while the viewport width is
+   * still unknown (first paint) and in zoom.
    */
-  const columnFullyVisible = (i: number): boolean => {
+  const columnTasksVisible = (i: number): boolean => {
     const vw = viewportW();
     if (vw <= 0 || ui().zoomed) return true;
     const stride = COL_WIDTH + COL_GAP;
     const start = i * stride;
-    return start >= scrollX() && start + COL_WIDTH <= scrollX() + vw;
+    const left = Math.max(start, scrollX());
+    const right = Math.min(start + COL_WIDTH, scrollX() + vw);
+    const visibleFraction = Math.max(0, right - left) / COL_WIDTH;
+    return visibleFraction >= MIN_TASKS_VISIBLE_FRACTION;
   };
 
   // Measure the viewport width once at mount, regardless of the active zone.
@@ -199,7 +212,7 @@ export function BoardView(props: BoardViewProps) {
                   columnIndex={originalIndex}
                   active={isActive()}
                   zoomed={ui().zoomed && isActive()}
-                  fullyVisible={columnFullyVisible(i())}
+                  tasksVisible={columnTasksVisible(i())}
                   boxId={columnId(props.board.filepath, originalIndex)}
                 />
               );
@@ -223,11 +236,11 @@ interface ColumnViewProps {
    */
   zoomed: boolean;
   /**
-   * False when the column is only partly on-screen (clipped by horizontal
-   * scroll). Its title still renders (clipped) as a "more columns" hint, but
-   * the task rows are blanked so no half-cut task text shows.
+   * False when the column is clipped down to a thin sliver at the viewport
+   * edge. Its title still renders as a "more columns" hint, but the task rows
+   * are blanked. Mostly-visible columns keep their tasks.
    */
-  fullyVisible?: boolean;
+  tasksVisible?: boolean;
   /** Stable DOM-equivalent id used by `scrollChildIntoView`. */
   boxId: string;
 }
@@ -349,9 +362,9 @@ function ColumnView(props: ColumnViewProps) {
           scrollbarOptions: { visible: false },
         }}
       >
-        {/* Blank the task rows when the column is only partly on-screen — its
-            (clipped) title still shows as a "more columns" hint. */}
-        <Show when={props.fullyVisible !== false}>
+        {/* Blank the task rows only when the column is a thin clipped sliver —
+            its title still shows as a "more columns" hint. */}
+        <Show when={props.tasksVisible !== false}>
         {/*
           Keyed on the task-list signature so a structural change (add/delete/
           move) rebuilds the <For> fresh in the correct order, working around

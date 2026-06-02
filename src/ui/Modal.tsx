@@ -20,41 +20,21 @@ import {
   parseTimeBlockShortcut,
 } from "~/store/parsers";
 import { ATTR, T } from "~/ui/glyphs";
+import { TIMELINE_WIDTH } from "~/views/Dashboard";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
 
-/** Fixed side-panel width for any modal. Wide enough for Detail / Help
- *  without being absurd for Edit / Confirm. */
-const MODAL_WIDTH = 64;
+/** The modal panel matches the Agenda's width so it can drop into the Agenda's
+ *  slot (which the Dashboard vacates while a modal is open) with no reflow. */
+const MODAL_WIDTH = TIMELINE_WIDTH;
 
 export function ModalLayer(props: { store: TuiStore }) {
   const modal = createMemo(() => props.store.state.ui.modal);
   return (
     <Show when={modal()}>
-      <box
-        style={{
-          flexDirection: "column",
-          width: MODAL_WIDTH,
-          minWidth: MODAL_WIDTH,
-          flexGrow: 0,
-          flexShrink: 0,
-          // Stretch to the parent's height so the modal panel matches
-          // the timeline / board zones it sits next to. Same contract as
-          // every other zone — fixed cross-axis size, full-height fill.
-          alignSelf: "stretch",
-          marginLeft: 1,
-          backgroundColor: T.panelBgActive,
-          border: true,
-          borderStyle: "rounded",
-          borderColor: T.borderActive,
-          paddingLeft: 1,
-          paddingRight: 1,
-          paddingTop: 1,
-          paddingBottom: 1,
-        }}
-      >
-        <ModalRouter store={props.store} modal={modal()!} />
-      </box>
+      {/* Each modal's DialogShell IS the panel box (border + title + slot
+          dimensions), so it drops into the Agenda's slot directly. */}
+      <ModalRouter store={props.store} modal={modal()!} />
     </Show>
   );
 }
@@ -87,11 +67,31 @@ interface DialogShellProps {
 function DialogShell(props: DialogShellProps) {
   void props.width;
   return (
-    <box style={{ flexDirection: "column" }}>
-      <text>
-        <span style={{ fg: T.accent, attributes: ATTR.bold }}>{props.title}</span>
-      </text>
-      <box style={{ height: 1 }} />
+    <box
+      style={{
+        // The modal panel: same width + marginLeft as the Agenda so it occupies
+        // the Agenda's slot (the Dashboard hides the Agenda while a modal is
+        // open) with no reflow. The title rides in the top border, exactly like
+        // the board columns and the other zones.
+        flexDirection: "column",
+        width: MODAL_WIDTH,
+        minWidth: MODAL_WIDTH,
+        flexGrow: 0,
+        flexShrink: 0,
+        alignSelf: "stretch",
+        marginLeft: 1,
+        backgroundColor: T.panelBgActive,
+        border: true,
+        borderStyle: "rounded",
+        borderColor: T.borderActive,
+        paddingLeft: 1,
+        paddingRight: 1,
+        paddingTop: 1,
+        paddingBottom: 1,
+      }}
+      title={`┤ ${props.title} ├`}
+      titleAlignment="left"
+    >
       {props.children}
       <Show when={props.hint}>
         <text>
@@ -207,11 +207,7 @@ function ScheduleModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiS
 
   return (
     <DialogShell
-      title={
-        markedCount > 1
-          ? `Schedule ${markedCount} selected tasks`
-          : `Schedule: ${task?.displayTitle.slice(0, 50) ?? ""}`
-      }
+      title={markedCount > 1 ? `Schedule · ${markedCount} tasks` : "Schedule"}
       hint="t = today · tm = tomorrow · +3 = in 3 days · lun = next Monday · 2026-06-15 · empty/-clear · Esc to cancel"
       width={70}
     >
@@ -256,11 +252,7 @@ function TimeBlockModal(props: { store: TuiStore; modal: Extract<NonNullable<Tui
 
   return (
     <DialogShell
-      title={
-        markedCount > 1
-          ? `Time block ${markedCount} selected tasks`
-          : `Time block: ${task?.displayTitle.slice(0, 50) ?? ""}`
-      }
+      title={markedCount > 1 ? `Time block · ${markedCount} tasks` : "Time block"}
       hint="n = now+30 · 9:00 · 9-11 · 09:30-10:45 · - to clear · Esc to cancel"
       width={70}
     >

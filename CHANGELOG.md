@@ -5,6 +5,19 @@ All notable changes to **tuiboard** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-06-02
+
+### Changed
+- Modals (new task, schedule, time block, assign, delete, detail, search, help)
+  now open in the Agenda's slot — an opaque panel of the same width — instead of
+  a side panel that pushed the dashboard left. Opening a modal no longer reflows
+  the board/planner; the Agenda returns when the modal closes.
+- Modal titles now ride in the panel's top border (`┤ … ├`), matching the board
+  columns and the zones, instead of sitting as a body text line.
+- A clipped board column keeps its task rows until it's scrolled down to less
+  than half visible (previously: blanked as soon as it was clipped at all), so a
+  column that's mostly on-screen stays useful.
+
 ## [0.7.0] - 2026-06-01
 
 ### Added
@@ -78,6 +91,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.7.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.1
 [0.7.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.0
 [0.6.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.6.2
 [0.6.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.6.1

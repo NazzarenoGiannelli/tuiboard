@@ -36,6 +36,7 @@ import {
   onMount,
 } from "solid-js";
 
+import { googleTokenCanWrite } from "~/store/calendar";
 import type { TaskRef } from "~/store/index";
 import {
   DAY_START_HOUR,
@@ -91,6 +92,13 @@ export function TimelineView(props: TimelineViewProps) {
   // the calendar overlay, and the "now" line.
   const viewedDate = () => props.store.agendaDate();
   const isToday = () => props.store.state.ui.agendaOffset === 0;
+
+  // The Google event currently selected (clicked) for edit/delete, if any.
+  const selectedCal = () => props.store.state.ui.selectedCalEvent;
+  const selectedCalKey = () => {
+    const s = selectedCal();
+    return s ? `${s.calendarId}:${s.eventId}` : undefined;
+  };
 
   // Task entries drive the cursor + arm/keyboard interactions.
   const entries = createMemo(() => {
@@ -189,11 +197,34 @@ export function TimelineView(props: TimelineViewProps) {
   const onBlockClick = (entry: TimelineEntry, event: MouseEventLike) => {
     props.store.setActiveZone("timeline");
 
-    // Calendar events are read-only: they can't be armed or moved. A click on
-    // one while a task is armed just places the armed task at that slot;
-    // otherwise it's a no-op (beyond focusing the zone).
+    // Calendar events can't be armed or time-block-moved. While a task is armed,
+    // a click places that task at this slot (unchanged). Otherwise: an editable
+    // Google event gets SELECTED for edit/delete (toggles off on re-click); a
+    // read-only event just reports that it can't be changed.
     if (entry.kind !== "task") {
-      if (armedRef()) onEmptyRowClick(entry.startRow, event);
+      if (armedRef()) {
+        onEmptyRowClick(entry.startRow, event);
+        return;
+      }
+      if (entry.kind === "calendar") {
+        if (entry.editable && entry.calendarId && entry.eventId) {
+          const wasSelected = selectedCalKey() === `${entry.calendarId}:${entry.eventId}`;
+          props.store.selectCalEvent({
+            calendarId: entry.calendarId,
+            eventId: entry.eventId,
+            title: entry.title,
+            startMin: entry.startMin,
+            endMin: entry.endMin,
+            dateIso: viewedDate(),
+            color: entry.color,
+          });
+          if (!wasSelected) {
+            props.store.flashBanner("info", `Selected "${tailTruncate(entry.title, 28)}" · e edit · d delete · Esc`);
+          }
+        } else {
+          props.store.flashBanner("info", "Read-only event — not on a writable calendar");
+        }
+      }
       return;
     }
 
@@ -238,7 +269,17 @@ export function TimelineView(props: TimelineViewProps) {
   const onEmptyRowClick = (rowIndex: number, event: MouseEventLike) => {
     const armed = armedTask();
     const ref = armedRef();
-    if (!armed || !ref) return;
+    if (!armed || !ref) {
+      // Nothing armed: an empty-slot click creates a Google Calendar event at
+      // that time (only when Google write is connected — otherwise a no-op).
+      const g = props.store.config.calendars?.google;
+      if (g && googleTokenCanWrite(g.token)) {
+        const startMin = Math.max(0, DAY_START_HOUR * 60 + rowIndex * MINS_PER_ROW);
+        const endMin = Math.min(24 * 60 - 1, startMin + DEFAULT_BLOCK_MIN);
+        props.store.openEventModal(viewedDate(), startMin, endMin);
+      }
+      return;
+    }
     const targetMin = DAY_START_HOUR * 60 + rowIndex * MINS_PER_ROW;
 
     // Unscheduled task → create a fresh block at the clicked row.
@@ -335,10 +376,21 @@ export function TimelineView(props: TimelineViewProps) {
           </span>
         </text>
       </Show>
+      {/* A selected calendar event shows its own action hint. */}
+      <Show when={selectedCal()}>
+        <text wrapMode="none">
+          <span style={{ fg: T.warm, attributes: ATTR.bold }}>
+            {"📅 "}{tailTruncate(selectedCal()!.title, 28)}{" "}
+          </span>
+          <span style={{ fg: T.textDim }}>
+            {"  e edit · d delete · Esc deselect"}
+          </span>
+        </text>
+      </Show>
       {/* Day-navigation hint — always visible in the resting state (not while
-          arming) so the [ ] day-switch is discoverable. Off-today, the
-          "\ today" reset is highlighted to pull the eye back. */}
-      <Show when={!armMode() && !armedTask()}>
+          arming or with an event selected) so the [ ] day-switch is
+          discoverable. Off-today, the "\ today" reset is highlighted. */}
+      <Show when={!armMode() && !armedTask() && !selectedCal()}>
         <text wrapMode="none">
           <span style={{ fg: T.warm }}>{"◷ "}</span>
           <span style={{ fg: T.textDim }}>{"[ ] change day · "}</span>
@@ -376,6 +428,7 @@ export function TimelineView(props: TimelineViewProps) {
                 rowIndex={i()}
                 cursorEntry={isActive() ? cursorEntry() : undefined}
                 armedEntry={armedEntry()}
+                selectedCalKey={selectedCalKey()}
                 innerWidth={props.width ? props.width - 4 : undefined}
                 onBlockClick={onBlockClick}
                 onEmptyRowClick={onEmptyRowClick}
@@ -423,6 +476,8 @@ interface TimelineRowProps {
   cursorEntry: TimelineEntry | undefined;
   /** When set, the armed entry — used to tint its rows warm. */
   armedEntry: TimelineEntry | undefined;
+  /** `${calendarId}:${eventId}` of the selected calendar event, if any. */
+  selectedCalKey: string | undefined;
   /** Panel content width (border+padding already removed). Undefined = fullscreen. */
   innerWidth?: number;
   onBlockClick: (entry: TimelineEntry, event: MouseEventLike) => void;
@@ -454,6 +509,13 @@ function TimelineRow(props: TimelineRowProps) {
     !!props.armedEntry && left().entry === props.armedEntry;
   const rightIsArmed = () =>
     !!props.armedEntry && right().entry === props.armedEntry;
+
+  const isSelectedCal = (e: TimelineEntry | undefined) =>
+    !!props.selectedCalKey &&
+    e?.kind === "calendar" &&
+    `${e.calendarId}:${e.eventId}` === props.selectedCalKey;
+  const leftIsSelCal = () => isSelectedCal(left().entry);
+  const rightIsSelCal = () => isSelectedCal(right().entry);
 
   const entryDone = (e: TimelineEntry | undefined) =>
     e?.kind === "task" && e.task.done;
@@ -490,6 +552,7 @@ function TimelineRow(props: TimelineRowProps) {
             backgroundColor: laneBg(
               leftIsCursor(),
               leftIsArmed(),
+              leftIsSelCal(),
               leftIsBlock(),
               leftIsDone(),
             ),
@@ -518,6 +581,7 @@ function TimelineRow(props: TimelineRowProps) {
             backgroundColor: laneBg(
               leftIsCursor(),
               leftIsArmed(),
+              leftIsSelCal(),
               leftIsBlock(),
               leftIsDone(),
             ),
@@ -540,6 +604,7 @@ function TimelineRow(props: TimelineRowProps) {
             backgroundColor: laneBg(
               rightIsCursor(),
               rightIsArmed(),
+              rightIsSelCal(),
               rightIsBlock(),
               rightIsDone(),
             ),
@@ -726,10 +791,11 @@ function isBlockKind(k: RowMapEntry["kind"]): boolean {
 function laneBg(
   isCursor: boolean,
   isArmed: boolean,
+  isSelectedCal: boolean,
   isBlock: boolean,
   isDone: boolean,
 ): string | undefined {
-  if (isArmed) return T.warmDim;
+  if (isArmed || isSelectedCal) return T.warmDim;
   if (isCursor) return T.cardBgCursor;
   if (isBlock) return isDone ? T.cardBlockBgDone : T.cardBlockBg;
   return undefined;

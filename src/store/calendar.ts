@@ -29,6 +29,14 @@ export interface CalEvent {
   endMin: number;
   color: string;
   source: "google" | "microsoft";
+  /** Google calendar id this event lives on (set for Google events only). */
+  calendarId?: string;
+  /** Google event id (set for Google events only). Needed to edit/delete. */
+  eventId?: string;
+  /** True when this event can be edited/deleted from tuiboard: a Google event
+   *  on an owner/writer calendar, with a write-scoped token. Microsoft events
+   *  and read-only-calendar events are never editable. */
+  editable?: boolean;
 }
 
 const GOOGLE_FALLBACK_COLOR = "#e8a05c";
@@ -143,6 +151,182 @@ async function googleAccessToken(tokenPath: string): Promise<string | null> {
   }
 }
 
+// ─── Google write (calendar list + event creation) ──────────────────────────
+
+/** A calendar the connected account can write to (accessRole owner/writer). */
+export interface WritableCalendar {
+  id: string;
+  summary: string;
+  accessRole: string;
+  color: string;
+  primary: boolean;
+}
+
+/**
+ * List the calendars the connected Google account can WRITE to (owner/writer),
+ * with display name + color. Used by the new-event calendar picker. Returns []
+ * on any failure. (Read path `fetchGoogle` keeps its own, reader-scoped query.)
+ */
+export async function listGoogleCalendars(
+  cfg: GoogleCalendarConfig,
+): Promise<WritableCalendar[]> {
+  const access = await googleAccessToken(cfg.token);
+  if (!access) return [];
+  try {
+    const res = await fetch(
+      "https://www.googleapis.com/calendar/v3/users/me/calendarList",
+      { headers: { Authorization: `Bearer ${access}` } },
+    );
+    if (!res.ok) return [];
+    const list = (await res.json()) as {
+      items?: Array<{
+        id: string;
+        summary?: string;
+        accessRole?: string;
+        backgroundColor?: string;
+        primary?: boolean;
+      }>;
+    };
+    return (list.items ?? [])
+      .filter((c) => c.accessRole === "owner" || c.accessRole === "writer")
+      .map((c) => ({
+        id: c.id,
+        summary: c.summary ?? c.id,
+        accessRole: c.accessRole ?? "reader",
+        color: c.backgroundColor || cfg.color || GOOGLE_FALLBACK_COLOR,
+        primary: c.primary === true,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/** True if the persisted Google token carries an event-write scope. Gates the
+ *  whole event-creation UI so read-only users never see it. */
+export function googleTokenCanWrite(tokenPath: string): boolean {
+  try {
+    const tok = JSON.parse(readFileSync(tokenPath, "utf-8")) as { scopes?: string[] };
+    return (
+      Array.isArray(tok.scopes) &&
+      tok.scopes.some((s) => s.includes("calendar.events") || s.endsWith("/auth/calendar"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** RFC3339 timestamp with the LOCAL UTC offset for `min` minutes past local
+ *  midnight of `dateIso` — e.g. "2026-06-03T15:00:00+02:00". Per-instant offset,
+ *  so DST is handled; Google then stores the wall-clock time exactly as typed. */
+function localRfc3339(dateIso: string, min: number): string {
+  const d = new Date(dayStartMs(dateIso) + min * 60000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const offMin = -d.getTimezoneOffset(); // minutes east of UTC
+  const sign = offMin >= 0 ? "+" : "-";
+  const off = Math.abs(offMin);
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:00` +
+    `${sign}${pad(Math.floor(off / 60))}:${pad(off % 60)}`
+  );
+}
+
+/**
+ * Create a Google Calendar event on `calendarId`. Unlike the read path, this
+ * surfaces failures (returns {ok:false,error}) so the UI can flash a banner.
+ */
+export async function createGoogleEvent(
+  cfg: GoogleCalendarConfig,
+  args: { calendarId: string; title: string; dateIso: string; startMin: number; endMin: number },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const access = await googleAccessToken(cfg.token);
+  if (!access) {
+    return { ok: false, error: "not authorized — run: tuiboard calendar-setup google --write" };
+  }
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(args.calendarId)}/events`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          summary: args.title,
+          start: { dateTime: localRfc3339(args.dateIso, args.startMin) },
+          end: { dateTime: localRfc3339(args.dateIso, args.endMin) },
+        }),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { ok: false, error: `${res.status} ${body.slice(0, 140)}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+/**
+ * Edit an existing Google Calendar event's title + time (same calendar — moving
+ * an event between calendars is intentionally not supported). PATCH so untouched
+ * fields (attendees, description, recurrence, …) are preserved.
+ */
+export async function updateGoogleEvent(
+  cfg: GoogleCalendarConfig,
+  args: { calendarId: string; eventId: string; title: string; dateIso: string; startMin: number; endMin: number },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const access = await googleAccessToken(cfg.token);
+  if (!access) {
+    return { ok: false, error: "not authorized — run: tuiboard calendar-setup google --write" };
+  }
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(args.calendarId)}/events/${encodeURIComponent(args.eventId)}`,
+      {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          summary: args.title,
+          start: { dateTime: localRfc3339(args.dateIso, args.startMin) },
+          end: { dateTime: localRfc3339(args.dateIso, args.endMin) },
+        }),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { ok: false, error: `${res.status} ${body.slice(0, 140)}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+/** Delete a Google Calendar event. DELETE returns 204 (no body) on success. */
+export async function deleteGoogleEvent(
+  cfg: GoogleCalendarConfig,
+  args: { calendarId: string; eventId: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const access = await googleAccessToken(cfg.token);
+  if (!access) {
+    return { ok: false, error: "not authorized — run: tuiboard calendar-setup google --write" };
+  }
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(args.calendarId)}/events/${encodeURIComponent(args.eventId)}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${access}` } },
+    );
+    // 410 Gone = already deleted; treat as success (the goal state is reached).
+    if (!res.ok && res.status !== 410) {
+      const body = await res.text().catch(() => "");
+      return { ok: false, error: `${res.status} ${body.slice(0, 140)}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
 async function fetchGoogle(
   cfg: GoogleCalendarConfig,
   dateIso: string,
@@ -168,13 +352,17 @@ async function fetchGoogle(
     );
     if (!listRes.ok) return [];
     const list = (await listRes.json()) as {
-      items?: Array<{ id: string; backgroundColor?: string; selected?: boolean }>;
+      items?: Array<{ id: string; backgroundColor?: string; selected?: boolean; accessRole?: string }>;
     };
+    // Events are editable only with a write-scoped token AND on a calendar the
+    // account owns/can-write. Computed once here, stamped on each event below.
+    const canWrite = googleTokenCanWrite(cfg.token);
     const cals = (list.items ?? []).map((c) => ({
       id: c.id,
       color: c.backgroundColor || fallback,
+      writable: canWrite && (c.accessRole === "owner" || c.accessRole === "writer"),
     }));
-    if (cals.length === 0) cals.push({ id: "primary", color: fallback });
+    if (cals.length === 0) cals.push({ id: "primary", color: fallback, writable: false });
 
     const events: CalEvent[] = [];
     const seen = new Set<string>();
@@ -209,6 +397,9 @@ async function fetchGoogle(
                 endMin,
                 color: cal.color,
                 source: "google",
+                calendarId: cal.id,
+                eventId: it.id,
+                editable: cal.writable && !!it.id,
               },
             });
           }

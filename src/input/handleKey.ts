@@ -14,6 +14,7 @@
  */
 
 import { isHiddenColumn } from "~/config/loader";
+import { googleTokenCanWrite } from "~/store/calendar";
 import { isTask } from "~/parser/markdown";
 import {
   isoToday,
@@ -59,11 +60,30 @@ export function handleKey(
       }
       return;
     }
+    if (ui.modal.kind === "confirm-delete-event") {
+      if (key.name === "y" || key.name === "enter" || key.name === "return") {
+        void store.confirmDeleteEvent();
+      } else if (key.name === "n") {
+        store.closeModal();
+      }
+      return;
+    }
     if ((ui.modal.kind === "help" ||
          ui.modal.kind === "detail" ||
          ui.modal.kind === "agent-detail") &&
         (key.name === "?" || key.sequence === "?" || key.name === "o")) {
       store.closeModal();
+      return;
+    }
+    // New-event modal: step 1 typing goes to the <input>; step 2 (no input
+    // focused) is the calendar picker, driven here.
+    if (ui.modal.kind === "event") {
+      const p = ui.eventPicker;
+      if (p && p.step === 2) {
+        if (key.name === "j" || key.name === "down") { store.setEventSel(p.sel + 1); return; }
+        if (key.name === "k" || key.name === "up") { store.setEventSel(p.sel - 1); return; }
+        if (key.name === "enter" || key.name === "return") { void store.confirmEventPicker(); return; }
+      }
       return;
     }
     return;
@@ -83,6 +103,11 @@ export function handleKey(
       store.setArmMode(false);
       store.armTimeline(undefined);
       store.flashBanner("info", wasMode ? "Arm mode off" : "Disarmed");
+      return;
+    }
+    if (ui.selectedCalEvent) {
+      store.clearCalSelection();
+      store.flashBanner("info", "Event deselected");
       return;
     }
     if (ui.grabbing) {
@@ -293,6 +318,34 @@ function handleTimelineZone(
     store.agendaDate(),
   );
   const target = entries[ui.row];
+
+  // A selected (clicked) calendar event takes over e/d/Enter for edit/delete.
+  // Any other key drops the selection and is then handled normally below.
+  const selCal = ui.selectedCalEvent;
+  if (selCal) {
+    if (key.name === "e" || key.name === "enter" || key.name === "return") {
+      store.openEventEditModal();
+      return;
+    }
+    if (key.name === "d") {
+      openLater({ kind: "confirm-delete-event" });
+      return;
+    }
+    store.clearCalSelection();
+  }
+
+  // `n` (Agenda zone) = create a Google Calendar event at the now-rounded slot.
+  // Mirrors `n` = new task in the board. Gated on Google write being connected.
+  if ((key.name === "n" || key.name === "N") && !key.ctrl) {
+    const g = store.config.calendars?.google;
+    if (g && googleTokenCanWrite(g.token)) {
+      const { startMin, endMin } = nextNowBlock();
+      store.openEventModal(store.agendaDate(), startMin, endMin);
+    } else {
+      store.flashBanner("warn", "Connect Google write first: tuiboard calendar-setup google --write");
+    }
+    return;
+  }
 
   // Armed-block adjustments take priority over navigation. While a block
   // is armed, j/k nudge its start time and +/- nudge its end.

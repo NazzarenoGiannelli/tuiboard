@@ -83,6 +83,9 @@ export interface GoogleCalendarConfig {
   credentials?: string;
   /** Fallback color when a calendar has none of its own. */
   color?: string;
+  /** Calendar id new events are created on by default (override in the modal).
+   *  Unset → the account's primary calendar. Requires `--write` setup. */
+  defaultCalendar?: string;
 }
 
 export interface MicrosoftCalendarConfig {
@@ -152,6 +155,7 @@ interface RawConfig {
       token?: string;
       credentials?: string;
       color?: string;
+      default_calendar?: string;
     };
     microsoft?: {
       enabled?: boolean;
@@ -191,6 +195,7 @@ function normalizeCalendars(
       token: expandPath(g.token, root),
       credentials: g.credentials ? expandPath(g.credentials, root) : undefined,
       color: g.color,
+      defaultCalendar: g.default_calendar,
     };
   }
   const m = raw.microsoft;

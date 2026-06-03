@@ -68,10 +68,17 @@ archive_column: Archive
 # own credentials — nothing is hosted, nothing leaves your machine. All-day
 # events are skipped; each calendar keeps its own color. Paths support `~`.
 #
+# To CREATE / EDIT / DELETE events (not just read), re-auth with:
+# calendar-setup google --write. Then press `n` / click an empty slot to create;
+# click an existing event to select it, `e` to edit, `d` to delete.
+# `default_calendar` (a calendar id) sets the default target for new events;
+# override per-event in the modal.
+#
 # calendars:
 #   google:
 #     enabled: true
 #     token: ~/.config/tuiboard/google_token.json
+#     # default_calendar: you@example.com   # default target for new events
 #     # color: "#e8a05c"            # fallback when a calendar has no color
 #   microsoft:
 #     enabled: true

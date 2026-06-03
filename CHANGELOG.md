@@ -5,6 +5,27 @@ All notable changes to **tuiboard** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-06-03
+
+### Added
+- **Create, edit & delete Google Calendar events from the Agenda** (opt-in
+  write). Re-authorize with `tuiboard calendar-setup google --write`, then:
+  - **Create** — press `n` (or click an empty Agenda slot) to open a new-event
+    modal: type a title (append `HH:MM-HH:MM` to set the time), pick the target
+    calendar, Enter to create. A `default_calendar` config sets the default
+    target (override per-event in the modal).
+  - **Edit / delete** — click an existing event on a writable calendar to select
+    it, then `e` (or Enter) to edit its title/time, `d` to delete (with confirm),
+    `Esc` to deselect. Edits stay on the same calendar. Read-only events can't be
+    selected.
+
+  Every change appears in the Agenda and on Google Calendar immediately.
+  Read-only setups are unaffected — the write UI only appears when the token
+  carries the write scope, and only Google events on owner/writer calendars are
+  selectable. Microsoft event write is not supported yet.
+- Expanded the README with a step-by-step Google Cloud OAuth client setup (the
+  bring-your-own-credentials flow), so first-time users have a clear path.
+
 ## [0.7.3] - 2026-06-02
 
 ### Fixed
@@ -113,6 +134,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.8.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.0
 [0.7.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.3
 [0.7.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.2
 [0.7.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.1

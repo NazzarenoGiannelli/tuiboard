@@ -21,6 +21,7 @@ import {
 } from "~/store/parsers";
 import { ATTR, T } from "~/ui/glyphs";
 import { AGENDA_WIDTH } from "~/ui/layout";
+import { formatHm } from "~/store/timeline";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
 
@@ -50,6 +51,9 @@ function ModalRouter(props: { store: TuiStore; modal: NonNullable<TuiStore["stat
     case "confirm-delete": return <ConfirmDeleteModal store={props.store} modal={m} />;
     case "detail":   return <DetailModal store={props.store} modal={m} />;
     case "agent-detail": return <AgentDetailModal store={props.store} modal={m} />;
+    case "event":    return <EventModal store={props.store} />;
+    case "event-edit": return <EventEditModal store={props.store} />;
+    case "confirm-delete-event": return <ConfirmDeleteEventModal store={props.store} />;
     case "search":   return <SearchModal store={props.store} />;
     case "help":     return <HelpModal store={props.store} />;
   }
@@ -263,6 +267,191 @@ function TimeBlockModal(props: { store: TuiStore; modal: Extract<NonNullable<Tui
           <span style={{ fg: T.bannerError }}>{error()!}</span>
         </text>
       </Show>
+    </DialogShell>
+  );
+}
+
+// ─── New calendar event ──────────────────────────────────────────────────────
+
+/**
+ * Two-step "new Google Calendar event" modal. Step 1: a title+time `<input>`
+ * (time prefilled from the clicked slot; append `HH:MM-HH:MM` to override).
+ * Step 2: a non-input calendar list navigated via handleKey (no input focused),
+ * preselected to the configured default. See `openEventModal` / `confirmEventPicker`.
+ */
+function EventModal(props: { store: TuiStore }) {
+  const picker = () => props.store.state.ui.eventPicker;
+  const defaultId = () => props.store.config.calendars?.google?.defaultCalendar;
+  const [value, setValue] = createSignal("");
+  const [error, setError] = createSignal<string | undefined>();
+
+  function submit(text: string) {
+    const p = picker();
+    if (!p) return;
+    const trimmed = text.trim();
+    let title = trimmed;
+    let startMin = p.startMin;
+    let endMin = p.endMin;
+    // Peel a trailing time token: "Standup 9:00-9:30" / "Lunch 12-13".
+    const m = trimmed.match(/\s(\S+)$/);
+    const tok = m?.[1];
+    if (m && m.index !== undefined && tok) {
+      const tb = parseTimeBlockShortcut(tok);
+      if (tb && tb.endMin > tb.startMin) {
+        title = trimmed.slice(0, m.index).trim();
+        startMin = tb.startMin;
+        endMin = tb.endMin;
+      }
+    }
+    if (!title) {
+      setError("Title required");
+      return;
+    }
+    void props.store.advanceEventToStep2(title, startMin, endMin);
+  }
+
+  return (
+    <Show when={picker()}>
+      <Show
+        when={picker()!.step === 2}
+        fallback={
+          <DialogShell
+            title="New event"
+            hint={`${formatHm(picker()!.startMin)}-${formatHm(picker()!.endMin)} · append HH:MM-HH:MM to change · Enter add · Esc cancel`}
+          >
+            <input
+              focused
+              value={value()}
+              onInput={(v: string) => {
+                setValue(v);
+                setError(undefined);
+              }}
+              onSubmit={((v: string) => submit(v)) as any}
+            />
+            <Show when={error()}>
+              <text>
+                <span style={{ fg: T.bannerError }}>{error()!}</span>
+              </text>
+            </Show>
+          </DialogShell>
+        }
+      >
+        <DialogShell
+          title={`Calendar · ${formatHm(picker()!.startMin)}-${formatHm(picker()!.endMin)}`}
+          hint="j/k choose · Enter create · Esc cancel"
+        >
+          <For each={picker()!.cals}>
+            {(c, i) => {
+              const isSel = () => i() === picker()!.sel;
+              const isDefault = defaultId() ? c.id === defaultId() : c.primary;
+              return (
+                <box style={{ backgroundColor: isSel() ? T.cardBgCursor : undefined }}>
+                  <text wrapMode="none" truncate>
+                    <span style={{ fg: isSel() ? T.accent : T.textDim }}>
+                      {isSel() ? "▶ " : "  "}
+                    </span>
+                    <span style={{ fg: c.color }}>{"● "}</span>
+                    <span style={{ fg: T.text }}>{c.summary}</span>
+                    <Show when={isDefault}>
+                      <span style={{ fg: T.textDim }}>{"  (default)"}</span>
+                    </Show>
+                  </text>
+                </box>
+              );
+            }}
+          </For>
+        </DialogShell>
+      </Show>
+    </Show>
+  );
+}
+
+// ─── Edit existing calendar event ────────────────────────────────────────────
+
+/**
+ * Edit the selected Google Calendar event's title + time (same calendar). A
+ * single `<input>` prefilled with "Title HH:MM-HH:MM"; Enter saves via PATCH.
+ * Reads `ui.selectedCalEvent` (set by clicking an editable event in the Agenda).
+ */
+function EventEditModal(props: { store: TuiStore }) {
+  const sel = () => props.store.state.ui.selectedCalEvent;
+  const s0 = sel();
+  const [value, setValue] = createSignal(
+    s0 ? `${s0.title} ${formatHm(s0.startMin)}-${formatHm(s0.endMin)}` : "",
+  );
+  const [error, setError] = createSignal<string | undefined>();
+
+  function submit(text: string) {
+    const s = sel();
+    if (!s) {
+      props.store.closeModal();
+      return;
+    }
+    const trimmed = text.trim();
+    let title = trimmed;
+    let startMin = s.startMin;
+    let endMin = s.endMin;
+    // Peel a trailing time token: "Standup 9:00-9:30" / "Lunch 12-13".
+    const m = trimmed.match(/\s(\S+)$/);
+    const tok = m?.[1];
+    if (m && m.index !== undefined && tok) {
+      const tb = parseTimeBlockShortcut(tok);
+      if (tb && tb.endMin > tb.startMin) {
+        title = trimmed.slice(0, m.index).trim();
+        startMin = tb.startMin;
+        endMin = tb.endMin;
+      }
+    }
+    if (!title) {
+      setError("Title required");
+      return;
+    }
+    void props.store.confirmEventEdit(title, startMin, endMin);
+  }
+
+  return (
+    <Show when={sel()}>
+      <DialogShell
+        title="Edit event"
+        hint="append HH:MM-HH:MM to change the time · Enter save · Esc cancel"
+      >
+        <input
+          focused
+          value={value()}
+          onInput={(v: string) => {
+            setValue(v);
+            setError(undefined);
+          }}
+          onSubmit={((v: string) => submit(v)) as any}
+        />
+        <Show when={error()}>
+          <text>
+            <span style={{ fg: T.bannerError }}>{error()!}</span>
+          </text>
+        </Show>
+      </DialogShell>
+    </Show>
+  );
+}
+
+// ─── Confirm delete calendar event ───────────────────────────────────────────
+
+function ConfirmDeleteEventModal(props: { store: TuiStore }) {
+  const sel = () => props.store.state.ui.selectedCalEvent;
+  return (
+    <DialogShell title="Delete event?" hint="⏎/y confirm · Esc/n cancel">
+      <text wrapMode="none" truncate>
+        <span style={{ fg: sel()?.color ?? T.text }}>{"📅 "}</span>
+        <span style={{ fg: T.text }}>{sel()?.title ?? "(missing)"}</span>
+        <Show when={sel()}>
+          <span style={{ fg: T.textDim }}>
+            {`  ${formatHm(sel()!.startMin)}-${formatHm(sel()!.endMin)}`}
+          </span>
+        </Show>
+      </text>
+      <text>
+        <span style={{ fg: T.textDim }}>Deletes from Google Calendar — cannot be undone here.</span>
+      </text>
     </DialogShell>
   );
 }
@@ -599,6 +788,8 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  [ / ]              Previous / next day (tasks + calendar events)\n"}</span>
         <span style={{ fg: T.text }}>{"  \\                  Jump back to today\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nAgenda (timeline) scheduling\n"}</span>
+        <span style={{ fg: T.text }}>{"  n / click slot     New Google Calendar event (needs: calendar-setup google --write)\n"}</span>
+        <span style={{ fg: T.text }}>{"  click an event     Select an editable Google event — then e edit · d delete · Esc\n"}</span>
         <span style={{ fg: T.text }}>{"  c (any zone)       Toggle ARM MODE — then click a task, click a slot, repeat\n"}</span>
         <span style={{ fg: T.text }}>{"  click empty row    Place the armed task here (30-min block, or move if it has one)\n"}</span>
         <span style={{ fg: T.text }}>{"  click band         Arm an existing block (or place the armed task at its start)\n"}</span>

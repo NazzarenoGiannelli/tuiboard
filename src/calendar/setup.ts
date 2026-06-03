@@ -21,7 +21,9 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { loadConfig } from "~/config/loader";
 
 const TUIBOARD_DIR = join(homedir(), ".config", "tuiboard");
-const GOOGLE_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+const GOOGLE_SCOPE_RO = "https://www.googleapis.com/auth/calendar.readonly";
+/** Added with `--write`: lets tuiboard CREATE events (and still read them). */
+const GOOGLE_SCOPE_EVENTS = "https://www.googleapis.com/auth/calendar.events";
 const MS_SCOPE = "Calendars.Read offline_access openid profile";
 
 function expandPath(p: string, root: string): string {
@@ -32,8 +34,10 @@ function expandPath(p: string, root: string): string {
 function openBrowser(url: string): void {
   try {
     if (process.platform === "win32") {
-      // `start` is a cmd builtin; the empty "" is the window title arg.
-      spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore" }).unref();
+      // NOT `cmd /c start`: cmd treats the `&` in an OAuth URL as a command
+      // separator and truncates it (→ Google "invalid_request"). rundll32 gets
+      // the URL as a single literal argv, no shell parsing.
+      spawn("rundll32", ["url.dll,FileProtocolHandler", url], { detached: true, stdio: "ignore" }).unref();
     } else if (process.platform === "darwin") {
       spawn("open", [url], { detached: true, stdio: "ignore" }).unref();
     } else {
@@ -58,8 +62,10 @@ interface GoogleClientSecrets {
   token_uri?: string;
 }
 
-async function setupGoogle(credsPath: string, tokenPath: string): Promise<number> {
+async function setupGoogle(credsPath: string, tokenPath: string, write: boolean): Promise<number> {
+  const scopes = write ? [GOOGLE_SCOPE_RO, GOOGLE_SCOPE_EVENTS] : [GOOGLE_SCOPE_RO];
   console.log("\n── Google Calendar setup ──────────────────────────────────");
+  console.log(write ? "Mode: read + create events" : "Mode: read-only (add --write to create events)");
   if (!existsSync(credsPath)) {
     console.log(`OAuth client file not found:\n  ${credsPath}\n
 Create it:
@@ -88,7 +94,10 @@ Create it:
     console.log("client_id / client_secret missing from the OAuth client file.");
     return 1;
   }
-  const authUri = secrets.auth_uri || "https://accounts.google.com/o/oauth2/auth";
+  // Force the current v2 authorization endpoint. Desktop client_secret files
+  // still ship the legacy `/o/oauth2/auth` in `auth_uri`, which returns
+  // "Error 400: invalid_request (GeneralOAuthFlow)" for loopback + multi-scope.
+  const authUri = "https://accounts.google.com/o/oauth2/v2/auth";
   const tokenUri = secrets.token_uri || "https://oauth2.googleapis.com/token";
 
   // Loopback server captures the ?code= redirect.
@@ -96,15 +105,22 @@ Create it:
   const result = new Promise<{ code?: string; error?: string }>((r) => (resolveResult = r));
   const server = Bun.serve({
     port: 0,
+    // Bind the IPv4 loopback explicitly. On Windows `localhost` resolves to
+    // IPv6 `::1` first; if the server is IPv4-only the redirect is refused.
+    // We also use 127.0.0.1 in the redirect URI so the two always match.
+    hostname: "127.0.0.1",
     fetch(req) {
       const u = new URL(req.url);
       const code = u.searchParams.get("code") ?? undefined;
       const error = u.searchParams.get("error") ?? undefined;
       if (code || error) {
-        resolveResult({ code, error });
         const msg = error
           ? `Authorization failed: ${error}`
           : "tuiboard is now connected to Google Calendar. You can close this tab.";
+        // Resolve AFTER the response is handed back so the success page has a
+        // moment to flush; resolving synchronously lets the caller stop the
+        // server before the bytes reach the browser (→ ERR_CONNECTION_REFUSED).
+        setTimeout(() => resolveResult({ code, error }), 300);
         return new Response(`<!doctype html><meta charset=utf-8><body style="font:16px system-ui;padding:3rem">${msg}</body>`, {
           headers: { "content-type": "text/html" },
         });
@@ -112,24 +128,24 @@ Create it:
       return new Response("waiting for Google…", { headers: { "content-type": "text/plain" } });
     },
   });
-  const redirectUri = `http://localhost:${server.port}`;
+  const redirectUri = `http://127.0.0.1:${server.port}`;
   const authUrl =
     `${authUri}?` +
     new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
       response_type: "code",
-      scope: GOOGLE_SCOPE,
+      scope: scopes.join(" "),
       access_type: "offline",
       prompt: "consent",
     }).toString();
 
-  console.log("Opening your browser to authorize Google Calendar (read-only)…");
+  console.log(`Opening your browser to authorize Google Calendar (${write ? "read + write" : "read-only"})…`);
   console.log(`If it doesn't open, visit:\n  ${authUrl}\n`);
   openBrowser(authUrl);
 
   const { code, error } = await result;
-  server.stop(true);
+  server.stop(); // graceful: lets the success page finish sending
   if (error || !code) {
     console.log(`\nSetup cancelled${error ? `: ${error}` : ""}.`);
     return 1;
@@ -165,7 +181,7 @@ Create it:
     token_uri: tokenUri,
     client_id: clientId,
     client_secret: clientSecret,
-    scopes: [GOOGLE_SCOPE],
+    scopes,
     expiry: data.expires_in ? new Date(Date.now() + data.expires_in * 1000).toISOString() : undefined,
   });
   console.log(`\n✓ Google Calendar connected. Token saved:\n  ${tokenPath}\n`);
@@ -279,8 +295,9 @@ function usage(): void {
   console.log(`tuiboard calendar-setup — connect a calendar to the Agenda overlay
 
 Usage:
-  tuiboard calendar-setup google      Browser OAuth for Google Calendar
-  tuiboard calendar-setup microsoft   Device-code flow for Microsoft 365
+  tuiboard calendar-setup google           Browser OAuth, read-only
+  tuiboard calendar-setup google --write   Browser OAuth, read + create events
+  tuiboard calendar-setup microsoft        Device-code flow for Microsoft 365
 
 Tokens are written to the paths in your tuiboard config (calendars.google.token
 / calendars.microsoft.tokenCache), or ~/.config/tuiboard/ if no calendars block
@@ -289,7 +306,8 @@ prints the exact YAML.`);
 }
 
 export async function runCalendarSetup(argv: string[]): Promise<number> {
-  const provider = (argv[0] ?? "").toLowerCase();
+  const write = argv.includes("--write");
+  const provider = (argv.find((a) => !a.startsWith("--")) ?? "").toLowerCase();
   const cfg = loadConfig();
   const root = cfg.root;
 
@@ -299,7 +317,7 @@ export async function runCalendarSetup(argv: string[]): Promise<number> {
       ? expandPath(g.credentials, root)
       : join(TUIBOARD_DIR, "google_credentials.json");
     const tokenPath = g?.token ? expandPath(g.token, root) : join(TUIBOARD_DIR, "google_token.json");
-    const rc = await setupGoogle(credsPath, tokenPath);
+    const rc = await setupGoogle(credsPath, tokenPath, write);
     if (rc === 0 && !g) {
       console.log(`Add this to your tuiboard config (${cfg.loaded ? "config found" : "create ~/.config/tuiboard/config.yaml"}):
 

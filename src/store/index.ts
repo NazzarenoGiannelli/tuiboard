@@ -28,7 +28,16 @@ import {
   type BoardWatcher,
 } from "~/io/watcher";
 import { createAgentsStore, type AgentsStore } from "./agents";
-import { createCalendarStore, type CalendarStore } from "./calendar";
+import {
+  createCalendarStore,
+  createGoogleEvent,
+  deleteGoogleEvent,
+  googleTokenCanWrite,
+  listGoogleCalendars,
+  updateGoogleEvent,
+  type CalendarStore,
+  type WritableCalendar,
+} from "./calendar";
 import { ConflictError, statMtime, writeBoardFile } from "~/io/writer";
 import { isTask, parseBoard } from "~/parser/markdown";
 import { serializeBoard } from "~/parser/serialize";
@@ -67,8 +76,43 @@ export type ModalKind =
   | { kind: "confirm-delete"; ref: TaskRef }
   | { kind: "detail"; ref: TaskRef }
   | { kind: "agent-detail"; sessionId: string }
+  | { kind: "event"; dateIso: string; startMin: number; endMin: number }
+  | { kind: "event-edit" }
+  | { kind: "confirm-delete-event" }
   | { kind: "search" }
   | { kind: "help" };
+
+/**
+ * Transient state for the two-step "new calendar event" modal. Step 1 is the
+ * title+time `<input>`; step 2 is the calendar picker, navigated via handleKey
+ * (no input focused). Lives in UI state so the key handler can drive it.
+ */
+export interface EventPicker {
+  step: 1 | 2;
+  /** Selection index into `cals` (step 2). */
+  sel: number;
+  title: string;
+  dateIso: string;
+  startMin: number;
+  endMin: number;
+  cals: WritableCalendar[];
+}
+
+/**
+ * The Google Calendar event currently selected in the Agenda (by clicking an
+ * editable event band). Parallel to `armedTimelineRef` but for read/write
+ * calendar events rather than tasks. While set, `e` edits and `d` deletes it.
+ */
+export interface SelectedCalEvent {
+  calendarId: string;
+  eventId: string;
+  title: string;
+  startMin: number;
+  endMin: number;
+  /** The Agenda day the event was selected on — its date for the API call. */
+  dateIso: string;
+  color: string;
+}
 
 /** Which dashboard zone owns the keyboard cursor. */
 export type ActiveZone = "planner" | "board" | "timeline" | "agents";
@@ -119,6 +163,13 @@ export interface UIState {
    */
   armedTimelineRef?: TaskRef;
   /**
+   * The Google Calendar event currently selected in the Agenda (clicked). While
+   * set, the Agenda zone's `e` edits it and `d` deletes it; any navigation key
+   * or `Esc` clears it. Only ever set for editable events (owner/writer + write
+   * token), so the presence of this implies "actionable".
+   */
+  selectedCalEvent?: SelectedCalEvent;
+  /**
    * Persistent calendar "arm mode" (toggled with `c`). While on, clicking any
    * task in the board / planner panel arms it for the timeline, so you can
    * schedule several tasks in a row — click a task, click a slot, repeat —
@@ -146,6 +197,8 @@ export interface UIState {
   banner?: { kind: "info" | "warn" | "error"; text: string; ts: number };
   /** Open modal, if any. Keyboard handler routes input to the modal when set. */
   modal?: ModalKind;
+  /** Two-step new-event modal state (set only while `modal.kind === "event"`). */
+  eventPicker?: EventPicker;
 }
 
 export interface UndoEntry {
@@ -1058,6 +1111,150 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   function closeModal(): void {
     setState("ui", "modal", undefined);
+    setState("ui", "eventPicker", undefined);
+  }
+
+  // ─── New calendar event (two-step modal) ─────────────────────────────────
+
+  /** Open the "new event" modal for a time slot. Guarded on Google write being
+   *  connected; prefetches the writable calendars while the user types. */
+  function openEventModal(dateIso: string, startMin: number, endMin: number): void {
+    const g = config.calendars?.google;
+    if (!g || !googleTokenCanWrite(g.token)) {
+      flashBanner("warn", "Connect Google write first: tuiboard calendar-setup google --write");
+      return;
+    }
+    setState("ui", "eventPicker", { step: 1, sel: 0, title: "", dateIso, startMin, endMin, cals: [] });
+    // Defer the modal open so the OpenTUI <input> mounts after this key event.
+    setTimeout(() => openModal({ kind: "event", dateIso, startMin, endMin }), 0);
+    void listGoogleCalendars(g).then((cals) => {
+      setState("ui", "eventPicker", produce((p: EventPicker | undefined) => {
+        if (p && p.cals.length === 0) p.cals = cals;
+      }));
+    });
+  }
+
+  /** Step 1 → step 2: stash the parsed title + time, load calendars if needed,
+   *  preselect the default, and either show the picker or (single calendar)
+   *  create immediately. */
+  async function advanceEventToStep2(title: string, startMin: number, endMin: number): Promise<void> {
+    const g = config.calendars?.google;
+    if (!g || !state.ui.eventPicker) { closeModal(); return; }
+    let cals = state.ui.eventPicker.cals;
+    if (cals.length === 0) cals = await listGoogleCalendars(g);
+    if (cals.length === 0) {
+      flashBanner("warn", "No writable Google calendars");
+      closeModal();
+      return;
+    }
+    const def = g.defaultCalendar;
+    const idx = cals.findIndex((c) => (def ? c.id === def : c.primary));
+    setState("ui", "eventPicker", produce((p: EventPicker | undefined) => {
+      if (!p) return;
+      p.title = title;
+      p.startMin = startMin;
+      p.endMin = endMin;
+      p.cals = cals;
+      p.sel = idx < 0 ? 0 : idx;
+      p.step = 2;
+    }));
+    if (cals.length === 1) void confirmEventPicker();
+  }
+
+  /** Move the step-2 calendar selection (wraps). */
+  function setEventSel(n: number): void {
+    setState("ui", "eventPicker", produce((p: EventPicker | undefined) => {
+      if (!p || p.cals.length === 0) return;
+      p.sel = ((n % p.cals.length) + p.cals.length) % p.cals.length;
+    }));
+  }
+
+  /** Create the event on the selected calendar, refresh the agenda, close. */
+  async function confirmEventPicker(): Promise<void> {
+    const p = state.ui.eventPicker;
+    const g = config.calendars?.google;
+    if (!p || !g) { closeModal(); return; }
+    const calendarId = p.cals[p.sel]?.id ?? g.defaultCalendar ?? "primary";
+    const title = p.title.trim() || "(busy)";
+    closeModal();
+    const r = await createGoogleEvent(g, {
+      calendarId,
+      title,
+      dateIso: p.dateIso,
+      startMin: p.startMin,
+      endMin: p.endMin,
+    });
+    if (r.ok) {
+      calendarStore.refresh(true);
+      flashBanner("info", `📅 Event created: ${title}`);
+    } else {
+      flashBanner("error", `Create failed: ${r.error}`);
+    }
+  }
+
+  // ─── Edit / delete an existing calendar event ────────────────────────────
+
+  /** Select an editable Google event (clicked in the Agenda). Toggles off if
+   *  the same event is clicked again. Clears any armed task so the two
+   *  selection models don't fight. */
+  function selectCalEvent(sel: SelectedCalEvent): void {
+    const cur = state.ui.selectedCalEvent;
+    if (cur && cur.calendarId === sel.calendarId && cur.eventId === sel.eventId) {
+      setState("ui", "selectedCalEvent", undefined);
+      return;
+    }
+    setState("ui", "armedTimelineRef", undefined);
+    setState("ui", "selectedCalEvent", sel);
+  }
+
+  function clearCalSelection(): void {
+    setState("ui", "selectedCalEvent", undefined);
+  }
+
+  /** Open the edit modal for the selected event (deferred so the <input>
+   *  mounts after this key event). No-op if nothing is selected. */
+  function openEventEditModal(): void {
+    if (!state.ui.selectedCalEvent) return;
+    setTimeout(() => openModal({ kind: "event-edit" }), 0);
+  }
+
+  /** Save the edited title/time to the selected event, refresh, close. */
+  async function confirmEventEdit(title: string, startMin: number, endMin: number): Promise<void> {
+    const sel = state.ui.selectedCalEvent;
+    const g = config.calendars?.google;
+    if (!sel || !g) { closeModal(); return; }
+    closeModal();
+    const r = await updateGoogleEvent(g, {
+      calendarId: sel.calendarId,
+      eventId: sel.eventId,
+      title: title.trim() || sel.title,
+      dateIso: sel.dateIso,
+      startMin,
+      endMin,
+    });
+    clearCalSelection();
+    if (r.ok) {
+      calendarStore.refresh(true);
+      flashBanner("info", `✏ Event updated: ${title.trim() || sel.title}`);
+    } else {
+      flashBanner("error", `Update failed: ${r.error}`);
+    }
+  }
+
+  /** Delete the selected event, refresh, close. */
+  async function confirmDeleteEvent(): Promise<void> {
+    const sel = state.ui.selectedCalEvent;
+    const g = config.calendars?.google;
+    if (!sel || !g) { closeModal(); return; }
+    closeModal();
+    const r = await deleteGoogleEvent(g, { calendarId: sel.calendarId, eventId: sel.eventId });
+    clearCalSelection();
+    if (r.ok) {
+      calendarStore.refresh(true);
+      flashBanner("info", `🗑 Event deleted: ${sel.title}`);
+    } else {
+      flashBanner("error", `Delete failed: ${r.error}`);
+    }
   }
 
   // ─── Private mutation helper ─────────────────────────────────────────────
@@ -1133,6 +1330,15 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     resetAllOverdueToToday,
     openModal,
     closeModal,
+    openEventModal,
+    advanceEventToStep2,
+    setEventSel,
+    confirmEventPicker,
+    selectCalEvent,
+    clearCalSelection,
+    openEventEditModal,
+    confirmEventEdit,
+    confirmDeleteEvent,
     flashBanner,
     clearBanner,
     // undo

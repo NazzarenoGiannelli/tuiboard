@@ -50,6 +50,12 @@ export interface CalTimelineEntry extends BaseEntry {
   title: string;
   color: string;
   source: "google" | "microsoft";
+  /** Google calendar id (Google events only) — needed to edit/delete. */
+  calendarId?: string;
+  /** Google event id (Google events only) — needed to edit/delete. */
+  eventId?: string;
+  /** True when this event can be edited/deleted from tuiboard. */
+  editable?: boolean;
 }
 
 export type TimelineEntry = TaskTimelineEntry | CalTimelineEntry;
@@ -168,7 +174,16 @@ export function buildTimelineEntries(
  * the target day) into grid entries, clipped to the rendered window.
  */
 export function buildCalendarEntries(
-  events: Array<{ title: string; startMin: number; endMin: number; color: string; source: "google" | "microsoft" }>,
+  events: Array<{
+    title: string;
+    startMin: number;
+    endMin: number;
+    color: string;
+    source: "google" | "microsoft";
+    calendarId?: string;
+    eventId?: string;
+    editable?: boolean;
+  }>,
 ): CalTimelineEntry[] {
   const out: CalTimelineEntry[] = [];
   for (const e of events) {
@@ -179,6 +194,9 @@ export function buildCalendarEntries(
       title: e.title,
       color: e.color,
       source: e.source,
+      calendarId: e.calendarId,
+      eventId: e.eventId,
+      editable: e.editable,
       startMin: e.startMin,
       endMin: e.endMin,
       startRow: rows.startRow,

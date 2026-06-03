@@ -193,13 +193,37 @@ tuiboard calendar-setup google      # opens your browser (read-only scope)
 tuiboard calendar-setup microsoft   # device-code flow, no redirect
 ```
 
-**Google** needs a one-time OAuth client (free): Google Cloud Console → enable
-*Google Calendar API* → create an *OAuth client ID* (type **Desktop app**) →
-download the JSON to `~/.config/tuiboard/google_credentials.json`, then run the
-command above. **Microsoft** needs an Azure app registration (Public client,
-`Calendars.Read` delegated) whose client ID goes in
-`~/.config/tuiboard/azure_config.json` — running `calendar-setup microsoft` with
-no config writes a template that walks you through it.
+**Microsoft** needs an Azure app registration (Public client, `Calendars.Read`
+delegated) whose client ID goes in `~/.config/tuiboard/azure_config.json` —
+running `calendar-setup microsoft` with no config writes a template that walks
+you through it.
+
+#### Google: one-time OAuth client setup
+
+There's no hosted tuiboard app — **you create your own free OAuth client** in
+your own Google Cloud project, so nothing is shared and your data never passes
+through anyone else's servers. It takes about five minutes, once:
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and
+   create a project (or pick an existing one) from the project dropdown.
+2. **APIs & Services → Library** → search **"Google Calendar API"** → **Enable**.
+3. **APIs & Services → OAuth consent screen**: if prompted, choose **External**,
+   give the app a name and your email, and save. You don't need to publish it or
+   submit for verification — as the project owner you're automatically a test
+   user of your own app, which is all tuiboard needs. (Add your Google address
+   under **Test users** if it asks.)
+4. **APIs & Services → Credentials → Create credentials → OAuth client ID**.
+   Application type: **Desktop app**. Create.
+5. **Download JSON** on the client you just made, and save it as
+   `~/.config/tuiboard/google_credentials.json`.
+6. Run `tuiboard calendar-setup google` (add `--write` to also create/edit/delete
+   — see below). Your browser opens; approve the access. You'll briefly see an
+   "unverified app" notice — that's expected for your own personal client; click
+   **Advanced → go to (your app)** to continue. The token is saved and the
+   command prints the YAML block to paste into your config.
+
+The `calendar-setup` command prints these exact steps too if it doesn't find the
+credentials file.
 
 After connecting, the command prints the exact YAML to paste into your config:
 
@@ -218,6 +242,46 @@ Paths support `~` and resolve against the config dir if relative. A missing,
 expired, or unconfigured calendar never breaks the board — it just shows no
 events. Set either provider's `enabled: false` (or drop the block) to turn it
 off; add a `color:` to override the fallback block color.
+
+### Creating, editing & deleting events (Google, opt-in)
+
+Reading is the default. To also **create, edit, and delete** Google Calendar
+events from the Agenda, re-authorize with the write scope:
+
+```bash
+tuiboard calendar-setup google --write
+```
+
+**Create** — in the Agenda zone, press **`n`** (or **click an empty time slot**)
+to open the new-event modal: type a title (append `HH:MM-HH:MM` to change the
+time), press Enter, pick the target calendar with `j`/`k`, Enter to create. Only
+calendars you can write to (owner/writer) show in the picker.
+
+**Edit / delete** — **click an existing event** in the Agenda to select it (only
+events on writable calendars can be selected; read-only ones just say so). Then:
+
+- **`e`** (or Enter) opens the edit modal, prefilled with the title and time —
+  change either (`Title HH:MM-HH:MM`) and Enter to save.
+- **`d`** deletes it (with a confirm).
+- **`Esc`** deselects.
+
+Edits stay on the same calendar (moving an event between calendars isn't
+supported). Every change appears in the Agenda right away and on Google Calendar.
+
+Set the calendar new events default to with `default_calendar` (a calendar id;
+unset → your primary). You can still override per-event in the modal:
+
+```yaml
+calendars:
+  google:
+    enabled: true
+    token: ~/.config/tuiboard/google_token.json
+    default_calendar: you@example.com   # optional; default target for new events
+```
+
+The write scope is opt-in: without `--write`, tuiboard stays read-only and the
+`n` shortcut / slot-click / event-selection do nothing. Microsoft event write
+isn't supported yet (read-only).
 
 ## Markdown board format
 

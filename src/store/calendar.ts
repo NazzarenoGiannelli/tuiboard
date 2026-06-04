@@ -37,6 +37,10 @@ export interface CalEvent {
    *  on an owner/writer calendar, with a write-scoped token. Microsoft events
    *  and read-only-calendar events are never editable. */
   editable?: boolean;
+  /** All-day event (date-only, no time). Rendered as a chip at the top of the
+   *  Agenda rather than on the 24h grid; startMin/endMin are unused. Display
+   *  only — not editable from tuiboard. */
+  allDay?: boolean;
 }
 
 const GOOGLE_FALLBACK_COLOR = "#e8a05c";
@@ -231,29 +235,45 @@ function localRfc3339(dateIso: string, min: number): string {
   );
 }
 
+/** The day after `dateIso` (YYYY-MM-DD). Google all-day events use an EXCLUSIVE
+ *  end date, so a single-day all-day event ends on the following day. */
+function nextDayIso(dateIso: string): string {
+  const d = new Date(dayStartMs(dateIso) + 24 * 60 * 60000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /**
  * Create a Google Calendar event on `calendarId`. Unlike the read path, this
  * surfaces failures (returns {ok:false,error}) so the UI can flash a banner.
+ * Pass `allDay` for a date-only event (start/end as dates, end exclusive).
  */
 export async function createGoogleEvent(
   cfg: GoogleCalendarConfig,
-  args: { calendarId: string; title: string; dateIso: string; startMin: number; endMin: number },
+  args: { calendarId: string; title: string; dateIso: string; startMin: number; endMin: number; allDay?: boolean },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const access = await googleAccessToken(cfg.token);
   if (!access) {
     return { ok: false, error: "not authorized — run: tuiboard calendar-setup google --write" };
   }
   try {
+    const body = args.allDay
+      ? {
+          summary: args.title,
+          start: { date: args.dateIso },
+          end: { date: nextDayIso(args.dateIso) },
+        }
+      : {
+          summary: args.title,
+          start: { dateTime: localRfc3339(args.dateIso, args.startMin) },
+          end: { dateTime: localRfc3339(args.dateIso, args.endMin) },
+        };
     const res = await fetch(
       `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(args.calendarId)}/events`,
       {
         method: "POST",
         headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          summary: args.title,
-          start: { dateTime: localRfc3339(args.dateIso, args.startMin) },
-          end: { dateTime: localRfc3339(args.dateIso, args.endMin) },
-        }),
+        body: JSON.stringify(body),
       },
     );
     if (!res.ok) {
@@ -387,7 +407,24 @@ async function fetchGoogle(
           for (const it of data.items ?? []) {
             const startRaw = it.start?.dateTime;
             const endRaw = it.end?.dateTime;
-            if (!startRaw || !endRaw) continue; // skip all-day (date only)
+            if (!startRaw || !endRaw) {
+              // All-day / date-only event: the per-day query already scoped it
+              // to a day it covers, so just surface it as a chip (display only).
+              const dayKey = it.start?.date;
+              if (!dayKey) continue;
+              out.push({
+                uid: it.id ?? `${cal.id}:allday:${dayKey}`,
+                ev: {
+                  title: it.summary ?? "(no title)",
+                  startMin: 0,
+                  endMin: 0,
+                  color: cal.color,
+                  source: "google",
+                  allDay: true,
+                },
+              });
+              continue;
+            }
             const { startMin, endMin } = toMinutes(Date.parse(startRaw), Date.parse(endRaw), base);
             out.push({
               uid: it.id ?? `${cal.id}:${startRaw}`,
@@ -540,7 +577,18 @@ async function fetchMicrosoft(
     };
     const events: CalEvent[] = [];
     for (const it of data.value ?? []) {
-      if (it.isAllDay) continue; // mirror Google: skip all-day events
+      if (it.isAllDay) {
+        // All-day event → chip at the top of the Agenda (display only).
+        events.push({
+          title: it.subject ?? "(no title)",
+          startMin: 0,
+          endMin: 0,
+          color,
+          source: "microsoft",
+          allDay: true,
+        });
+        continue;
+      }
       const s = it.start?.dateTime;
       const e = it.end?.dateTime;
       if (!s || !e) continue;

@@ -274,8 +274,75 @@ function TimeBlockModal(props: { store: TuiStore; modal: Extract<NonNullable<Tui
 // ─── New calendar event ──────────────────────────────────────────────────────
 
 /**
+ * Parse an event input line into title + time + (optional) date. Tokens are
+ * peeled off the END, time first then date, so the natural order is
+ * "Title [date] [time]":
+ *   "Standup 9:00-9:30"          → title, 09:00-09:30, (default date)
+ *   "Lunch tomorrow 12-13"       → title, 12:00-13:00, tomorrow
+ *   "Review 2026-06-10 15-16"    → title, 15:00-16:00, that date
+ * A trailing token is only consumed if it parses AND something is left for the
+ * title, so a one-word title like "tomorrow" stays a title. `dateIso` is set
+ * only when an explicit date token was found (caller falls back to its default).
+ */
+function peelEventInput(
+  text: string,
+  defStart: number,
+  defEnd: number,
+): { title: string; startMin: number; endMin: number; dateIso?: string; allDay: boolean } {
+  let title = text.trim();
+  let startMin = defStart;
+  let endMin = defEnd;
+  let dateIso: string | undefined;
+
+  // 0) an "allday" / "all-day" keyword anywhere → date-only event (time ignored)
+  let allDay = false;
+  if (/(^|\s)(all-?day)(\s|$)/i.test(title)) {
+    allDay = true;
+    title = title.replace(/(^|\s)all-?day(\s|$)/i, " ").replace(/\s+/g, " ").trim();
+  }
+
+  // 1) trailing time token
+  const mt = title.match(/\s(\S+)$/);
+  const ttok = mt?.[1];
+  if (mt && mt.index !== undefined && ttok) {
+    const tb = parseTimeBlockShortcut(ttok);
+    if (tb && tb.endMin > tb.startMin) {
+      const rest = title.slice(0, mt.index).trim();
+      if (rest) {
+        title = rest;
+        startMin = tb.startMin;
+        endMin = tb.endMin;
+      }
+    }
+  }
+  // 2) trailing date token (on what's left)
+  const md = title.match(/\s(\S+)$/);
+  const dtok = md?.[1];
+  if (md && md.index !== undefined && dtok) {
+    const d = parseDateShortcut(dtok);
+    if (typeof d === "string") {
+      const rest = title.slice(0, md.index).trim();
+      if (rest) {
+        title = rest;
+        dateIso = d;
+      }
+    }
+  }
+  return { title, startMin, endMin, dateIso, allDay };
+}
+
+/** Short "Mon 10 Jun" style label for an ISO date, for modal titles. */
+function shortDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
+  if (!y || !m || !d) return iso;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${d} ${months[m - 1]}`;
+}
+
+/**
  * Two-step "new Google Calendar event" modal. Step 1: a title+time `<input>`
- * (time prefilled from the clicked slot; append `HH:MM-HH:MM` to override).
+ * (time prefilled from the clicked slot; append `HH:MM-HH:MM` to override, and
+ * a date token like `tomorrow` / `2026-06-10` to change the day).
  * Step 2: a non-input calendar list navigated via handleKey (no input focused),
  * preselected to the configured default. See `openEventModal` / `confirmEventPicker`.
  */
@@ -288,26 +355,12 @@ function EventModal(props: { store: TuiStore }) {
   function submit(text: string) {
     const p = picker();
     if (!p) return;
-    const trimmed = text.trim();
-    let title = trimmed;
-    let startMin = p.startMin;
-    let endMin = p.endMin;
-    // Peel a trailing time token: "Standup 9:00-9:30" / "Lunch 12-13".
-    const m = trimmed.match(/\s(\S+)$/);
-    const tok = m?.[1];
-    if (m && m.index !== undefined && tok) {
-      const tb = parseTimeBlockShortcut(tok);
-      if (tb && tb.endMin > tb.startMin) {
-        title = trimmed.slice(0, m.index).trim();
-        startMin = tb.startMin;
-        endMin = tb.endMin;
-      }
-    }
+    const { title, startMin, endMin, dateIso, allDay } = peelEventInput(text, p.startMin, p.endMin);
     if (!title) {
       setError("Title required");
       return;
     }
-    void props.store.advanceEventToStep2(title, startMin, endMin);
+    void props.store.advanceEventToStep2(title, startMin, endMin, dateIso, allDay);
   }
 
   return (
@@ -317,7 +370,7 @@ function EventModal(props: { store: TuiStore }) {
         fallback={
           <DialogShell
             title="New event"
-            hint={`${formatHm(picker()!.startMin)}-${formatHm(picker()!.endMin)} · append HH:MM-HH:MM to change · Enter add · Esc cancel`}
+            hint={`${formatHm(picker()!.startMin)}-${formatHm(picker()!.endMin)} · add a time, a date (tm · +3 · 2026-06-10), or "allday" · Enter add · Esc`}
           >
             <input
               focused
@@ -337,7 +390,7 @@ function EventModal(props: { store: TuiStore }) {
         }
       >
         <DialogShell
-          title={`Calendar · ${formatHm(picker()!.startMin)}-${formatHm(picker()!.endMin)}`}
+          title={`Calendar · ${shortDate(picker()!.dateIso)} ${picker()!.allDay ? "all day" : `${formatHm(picker()!.startMin)}-${formatHm(picker()!.endMin)}`}`}
           hint="j/k choose · Enter create · Esc cancel"
         >
           <For each={picker()!.cals}>
@@ -387,33 +440,19 @@ function EventEditModal(props: { store: TuiStore }) {
       props.store.closeModal();
       return;
     }
-    const trimmed = text.trim();
-    let title = trimmed;
-    let startMin = s.startMin;
-    let endMin = s.endMin;
-    // Peel a trailing time token: "Standup 9:00-9:30" / "Lunch 12-13".
-    const m = trimmed.match(/\s(\S+)$/);
-    const tok = m?.[1];
-    if (m && m.index !== undefined && tok) {
-      const tb = parseTimeBlockShortcut(tok);
-      if (tb && tb.endMin > tb.startMin) {
-        title = trimmed.slice(0, m.index).trim();
-        startMin = tb.startMin;
-        endMin = tb.endMin;
-      }
-    }
+    const { title, startMin, endMin, dateIso } = peelEventInput(text, s.startMin, s.endMin);
     if (!title) {
       setError("Title required");
       return;
     }
-    void props.store.confirmEventEdit(title, startMin, endMin);
+    void props.store.confirmEventEdit(title, startMin, endMin, dateIso);
   }
 
   return (
     <Show when={sel()}>
       <DialogShell
-        title="Edit event"
-        hint="append HH:MM-HH:MM to change the time · Enter save · Esc cancel"
+        title={`Edit event · ${shortDate(sel()!.dateIso)}`}
+        hint="change title, HH:MM-HH:MM, and/or a date (tm · +3 · lun · 2026-06-10) · Enter save · Esc"
       >
         <input
           focused
@@ -789,6 +828,7 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  \\                  Jump back to today\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nAgenda (timeline) scheduling\n"}</span>
         <span style={{ fg: T.text }}>{"  n / click slot     New Google Calendar event (needs: calendar-setup google --write)\n"}</span>
+        <span style={{ fg: T.text }}>{"                     append date+time: Lunch tomorrow 12-13 · Review 2026-06-10 15-16 · Holiday 25-12 allday\n"}</span>
         <span style={{ fg: T.text }}>{"  click an event     Select an editable Google event — then e edit · d delete · Esc\n"}</span>
         <span style={{ fg: T.text }}>{"  c (any zone)       Toggle ARM MODE — then click a task, click a slot, repeat\n"}</span>
         <span style={{ fg: T.text }}>{"  click empty row    Place the armed task here (30-min block, or move if it has one)\n"}</span>

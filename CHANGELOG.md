@@ -5,6 +5,24 @@ All notable changes to **tuiboard** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-06-04
+
+### Added
+- **Set an event's date from the Agenda modal.** When creating or editing a
+  Google Calendar event you can now append a date token to the title — `t` /
+  `tm` / `+3` / `lun` / `2026-06-10`, the same shortcuts as task scheduling — so
+  you're no longer limited to the day the Agenda is showing. Natural order is
+  `Title [date] HH:MM-HH:MM` (e.g. `Lunch tomorrow 12-13`); without a date token
+  it still defaults to the viewed day. On edit, a date token moves the event to
+  another day.
+- **All-day events now show in the Agenda.** Previously skipped, all-day events
+  (Google and Microsoft) render as a chip strip at the top of the Agenda — like
+  Google Calendar's all-day band — instead of being dropped.
+- **Create all-day events from the Agenda.** Add `allday` (or `all-day`) anywhere
+  in the new-event title — e.g. `Holiday 2026-12-25 allday` — to create a
+  date-only Google event instead of a timed one. It appears in the top chip
+  strip. (Editing all-day events isn't supported; create only.)
+
 ## [0.8.0] - 2026-06-03
 
 ### Added
@@ -134,6 +152,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.8.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.1
 [0.8.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.0
 [0.7.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.3
 [0.7.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.2

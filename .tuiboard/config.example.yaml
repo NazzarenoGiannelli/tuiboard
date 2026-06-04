@@ -65,8 +65,9 @@ archive_column: Archive
 # Optional: overlay read-only calendar events on the Agenda (the 24h timeline).
 # Connect a provider with `tuiboard calendar-setup google` / `... microsoft`,
 # which opens the auth flow and prints the exact block to paste here. Bring your
-# own credentials — nothing is hosted, nothing leaves your machine. All-day
-# events are skipped; each calendar keeps its own color. Paths support `~`.
+# own credentials — nothing is hosted, nothing leaves your machine. Timed events
+# render on the 24h grid; all-day events show as chips at the top. Each calendar
+# keeps its own color. Paths support `~`.
 #
 # To CREATE / EDIT / DELETE events (not just read), re-auth with:
 # calendar-setup google --write. Then press `n` / click an empty slot to create;

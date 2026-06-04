@@ -115,9 +115,13 @@ export function TimelineView(props: TimelineViewProps) {
   });
 
   // Read-only calendar events (Google / Microsoft), merged into the grid for
-  // display only — not cursor-navigable, not editable.
+  // display only — not cursor-navigable. Timed events go on the 24h grid;
+  // all-day events are pulled out into a chip strip at the top (no time slot).
   const calEntries = createMemo(() =>
-    buildCalendarEntries(props.store.calendar.events()),
+    buildCalendarEntries(props.store.calendar.events().filter((e) => !e.allDay)),
+  );
+  const allDayEvents = createMemo(() =>
+    props.store.calendar.events().filter((e) => e.allDay),
   );
 
   // Recompute the row map every minute so the "now" marker stays current.
@@ -405,9 +409,32 @@ export function TimelineView(props: TimelineViewProps) {
         </text>
       </Show>
 
-      {/* The 24h grid now owns the whole panel — no sticky section above
-          it. Tasks are armed for scheduling from the board / planner panel
-          via the `C` shortcut, then placed by clicking a slot here. */}
+      {/* All-day events ride in a chip strip above the 24h grid (like Google
+          Calendar's top band) — they have no time slot to sit in. Display only. */}
+      <Show when={allDayEvents().length > 0}>
+        <box style={{ flexDirection: "row", height: 1 }}>
+          <text wrapMode="none" style={{ flexShrink: 0 }}>
+            <span style={{ fg: T.textDim }}>{"▦ "}</span>
+          </text>
+          <For each={allDayEvents().slice(0, 8)}>
+            {(e) => (
+              <text wrapMode="none" truncate style={{ flexShrink: 1, marginRight: 1 }}>
+                <span style={{ fg: e.color }}>{"●"}</span>
+                <span style={{ fg: T.text }}>{" " + tailTruncate(e.title, 18)}</span>
+              </text>
+            )}
+          </For>
+          <Show when={allDayEvents().length > 8}>
+            <text wrapMode="none" style={{ flexShrink: 0 }}>
+              <span style={{ fg: T.textDim }}>{`+${allDayEvents().length - 8}`}</span>
+            </text>
+          </Show>
+        </box>
+      </Show>
+
+      {/* The 24h grid owns the rest of the panel. Tasks are armed for scheduling
+          from the board / planner panel via the `C` shortcut, then placed by
+          clicking a slot here. */}
       <scrollbox
         ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}
         style={{

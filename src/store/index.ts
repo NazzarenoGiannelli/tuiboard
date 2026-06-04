@@ -95,6 +95,8 @@ export interface EventPicker {
   dateIso: string;
   startMin: number;
   endMin: number;
+  /** Create as a date-only all-day event (start/end times ignored). */
+  allDay?: boolean;
   cals: WritableCalendar[];
 }
 
@@ -1137,7 +1139,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   /** Step 1 → step 2: stash the parsed title + time, load calendars if needed,
    *  preselect the default, and either show the picker or (single calendar)
    *  create immediately. */
-  async function advanceEventToStep2(title: string, startMin: number, endMin: number): Promise<void> {
+  async function advanceEventToStep2(title: string, startMin: number, endMin: number, dateIso?: string, allDay?: boolean): Promise<void> {
     const g = config.calendars?.google;
     if (!g || !state.ui.eventPicker) { closeModal(); return; }
     let cals = state.ui.eventPicker.cals;
@@ -1154,6 +1156,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       p.title = title;
       p.startMin = startMin;
       p.endMin = endMin;
+      if (dateIso) p.dateIso = dateIso; // explicit date token overrides the viewed day
+      p.allDay = !!allDay;
       p.cals = cals;
       p.sel = idx < 0 ? 0 : idx;
       p.step = 2;
@@ -1176,6 +1180,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     if (!p || !g) { closeModal(); return; }
     const calendarId = p.cals[p.sel]?.id ?? g.defaultCalendar ?? "primary";
     const title = p.title.trim() || "(busy)";
+    const allDay = !!p.allDay;
     closeModal();
     const r = await createGoogleEvent(g, {
       calendarId,
@@ -1183,10 +1188,11 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       dateIso: p.dateIso,
       startMin: p.startMin,
       endMin: p.endMin,
+      allDay,
     });
     if (r.ok) {
       calendarStore.refresh(true);
-      flashBanner("info", `📅 Event created: ${title}`);
+      flashBanner("info", allDay ? `📅 All-day event created: ${title}` : `📅 Event created: ${title}`);
     } else {
       flashBanner("error", `Create failed: ${r.error}`);
     }
@@ -1218,8 +1224,9 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setTimeout(() => openModal({ kind: "event-edit" }), 0);
   }
 
-  /** Save the edited title/time to the selected event, refresh, close. */
-  async function confirmEventEdit(title: string, startMin: number, endMin: number): Promise<void> {
+  /** Save the edited title/time/date to the selected event, refresh, close.
+   *  `dateIso` (optional) moves the event to another day; defaults to its day. */
+  async function confirmEventEdit(title: string, startMin: number, endMin: number, dateIso?: string): Promise<void> {
     const sel = state.ui.selectedCalEvent;
     const g = config.calendars?.google;
     if (!sel || !g) { closeModal(); return; }
@@ -1228,7 +1235,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       calendarId: sel.calendarId,
       eventId: sel.eventId,
       title: title.trim() || sel.title,
-      dateIso: sel.dateIso,
+      dateIso: dateIso ?? sel.dateIso,
       startMin,
       endMin,
     });

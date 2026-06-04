@@ -179,12 +179,14 @@ at all — handy if you don't use Claude Code and don't want tuiboard reading
 
 ## Calendars (Agenda overlay)
 
-The **Agenda** zone (the 24h timeline) can overlay read-only events from Google
-Calendar and Microsoft 365 alongside your time-blocked tasks — rendered as
-colored `📅` blocks you can't edit, so the day's real shape is visible at a
-glance. All-day events are skipped; each calendar keeps its own color. Events
-are cached 30 min on disk and refreshed every 5 min. **Bring your own
-credentials** — there's nothing to sign up for and nothing leaves your machine.
+The **Agenda** zone (the 24h timeline) can overlay events from Google Calendar
+and Microsoft 365 alongside your time-blocked tasks — timed events render as
+colored `📅` blocks on the grid, and all-day events ride in a chip strip at the
+top (like Google Calendar's all-day band). The day's real shape is visible at a
+glance. Each calendar keeps its own color. Events are cached 30 min on disk and
+refreshed every 5 min. **Bring your own credentials** — there's nothing to sign
+up for and nothing leaves your machine. (Reading is the default; opt into
+creating/editing events below.)
 
 Connect a calendar with the built-in setup command:
 
@@ -253,15 +255,29 @@ tuiboard calendar-setup google --write
 ```
 
 **Create** — in the Agenda zone, press **`n`** (or **click an empty time slot**)
-to open the new-event modal: type a title (append `HH:MM-HH:MM` to change the
-time), press Enter, pick the target calendar with `j`/`k`, Enter to create. Only
-calendars you can write to (owner/writer) show in the picker.
+to open the new-event modal: type a title, press Enter, pick the target calendar
+with `j`/`k`, Enter to create. Only calendars you can write to (owner/writer)
+show in the picker. Append tokens to the title to set the **time** and **date**:
+
+```
+Standup 9:00-9:30            # today (or the viewed day), 09:00–09:30
+Lunch tomorrow 12-13         # tomorrow, 12:00–13:00
+Review 2026-06-10 15-16      # that date, 15:00–16:00
+Call +3 16:00-16:30          # in 3 days · lun = next Monday also works
+Holiday 2026-12-25 allday    # an all-day event (no time)
+```
+
+The date defaults to whichever day the Agenda is showing; an explicit date token
+(`t` / `tm` / `+N` / weekday / `YYYY-MM-DD`) overrides it. The time is taken from
+the clicked slot, or `HH:MM-HH:MM`. Add **`allday`** (or `all-day`) anywhere in
+the title to create an all-day event instead — it lands in the top chip strip.
 
 **Edit / delete** — **click an existing event** in the Agenda to select it (only
 events on writable calendars can be selected; read-only ones just say so). Then:
 
 - **`e`** (or Enter) opens the edit modal, prefilled with the title and time —
-  change either (`Title HH:MM-HH:MM`) and Enter to save.
+  change the title, time, and/or date (same `Title [date] HH:MM-HH:MM` syntax)
+  and Enter to save. A date token moves the event to another day.
 - **`d`** deletes it (with a confirm).
 - **`Esc`** deselects.
 

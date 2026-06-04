@@ -3,7 +3,7 @@
  *
  * Date input shortcuts:
  *   t                 → today
- *   tm | tom          → tomorrow
+ *   m | tm | tom      → tomorrow  (m matches the board's `m` = tomorrow key)
  *   -N                → N days ago
  *   +N                → N days ahead
  *   lun/mar/.../dom   → next weekday (Italian short)
@@ -47,7 +47,8 @@ export function parseDateShortcut(input: string): string | undefined | null {
   if (s === "-") return undefined;
 
   if (s === "t" || s === "today" || s === "oggi") return isoToday();
-  if (s === "tm" || s === "tom" || s === "tomorrow" || s === "domani") return isoTomorrow();
+  // `m` mirrors the board's `m` = tomorrow key; `tm`/`tom`/… kept as aliases.
+  if (s === "m" || s === "tm" || s === "tom" || s === "tomorrow" || s === "domani") return isoTomorrow();
 
   // Relative ±N
   const rel = s.match(/^([+-])(\d+)$/);
@@ -167,7 +168,7 @@ export interface QuickAddResult {
  * Parse a free-form quick-add string. Recognized tokens:
  *   @name        → assignee
  *   #tag         → tag
- *   t, tm, +N    → scheduled date shortcut
+ *   t, m, +N     → scheduled date shortcut (m = tomorrow, matches the board key)
  *   YYYY-MM-DD   → scheduled date literal
  *   HH:MM-HH:MM  → time block (also sets scheduled to today if missing)
  *   9-11         → 09:00-11:00 time block
@@ -220,10 +221,10 @@ export function parseQuickAdd(input: string): QuickAddResult {
       }
       continue;
     }
-    // Date: t, tm, +N, YYYY-MM-DD
+    // Date: t, m/tm, +N, YYYY-MM-DD
     const lower = tok.toLowerCase();
     if (
-      lower === "t" || lower === "tm" || lower === "tom" ||
+      lower === "t" || lower === "m" || lower === "tm" || lower === "tom" ||
       lower === "today" || lower === "tomorrow" ||
       lower === "oggi" || lower === "domani" ||
       /^[+-]\d+$/.test(lower) ||

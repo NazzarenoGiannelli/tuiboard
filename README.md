@@ -261,14 +261,15 @@ show in the picker. Append tokens to the title to set the **time** and **date**:
 
 ```
 Standup 9:00-9:30            # today (or the viewed day), 09:00–09:30
-Lunch tomorrow 12-13         # tomorrow, 12:00–13:00
+Lunch m 12-13                # tomorrow (m), 12:00–13:00
 Review 2026-06-10 15-16      # that date, 15:00–16:00
 Call +3 16:00-16:30          # in 3 days · lun = next Monday also works
 Holiday 2026-12-25 allday    # an all-day event (no time)
 ```
 
 The date defaults to whichever day the Agenda is showing; an explicit date token
-(`t` / `tm` / `+N` / weekday / `YYYY-MM-DD`) overrides it. The time is taken from
+(`t` / `m` / `+N` / weekday / `YYYY-MM-DD` — the same `t`/`m` = today/tomorrow as
+the board keys) overrides it. The time is taken from
 the clicked slot, or `HH:MM-HH:MM`. Add **`allday`** (or `all-day`) anywhere in
 the title to create an all-day event instead — it lands in the top chip strip.
 

@@ -5,6 +5,17 @@ All notable changes to **tuiboard** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-06-04
+
+### Changed
+- **Consistent date shortcuts everywhere.** `m` now means "tomorrow" in every
+  date input (the schedule modal, the new-event/edit modals, and quick-add),
+  matching the board's `m` = tomorrow key — so `t`/`m` = today/tomorrow whether
+  you press them on a card or type them into a field. `tm`/`tom`/`tomorrow`/
+  `domani` still work as aliases. Hints and the help screen updated to lead with
+  `m`. (Audit of all shortcut surfaces found this was the only divergence; the
+  rest — `t`, `-`/empty to clear, weekdays, ±N — were already aligned.)
+
 ## [0.8.1] - 2026-06-04
 
 ### Added
@@ -152,6 +163,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.8.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.2
 [0.8.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.1
 [0.8.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.0
 [0.7.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.7.3

@@ -139,7 +139,7 @@ function AddModal(props: { store: TuiStore; columnIndex: number }) {
   return (
     <DialogShell
       title="New task"
-      hint="Quick syntax: @assignee #tag t/tm/+N HH:MM-HH:MM 🔺   ·   Enter to add, Esc to cancel"
+      hint="Quick syntax: @assignee #tag t/m/+N HH:MM-HH:MM 🔺   ·   Enter to add, Esc to cancel"
       width={70}
     >
       <input
@@ -195,7 +195,7 @@ function ScheduleModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiS
   function submit(text: string) {
     const d = parseDateShortcut(text);
     if (d === null) {
-      setError(`Cannot parse "${text}". Try: t · tm · +3 · lun · 2026-06-15`);
+      setError(`Cannot parse "${text}". Try: t · m · +3 · lun · 2026-06-15`);
       return;
     }
     const n = props.store.applyToMarkedOr(props.modal.ref, (r) =>
@@ -208,7 +208,7 @@ function ScheduleModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiS
   return (
     <DialogShell
       title={markedCount > 1 ? `Schedule · ${markedCount} tasks` : "Schedule"}
-      hint="t = today · tm = tomorrow · +3 = in 3 days · lun = next Monday · 2026-06-15 · empty/-clear · Esc to cancel"
+      hint="t = today · m = tomorrow · +3 = in 3 days · lun = next Monday · 2026-06-15 · empty/-clear · Esc to cancel"
       width={70}
     >
       <input
@@ -370,7 +370,7 @@ function EventModal(props: { store: TuiStore }) {
         fallback={
           <DialogShell
             title="New event"
-            hint={`${formatHm(picker()!.startMin)}-${formatHm(picker()!.endMin)} · add a time, a date (tm · +3 · 2026-06-10), or "allday" · Enter add · Esc`}
+            hint={`${formatHm(picker()!.startMin)}-${formatHm(picker()!.endMin)} · add a time, a date (m · +3 · 2026-06-10), or "allday" · Enter add · Esc`}
           >
             <input
               focused
@@ -452,7 +452,7 @@ function EventEditModal(props: { store: TuiStore }) {
     <Show when={sel()}>
       <DialogShell
         title={`Edit event · ${shortDate(sel()!.dateIso)}`}
-        hint="change title, HH:MM-HH:MM, and/or a date (tm · +3 · lun · 2026-06-10) · Enter save · Esc"
+        hint="change title, HH:MM-HH:MM, and/or a date (m · +3 · lun · 2026-06-10) · Enter save · Esc"
       >
         <input
           focused
@@ -813,7 +813,7 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  Enter             Toggle done\n"}</span>
         <span style={{ fg: T.text }}>{"  o                 Open detail view\n"}</span>
         <span style={{ fg: T.text }}>{"  e                 Edit task text\n"}</span>
-        <span style={{ fg: T.text }}>{"  s                 Schedule date modal (t/tm/+N/lun/YYYY-MM-DD)\n"}</span>
+        <span style={{ fg: T.text }}>{"  s                 Schedule date modal (t/m/+N/lun/YYYY-MM-DD — same t/m as the board)\n"}</span>
         <span style={{ fg: T.text }}>{"  t                 Set scheduled = today\n"}</span>
         <span style={{ fg: T.text }}>{"  m                 Set scheduled = tomorrow\n"}</span>
         <span style={{ fg: T.text }}>{"  .                 Schedule now — time block at next 15-min slot (30min)\n"}</span>

@@ -12,6 +12,10 @@
  * root layout component changes.
  */
 
+// FIRST import on purpose: paints the boot splash before the heavy imports
+// (OpenTUI) and the ~600ms store build below run. See ui/splash-boot.ts.
+import "~/ui/splash-boot";
+
 import { createMemo } from "solid-js";
 import { render, useKeyboard } from "@opentui/solid";
 
@@ -148,6 +152,20 @@ function App() {
       <BottomBar store={store} />
     </box>
   );
+}
+
+// Signal the launcher (if we were spawned by the `tuiboard` bin) that we're
+// about to take the screen, so it stops animating the splash a beat before
+// OpenTUI enters the alternate buffer — otherwise its writes would land on the
+// dashboard. The short delay gives the launcher's poll a cycle to notice.
+if (process.env.TUIBOARD_READY_FLAG) {
+  try {
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(process.env.TUIBOARD_READY_FLAG, "1");
+    await new Promise((r) => setTimeout(r, 70));
+  } catch {
+    // Cosmetic only — never block startup on the splash handshake.
+  }
 }
 
 await render(() => <App />, { useMouse: true });

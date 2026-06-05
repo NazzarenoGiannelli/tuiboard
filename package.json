@@ -1,6 +1,6 @@
 {
   "name": "tuiboard",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "description": "Terminal kanban for markdown task boards, with optional Today/Tomorrow planner, 24h agenda + calendar overlay, and a live Claude Code agent view. Use only the panels you want.",
   "type": "module",
   "license": "MIT",

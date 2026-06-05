@@ -437,6 +437,9 @@ session (until the next terminal resize).
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
+- **v0.8** — write to Google Calendar from the Agenda: create, edit, and delete
+  events (opt-in), set their date and time in the modal, plus all-day events in
+  the top strip, consistent `t`/`m` date shortcuts, and a boot splash.
 - **v0.7** — configurable zones: turn the planner, agenda, or agents view off
   (or start it collapsed) via the `zones:` config, so tuiboard can be a pure
   kanban, kanban + calendar, or any mix.

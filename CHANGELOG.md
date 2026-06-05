@@ -5,6 +5,17 @@ All notable changes to **tuiboard** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.3] - 2026-06-04
+
+### Added
+- **Boot splash.** Launching tuiboard now paints a `tuiboard` wordmark (FIGlet
+  "Rectangles", in the tool's light-yellow accent) the instant the process
+  starts, so the ~1s cold start (runtime + store build + first calendar/agents
+  read) isn't a blank terminal. The launcher animates the booting dots while the
+  dashboard process loads in parallel, then hands the screen over cleanly — no
+  startup time added. Set `TUIBOARD_NO_SPLASH=1` to disable; it also no-ops when
+  output isn't a TTY or the terminal is tiny.
+
 ## [0.8.2] - 2026-06-04
 
 ### Changed
@@ -163,6 +174,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.8.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.3
 [0.8.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.2
 [0.8.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.1
 [0.8.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.0

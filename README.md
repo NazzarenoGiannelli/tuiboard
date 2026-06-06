@@ -451,6 +451,15 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
   responsive layout. Tested on Windows with WezTerm; Linux/macOS should
   work via the same OpenTUI binaries (untested).
 
+## Contributing
+
+Contributions are welcome — bugs, docs, fixes, features, or just trying it on a
+platform I haven't tested. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the
+project layout, and the checks to run, and the [good first issues][gfi] for a
+place to start.
+
+[gfi]: https://github.com/NazzarenoGiannelli/tuiboard/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

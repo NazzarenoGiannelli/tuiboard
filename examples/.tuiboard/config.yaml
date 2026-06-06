@@ -1,0 +1,32 @@
+# tuiboard DEMO vault — fictional data for screencasts / screenshots, so a
+# recording never shows real tasks, clients, or session names.
+#
+# Launch it from this folder (tuiboard walks up to find this config):
+#   cd examples && tuiboard
+#
+# Paths are relative to this file, so it works on any machine / clone.
+
+boards:
+  - path: ./Work.md
+    name: Work
+  - path: ./Personal.md
+    name: Personal
+  - path: ./Home.md
+    name: Home
+
+assignees: [Sam, Alex, Jordan]
+done_column: Done
+archive_column: Archive
+
+# The agents view reads ~/.claude and would show YOUR real Claude Code session
+# names — kept OFF here so the demo can never leak them. Flip to `on` only when
+# the sessions you have running are safe to show on camera.
+zones:
+  planner: on
+  agenda: on
+  agents: off
+
+# No calendars block on purpose: the 24h agenda is populated by the time-blocked
+# tasks above (the ⌚ HH:MM-HH:MM ones scheduled for today), so there's no real
+# calendar account to connect. To also show the calendar overlay on camera,
+# connect a throwaway Google/Microsoft account and add a `calendars:` block.

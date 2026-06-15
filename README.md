@@ -11,7 +11,11 @@ Built with [OpenTUI](https://opentui.com) + SolidJS on Bun. Cross-platform
 the Obsidian Tasks-plugin emoji vocabulary, so they open and edit fine in
 any markdown editor.
 
-![tuiboard — kanban board, Today/Tomorrow panel, 24h agenda with calendar overlay, and live Claude Code agents in one terminal dashboard](docs/screenshot.png)
+![tuiboard demo — the kanban board, Today/Tomorrow planner, 24h agenda with calendar overlay, and live Claude Code agents in one terminal dashboard: moving around the boards, then rescheduling and time-blocking a task so it lands on the agenda](docs/demo.gif)
+
+> Recorded against the bundled [`examples/`](examples/) demo vault. The source
+> [asciinema cast](docs/demo.cast) is also in `docs/` if you'd rather embed the
+> crisp, tiny player.
 
 ## Install
 

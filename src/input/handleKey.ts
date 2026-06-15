@@ -75,6 +75,12 @@ export function handleKey(
       store.closeModal();
       return;
     }
+    // Help modal: j/k (or arrows) scroll its keyboard reference.
+    if (ui.modal.kind === "help") {
+      if (key.name === "j" || key.name === "down") { store.setHelpScroll(ui.helpScroll + 1); return; }
+      if (key.name === "k" || key.name === "up")   { store.setHelpScroll(ui.helpScroll - 1); return; }
+      return;
+    }
     // New-event modal: step 1 typing goes to the <input>; step 2 (no input
     // focused) is the calendar picker, driven here.
     if (ui.modal.kind === "event") {

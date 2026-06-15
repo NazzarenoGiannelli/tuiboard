@@ -185,6 +185,12 @@ export interface UIState {
    * entries and the calendar overlay. Changed with `[` / `]`; `\` resets to 0.
    */
   agendaOffset: number;
+  /**
+   * Vertical scroll position of the help modal, as a block index (0 = top).
+   * `?` opens the help at 0; `j`/`k` step it. The HelpModal component clamps
+   * the upper bound (it knows the block count) and scrolls that block into view.
+   */
+  helpScroll: number;
   view: ViewMode;
   /**
    * Tasks marked for bulk ops (`Space`). Key format:
@@ -278,6 +284,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       grabbing: false,
       armMode: false,
       agendaOffset: 0,
+      helpScroll: 0,
       view: "kanban",
       marked: {},
       filter: "all",
@@ -1108,6 +1115,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   }
 
   function openModal(m: ModalKind): void {
+    // Help always opens scrolled to the top.
+    if (m.kind === "help") setState("ui", "helpScroll", 0);
     setState("ui", "modal", m);
   }
 
@@ -1163,6 +1172,12 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       p.step = 2;
     }));
     if (cals.length === 1) void confirmEventPicker();
+  }
+
+  /** Scroll the help modal by setting its block index (lower-clamped at 0; the
+   *  HelpModal component enforces the upper bound against its block count). */
+  function setHelpScroll(n: number): void {
+    setState("ui", "helpScroll", Math.max(0, n));
   }
 
   /** Move the step-2 calendar selection (wraps). */
@@ -1339,6 +1354,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     closeModal,
     openEventModal,
     advanceEventToStep2,
+    setHelpScroll,
     setEventSel,
     confirmEventPicker,
     selectCalEvent,

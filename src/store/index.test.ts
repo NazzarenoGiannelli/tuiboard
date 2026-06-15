@@ -287,3 +287,25 @@ describe("single-pane mode", () => {
     expect(store.state.ui.banner?.text).toContain("Nothing else fits");
   });
 });
+
+describe("UI helpScroll", () => {
+  it("defaults to 0 on a fresh store", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    expect(store.state.ui.helpScroll).toBe(0);
+  });
+
+  it("setHelpScroll sets the offset and clamps the lower bound at 0", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setHelpScroll(5);
+    expect(store.state.ui.helpScroll).toBe(5);
+    store.setHelpScroll(-3);
+    expect(store.state.ui.helpScroll).toBe(0);
+  });
+
+  it("opening the help modal resets helpScroll to 0", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setHelpScroll(7);
+    store.openModal({ kind: "help" });
+    expect(store.state.ui.helpScroll).toBe(0);
+  });
+});

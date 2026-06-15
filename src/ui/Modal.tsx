@@ -11,7 +11,7 @@
  * checks `ui.modal` first and bails if set (only Escape passes through).
  */
 
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 
 import { isTask } from "~/parser/markdown";
 import {
@@ -19,7 +19,7 @@ import {
   parseQuickAdd,
   parseTimeBlockShortcut,
 } from "~/store/parsers";
-import { ATTR, T } from "~/ui/glyphs";
+import { ATTR, T, cellWidth } from "~/ui/glyphs";
 import { AGENDA_WIDTH } from "~/ui/layout";
 import { formatHm } from "~/store/timeline";
 import type { TuiStore } from "~/store/index";
@@ -795,69 +795,231 @@ function truncate(s: string, n: number): string {
 
 // ─── Help ────────────────────────────────────────────────────────────────────
 
+/**
+ * Width (cells) of the key column. The longest key label is 15 cells
+ * ("shift+click row"), so 16 leaves room for a one-cell separator and keeps
+ * every description starting at the same column. `cellWidth` (not `.length`)
+ * is used so wide arrow/emoji glyphs are budgeted correctly.
+ */
+const HELP_KEYW = 16;
+
+interface HelpSection {
+  emoji: string;
+  title: string;
+  /** Scope note shown dim under the header (kept verbatim from the original). */
+  note?: string;
+  /** [keyLabel, description] pairs — descriptions are verbatim. */
+  rows: [string, string][];
+}
+
+const HELP_SECTIONS: HelpSection[] = [
+  {
+    emoji: "🧭",
+    title: "Navigation",
+    rows: [
+      ["h j k l  ←↑↓→", "Move cursor inside the active zone"],
+      ["Tab", "Next board (kanban zone)"],
+      ["1..9", "Jump to board N"],
+      ["v", "Toggle Today/Tomorrow planner panel focus"],
+      ["Shift-Tab", "Cycle active zone (planner → board → timeline → agents)"],
+      ["F1 / F2 / F3", "Toggle visibility of Planner / Timeline / Agents zones"],
+      ["z", "Zoom active zone (or column) to full screen"],
+      ["r", "Refresh everything (boards from disk, agents, agenda calendar)"],
+    ],
+  },
+  {
+    emoji: "⚙️",
+    title: "Task actions",
+    note: "work in board, planner, AND timeline zones",
+    rows: [
+      ["Enter", "Toggle done"],
+      ["o", "Open detail view"],
+      ["e", "Edit task text"],
+      ["s", "Schedule date modal (t/m/+N/lun/YYYY-MM-DD — same t/m as the board)"],
+      ["t", "Set scheduled = today"],
+      ["m", "Set scheduled = tomorrow"],
+      [".", "Schedule now — time block at next 15-min slot (30min)"],
+      ["b", "Set time block modal"],
+      ["p", "Cycle priority (none → 🔺 → ⏫ → 🔼 → 🔽 → ⏬ → none)"],
+      ["a", "Set assignee"],
+      ["d", "Delete task (with confirm)"],
+      ["X", "Archive task → moves to Archive column"],
+      ["C", "Copy task to clipboard (markdown line)"],
+    ],
+  },
+  {
+    emoji: "📅",
+    title: "Agenda — day navigation",
+    note: "works from any zone",
+    rows: [
+      ["[ / ]", "Previous / next day (tasks + calendar events)"],
+      ["\\", "Jump back to today"],
+    ],
+  },
+  {
+    emoji: "⏰",
+    title: "Agenda — scheduling",
+    rows: [
+      ["n / click slot", "New Google Calendar event (needs: calendar-setup google --write) append date+time: Lunch tomorrow 12-13 · Review 2026-06-10 15-16 · Holiday 25-12 allday"],
+      ["click an event", "Select an editable Google event — then e edit · d delete · Esc"],
+      ["c (any zone)", "Toggle ARM MODE — then click a task, click a slot, repeat"],
+      ["click empty row", "Place the armed task here (30-min block, or move if it has one)"],
+      ["click band", "Arm an existing block (or place the armed task at its start)"],
+      ["shift+click row", "While armed (existing block): resize end to that row"],
+      ["j / k", "While armed: nudge block ±15 min"],
+      ["+ / -", "While armed: resize block end ±15 min"],
+      ["Enter", "While armed: commit + jump to source task"],
+      ["Esc", "Disarm / exit arm mode"],
+    ],
+  },
+  {
+    emoji: "📋",
+    title: "Board-only actions",
+    rows: [
+      ["n", "New task in current column (quick-add syntax)"],
+      ["g", "Grab task — h/l then moves it between columns; g/Esc to drop"],
+      ["f", "Cycle board filter: all → today → overdue → tomorrow → followup"],
+      ["/", "Search task titles — jumps cursor to first match"],
+    ],
+  },
+  {
+    emoji: "🤖",
+    title: "Agents zone",
+    rows: [
+      ["Enter", "Open (resume) the selected session in a new WezTerm tab"],
+      ["o", "Session detail (cwd, branch, last prompts, resume cmd)"],
+    ],
+  },
+  {
+    emoji: "☑️",
+    title: "Multi-select",
+    rows: [
+      ["Space", "Mark / unmark task (cursor stays — mark in any order) Every task action (done/schedule/time block/assign/priority/archive/delete) then applies to ALL marked"],
+      ["Esc", "Clear the selection (when no modal is open)"],
+    ],
+  },
+  {
+    emoji: "📦",
+    title: "Bulk",
+    rows: [["T", "Reset ALL overdue tasks (any board) to today"]],
+  },
+  {
+    emoji: "🌐",
+    title: "Global",
+    rows: [
+      ["Ctrl-Z", "Undo last mutation"],
+      ["?", "This help"],
+      ["q · Ctrl-C", "Quit"],
+    ],
+  },
+];
+
+/**
+ * Flattened render+scroll units: one "header" block per section (carrying its
+ * optional note) followed by one "row" block per shortcut. `ui.helpScroll` is
+ * an index into this list; `j`/`k` step it and the matching `<box id>` is
+ * scrolled into view.
+ */
+type HelpBlock =
+  | { kind: "header"; emoji: string; title: string; note?: string }
+  | { kind: "row"; keyLabel: string; desc: string };
+
+const HELP_BLOCKS: HelpBlock[] = HELP_SECTIONS.flatMap((s) => [
+  { kind: "header", emoji: s.emoji, title: s.title, note: s.note } as HelpBlock,
+  ...s.rows.map(([keyLabel, desc]) => ({ kind: "row", keyLabel, desc }) as HelpBlock),
+]);
+
+/** Dim dot leader that pads `key` out to the fixed key column (with one leading
+ *  separator space). Empty for keys that already fill the column. */
+function helpDots(key: string): string {
+  const n = HELP_KEYW - cellWidth(key) - 1;
+  return n > 0 ? "·".repeat(n) : "";
+}
+
+/** Minimal structural view of OpenTUI's <scrollbox> ref (mirrors TimelineView). */
+interface ScrollBoxLike {
+  scrollChildIntoView(id: string): void;
+}
+
+/**
+ * Keyboard reference.
+ *
+ * Each shortcut is a SINGLE full-width `<text wrapMode="word">` (key + dim dot
+ * leader + description as spans). A single full-width text manages its own
+ * wrapped height correctly; a wrapping `<text>` placed as a flex *sibling* in a
+ * row does NOT (the next row overpaints it — the "bleed-into-neighbor" glitch
+ * documented in TaskRow). When a description wraps it returns to column 0 in the
+ * dim description color, visually distinct from the accent key.
+ *
+ * The whole list lives in a `<scrollbox>` so it never clips on short terminals;
+ * `j`/`k` move `ui.helpScroll` and the focused block is scrolled into view.
+ */
 function HelpModal(props: { store: TuiStore }) {
-  void props;
+  let scrollBoxRef: ScrollBoxLike | undefined;
+
+  createEffect(() => {
+    const raw = props.store.state.ui.helpScroll;
+    const clamped = Math.max(0, Math.min(raw, HELP_BLOCKS.length - 1));
+    if (clamped !== raw) {
+      props.store.setHelpScroll(clamped);
+      return; // effect re-runs with the corrected value
+    }
+    scrollBoxRef?.scrollChildIntoView(`help-b${clamped}`);
+  });
+
   return (
-    <DialogShell title="tuiboard — keyboard reference" hint="Esc/? to close" width={92}>
-      <text>
-        <span style={{ fg: T.textDim }}>{"Navigation\n"}</span>
-        <span style={{ fg: T.text }}>{"  h j k l  ←↑↓→     Move cursor inside the active zone\n"}</span>
-        <span style={{ fg: T.text }}>{"  Tab               Next board (kanban zone)\n"}</span>
-        <span style={{ fg: T.text }}>{"  1..9              Jump to board N\n"}</span>
-        <span style={{ fg: T.text }}>{"  v                 Toggle Today/Tomorrow planner panel focus\n"}</span>
-        <span style={{ fg: T.text }}>{"  Shift-Tab         Cycle active zone (planner → board → timeline → agents)\n"}</span>
-        <span style={{ fg: T.text }}>{"  F1 / F2 / F3      Toggle visibility of Planner / Timeline / Agents zones\n"}</span>
-        <span style={{ fg: T.text }}>{"  z                 Zoom active zone (or column) to full screen\n"}</span>
-        <span style={{ fg: T.text }}>{"  r                 Refresh everything (boards from disk, agents, agenda calendar)\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nTask actions (work in board, planner, AND timeline zones)\n"}</span>
-        <span style={{ fg: T.text }}>{"  Enter             Toggle done\n"}</span>
-        <span style={{ fg: T.text }}>{"  o                 Open detail view\n"}</span>
-        <span style={{ fg: T.text }}>{"  e                 Edit task text\n"}</span>
-        <span style={{ fg: T.text }}>{"  s                 Schedule date modal (t/m/+N/lun/YYYY-MM-DD — same t/m as the board)\n"}</span>
-        <span style={{ fg: T.text }}>{"  t                 Set scheduled = today\n"}</span>
-        <span style={{ fg: T.text }}>{"  m                 Set scheduled = tomorrow\n"}</span>
-        <span style={{ fg: T.text }}>{"  .                 Schedule now — time block at next 15-min slot (30min)\n"}</span>
-        <span style={{ fg: T.text }}>{"  b                 Set time block modal\n"}</span>
-        <span style={{ fg: T.text }}>{"  p                 Cycle priority (none → 🔺 → ⏫ → 🔼 → 🔽 → ⏬ → none)\n"}</span>
-        <span style={{ fg: T.text }}>{"  a                 Set assignee\n"}</span>
-        <span style={{ fg: T.text }}>{"  d                 Delete task (with confirm)\n"}</span>
-        <span style={{ fg: T.text }}>{"  X                 Archive task → moves to Archive column\n"}</span>
-        <span style={{ fg: T.text }}>{"  C                 Copy task to clipboard (markdown line)\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nAgenda (timeline) day navigation — works from any zone\n"}</span>
-        <span style={{ fg: T.text }}>{"  [ / ]              Previous / next day (tasks + calendar events)\n"}</span>
-        <span style={{ fg: T.text }}>{"  \\                  Jump back to today\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nAgenda (timeline) scheduling\n"}</span>
-        <span style={{ fg: T.text }}>{"  n / click slot     New Google Calendar event (needs: calendar-setup google --write)\n"}</span>
-        <span style={{ fg: T.text }}>{"                     append date+time: Lunch tomorrow 12-13 · Review 2026-06-10 15-16 · Holiday 25-12 allday\n"}</span>
-        <span style={{ fg: T.text }}>{"  click an event     Select an editable Google event — then e edit · d delete · Esc\n"}</span>
-        <span style={{ fg: T.text }}>{"  c (any zone)       Toggle ARM MODE — then click a task, click a slot, repeat\n"}</span>
-        <span style={{ fg: T.text }}>{"  click empty row    Place the armed task here (30-min block, or move if it has one)\n"}</span>
-        <span style={{ fg: T.text }}>{"  click band         Arm an existing block (or place the armed task at its start)\n"}</span>
-        <span style={{ fg: T.text }}>{"  shift+click row    While armed (existing block): resize end to that row\n"}</span>
-        <span style={{ fg: T.text }}>{"  j / k              While armed: nudge block ±15 min\n"}</span>
-        <span style={{ fg: T.text }}>{"  + / -              While armed: resize block end ±15 min\n"}</span>
-        <span style={{ fg: T.text }}>{"  Enter              While armed: commit + jump to source task\n"}</span>
-        <span style={{ fg: T.text }}>{"  Esc                Disarm / exit arm mode\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nBoard-only actions\n"}</span>
-        <span style={{ fg: T.text }}>{"  n                 New task in current column (quick-add syntax)\n"}</span>
-        <span style={{ fg: T.text }}>{"  g                 Grab task — h/l then moves it between columns; g/Esc to drop\n"}</span>
-        <span style={{ fg: T.text }}>{"  f                 Cycle board filter: all → today → overdue → tomorrow → followup\n"}</span>
-        <span style={{ fg: T.text }}>{"  /                 Search task titles — jumps cursor to first match\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nAgents zone\n"}</span>
-        <span style={{ fg: T.text }}>{"  Enter             Open (resume) the selected session in a new WezTerm tab\n"}</span>
-        <span style={{ fg: T.text }}>{"  o                 Session detail (cwd, branch, last prompts, resume cmd)\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nMulti-select\n"}</span>
-        <span style={{ fg: T.text }}>{"  Space             Mark / unmark task (cursor stays — mark in any order)\n"}</span>
-        <span style={{ fg: T.text }}>{"                    Every task action (done/schedule/time block/assign/\n"}</span>
-        <span style={{ fg: T.text }}>{"                    priority/archive/delete) then applies to ALL marked\n"}</span>
-        <span style={{ fg: T.text }}>{"  Esc               Clear the selection (when no modal is open)\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nBulk\n"}</span>
-        <span style={{ fg: T.text }}>{"  T                 Reset ALL overdue tasks (any board) to today\n"}</span>
-        <span style={{ fg: T.textDim }}>{"\nGlobal\n"}</span>
-        <span style={{ fg: T.text }}>{"  Ctrl-Z            Undo last mutation\n"}</span>
-        <span style={{ fg: T.text }}>{"  ?                 This help\n"}</span>
-        <span style={{ fg: T.text }}>{"  q · Ctrl-C        Quit\n"}</span>
-      </text>
+    <DialogShell title="tuiboard — keyboard reference" hint="Esc/? close · j/k scroll" width={92}>
+      <scrollbox
+        ref={(r: ScrollBoxLike) => (scrollBoxRef = r)}
+        style={{
+          width: "100%",
+          flexGrow: 1,
+          scrollX: false,
+          scrollY: true,
+          rootOptions: {},
+          contentOptions: {},
+          scrollbarOptions: { visible: false },
+        }}
+      >
+        <For each={HELP_BLOCKS}>
+          {(block, i) => (
+            <box id={`help-b${i()}`} style={{ flexDirection: "column" }}>
+              <Show when={block.kind === "header"}>
+                {/* blank line above every section header except the first */}
+                <Show when={i() > 0}>
+                  <box style={{ height: 1 }} />
+                </Show>
+                <text wrapMode="none" truncate>
+                  <span style={{ fg: T.warm, attributes: ATTR.bold }}>
+                    {`${(block as { emoji: string }).emoji}  ${(block as { title: string }).title}`}
+                  </span>
+                </text>
+                {/* scope note on its own wrapping line, kept verbatim */}
+                <Show when={(block as { note?: string }).note}>
+                  <text wrapMode="word">
+                    <span style={{ fg: T.textDone, attributes: ATTR.italic }}>
+                      {(block as { note: string }).note}
+                    </span>
+                  </text>
+                </Show>
+              </Show>
+              <Show when={block.kind === "row"}>
+                <text wrapMode="word">
+                  <span style={{ fg: T.accent, attributes: ATTR.bold }}>
+                    {(block as { keyLabel: string }).keyLabel}
+                  </span>
+                  <span style={{ fg: T.border }}>
+                    {` ${helpDots((block as { keyLabel: string }).keyLabel)}`}
+                  </span>
+                  <span style={{ fg: T.textDim }}>
+                    {` ${(block as { desc: string }).desc}`}
+                  </span>
+                </text>
+              </Show>
+            </box>
+          )}
+        </For>
+      </scrollbox>
     </DialogShell>
   );
 }

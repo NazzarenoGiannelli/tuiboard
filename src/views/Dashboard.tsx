@@ -54,18 +54,46 @@ export function Dashboard(props: { store: TuiStore }) {
  * Board + planner share BoardOnly because both live in the top-left
  * zone of the normal layout and BoardOnly already respects ui.zoomed
  * to render only the active panel between them.
+ *
+ * Modals: the normal layout drops them into the Agenda's slot, which doesn't
+ * exist while zoomed — so here the modal floats as a centered absolute overlay
+ * on top of the zoomed view. The user stays zoomed; close the modal and the
+ * zoomed view is exactly as they left it (no exit-zoom / re-zoom flip).
  */
 function ZoomedLayout(props: { store: TuiStore }) {
-  const zone = () => props.store.state.ui.activeZone;
+  const ui = () => props.store.state.ui;
+  const zone = () => ui().activeZone;
 
   return (
-    <Show when={zone() === "timeline"} fallback={
-      <Show when={zone() === "agents"} fallback={<BoardOnly store={props.store} />}>
-        <AgentsOnly store={props.store} />
+    <>
+      <Show when={zone() === "timeline"} fallback={
+        <Show when={zone() === "agents"} fallback={<BoardOnly store={props.store} />}>
+          <AgentsOnly store={props.store} />
+        </Show>
+      }>
+        <TimelineOnly store={props.store} />
       </Show>
-    }>
-      <TimelineOnly store={props.store} />
-    </Show>
+      {/* Modal overlay — only while zoomed AND a modal is open. Absolute + high
+          zIndex so it paints over the zoomed view; centered; transparent
+          backdrop so the board stays visible behind the (opaque) modal panel. */}
+      <Show when={ui().modal}>
+        <box
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 100,
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <ModalLayer store={props.store} />
+        </box>
+      </Show>
+    </>
   );
 }
 

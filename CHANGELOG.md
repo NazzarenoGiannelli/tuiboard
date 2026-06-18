@@ -5,6 +5,16 @@ All notable changes to **tuiboard** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Modals now appear in zoom mode.** Opening a modal (new task, schedule, time
+  block, assign, edit, delete, search, new event…) while a zone was zoomed (`z`)
+  set the modal state but rendered nothing — the zoomed layout had no Agenda slot
+  to host it, so the dialog was invisible and you typed blind. The modal now
+  floats as a centered overlay on top of the zoomed view; closing it returns you
+  to the zoomed view exactly as you left it.
+
 ## [0.8.3] - 2026-06-04
 
 ### Added

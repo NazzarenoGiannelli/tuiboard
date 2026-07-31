@@ -432,6 +432,20 @@ function handleAgentsZone(store: TuiStore, key: KeyEvent): void {
     // Open (resume) the selected session in a new WezTerm tab.
     const target = sessions[ui.row];
     if (target) void openSessionInWezterm(store, target.cwd, target.sessionId);
+  } else if (key.name === "c") {
+    // Copy a one-paste "cd + resume" command for the selected session, so you
+    // can drop it into any tab/pane anywhere and land in the right directory
+    // resuming the right session (no WezTerm dependency, unlike Enter).
+    const target = sessions[ui.row];
+    if (target) {
+      const cmd = store.config.copyResumeCommand
+        .replaceAll("{cwd}", target.cwd)
+        .replaceAll("{sessionId}", target.sessionId);
+      copyToClipboard(cmd).then(
+        () => store.flashBanner("info", `📋 Copied resume command (${target.sessionId.slice(0, 8)})`),
+        (err) => store.flashBanner("error", `Copy failed: ${err}`),
+      );
+    }
   } else if (key.name === "o") {
     // Inspect the session in the detail modal.
     const target = sessions[ui.row];

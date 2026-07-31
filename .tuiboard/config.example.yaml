@@ -62,6 +62,15 @@ archive_column: Archive
 #   - "{cwd}"
 #   - "{sessionId}"
 
+# Optional: the command copied to your clipboard by `c` in the Agents zone — one
+# paste that cd's into the session's directory and resumes it, for when you want
+# to open the session yourself in a new tab/pane anywhere (no WezTerm needed).
+# The tokens {cwd} and {sessionId} are substituted. It's a plain string, so use
+# whatever chaining your shell wants. Default (works in bash/zsh/pwsh/cmd):
+#   copy_resume_command: 'cd "{cwd}" && claude --resume {sessionId}'
+# Nushell users typically want `;` instead of `&&`:
+# copy_resume_command: 'cd "{cwd}"; claude --resume {sessionId}'
+
 # Optional: overlay read-only calendar events on the Agenda (the 24h timeline).
 # Connect a provider with `tuiboard calendar-setup google` / `... microsoft`,
 # which opens the auth flow and prints the exact block to paste here. Bring your

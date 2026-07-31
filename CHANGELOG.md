@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-07-31
+
+### Added
+- **Copy a session's resume command (`c` in the Agents zone).** Select a Claude
+  Code session and press `c` to copy a one-paste command that `cd`s into its
+  directory and resumes it — `cd "<cwd>" && claude --resume <id>` by default — so
+  you can drop it into any tab or pane, on any machine layout, without depending
+  on WezTerm (which `Enter` requires). The format is configurable via
+  `copy_resume_command` (tokens `{cwd}` / `{sessionId}`); Nushell users can swap
+  `&&` for `;`. The session detail view (`o`) now shows this exact command.
+
 ### Fixed
 - **Modals now appear in zoom mode.** Opening a modal (new task, schedule, time
   block, assign, edit, delete, search, new event…) while a zone was zoomed (`z`)
@@ -184,6 +195,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.8.4]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.4
 [0.8.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.3
 [0.8.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.2
 [0.8.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.1

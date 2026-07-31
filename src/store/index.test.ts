@@ -18,6 +18,7 @@ function emptyConfig(overrides: Partial<Config> = {}): Config {
     assignees: [],
     doneColumn: "Done",
     archiveColumn: "Archive",
+    copyResumeCommand: 'cd "{cwd}" && claude --resume {sessionId}',
     zones: { planner: "on", agenda: "on", agents: "on" },
     ...overrides,
   };

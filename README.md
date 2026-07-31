@@ -147,6 +147,12 @@ archive_column: Archive
 # path, NOT a shell builtin or Windows App Execution Alias). Defaults to
 # opening a WezTerm tab with `claude --resume <id>`. For a custom layout:
 # resume_command: ["nu", "C:/Users/you/.config/tuiboard/code-resume.nu", "{cwd}", "{sessionId}"]
+
+# Optional: the command `c` copies to the clipboard in the Agents zone — one
+# paste that cd's into the session dir and resumes it, so you can open it
+# yourself in any tab/pane (no WezTerm needed). {cwd}/{sessionId} substituted.
+# Default: 'cd "{cwd}" && claude --resume {sessionId}'. Nushell users:
+# copy_resume_command: 'cd "{cwd}"; claude --resume {sessionId}'
 ```
 
 ## Zones
@@ -396,6 +402,15 @@ session (until the next terminal resize).
 | `c` | Arm mode: click a task, then click a slot to schedule (works from any zone) |
 | `j` / `k` | While armed: nudge the block ±15 min |
 | `+` / `-` | While armed: resize the block's end ±15 min |
+
+### Agents (agents zone)
+
+| Key | Action |
+|---|---|
+| `j` / `k` | Move the cursor down / up the session list |
+| `Enter` | Open (resume) the selected session in a new WezTerm tab |
+| `c` | Copy a one-paste `cd … && claude --resume <id>` command for the selected session — drop it into any tab/pane to land in the right dir and resume (no WezTerm needed; format is `copy_resume_command`) |
+| `o` | Session detail (cwd, branch, last prompts, resume command) |
 
 ### Task actions (work in board, planner, AND timeline zones)
 

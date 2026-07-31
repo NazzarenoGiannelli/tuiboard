@@ -772,12 +772,14 @@ function AgentDetailModal(props: { store: TuiStore; modal: Extract<NonNullable<T
             <box style={{ height: 1 }} />
             <text>
               <span style={{ fg: T.textDim }}>
-                resume — press Enter in the agents list to open this in WezTerm:
+                resume — Enter opens this in WezTerm; c copies this command to paste anywhere:
               </span>
             </text>
             <text wrapMode="word">
               <span style={{ fg: T.scheduled }}>
-                claude --resume {s().sessionId}
+                {props.store.config.copyResumeCommand
+                  .replaceAll("{cwd}", s().cwd)
+                  .replaceAll("{sessionId}", s().sessionId)}
               </span>
             </text>
           </box>
@@ -845,6 +847,7 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.text }}>{"  /                 Search task titles — jumps cursor to first match\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nAgents zone\n"}</span>
         <span style={{ fg: T.text }}>{"  Enter             Open (resume) the selected session in a new WezTerm tab\n"}</span>
+        <span style={{ fg: T.text }}>{"  c                 Copy a 'cd + claude --resume' command for the session\n"}</span>
         <span style={{ fg: T.text }}>{"  o                 Session detail (cwd, branch, last prompts, resume cmd)\n"}</span>
         <span style={{ fg: T.textDim }}>{"\nMulti-select\n"}</span>
         <span style={{ fg: T.text }}>{"  Space             Mark / unmark task (cursor stays — mark in any order)\n"}</span>

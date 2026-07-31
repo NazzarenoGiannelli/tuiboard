@@ -44,6 +44,15 @@ export interface Config {
    */
   resumeCommand?: string[];
   /**
+   * Template for the shell command copied to the clipboard by `c` in the agents
+   * zone — one paste that `cd`s into the session's directory and resumes it.
+   * The tokens `{cwd}` and `{sessionId}` are substituted. Default:
+   *   cd "{cwd}" && claude --resume {sessionId}
+   * `&&` works in bash/zsh/pwsh/cmd; Nushell users may prefer
+   *   cd "{cwd}"; claude --resume {sessionId}
+   */
+  copyResumeCommand: string;
+  /**
    * Optional read-only calendar feeds merged into the Agenda (timeline) zone.
    * Paths support `~` and are resolved against the config dir if relative.
    * Tokens are produced by `tuiboard calendar-setup`.
@@ -102,10 +111,18 @@ export interface CalendarsConfig {
   microsoft?: MicrosoftCalendarConfig;
 }
 
+/**
+ * Default clipboard template for `c` in the agents zone: `cd` + resume in one
+ * paste. `&&` chains in bash/zsh/pwsh/cmd (Nushell users override with `;`).
+ */
+export const DEFAULT_COPY_RESUME_COMMAND =
+  'cd "{cwd}" && claude --resume {sessionId}';
+
 export const DEFAULT_CONFIG: Omit<Config, "root" | "loaded" | "boards"> = {
   assignees: [],
   doneColumn: "Done",
   archiveColumn: "Archive",
+  copyResumeCommand: DEFAULT_COPY_RESUME_COMMAND,
   zones: { planner: "on", agenda: "on", agents: "on" },
 };
 
@@ -149,6 +166,7 @@ interface RawConfig {
   done_column: string;
   archive_column: string;
   resume_command: string[];
+  copy_resume_command: string;
   calendars: {
     google?: {
       enabled?: boolean;
@@ -293,6 +311,11 @@ function normalize(raw: Partial<RawConfig>, root: string, loaded: boolean): Conf
       Array.isArray(raw.resume_command) && raw.resume_command.length > 0
         ? raw.resume_command.map(String)
         : undefined,
+    copyResumeCommand:
+      typeof raw.copy_resume_command === "string" &&
+      raw.copy_resume_command.trim().length > 0
+        ? raw.copy_resume_command
+        : DEFAULT_COPY_RESUME_COMMAND,
     calendars: normalizeCalendars(raw.calendars, root),
     zones: normalizeZones(raw.zones),
   };

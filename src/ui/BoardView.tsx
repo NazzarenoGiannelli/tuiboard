@@ -8,7 +8,7 @@
  * board width.
  */
 
-import { For, Show, createEffect, createMemo, createSignal, onMount } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 
 import { isHiddenColumn } from "~/config/loader";
 import { isTask } from "~/parser/markdown";
@@ -120,6 +120,11 @@ export function BoardView(props: BoardViewProps) {
     const colIdx = ui().col;
     if (ui().zoomed || ui().activeZone === "planner") {
       setScrollX(0);
+      // Refresh viewportW too - the zoomed title budget depends on it.
+      setTimeout(() => {
+        const vw = viewportRef?.width ?? 0;
+        if (vw > 0) setViewportW(vw);
+      }, 0);
       return;
     }
     const cols = props.board.columns;
@@ -176,6 +181,18 @@ export function BoardView(props: BoardViewProps) {
     }, 0);
   });
 
+  // Re-measure on resize while zoomed (the scroll effect above only
+  // reruns on col/zoomed/activeZone changes, not plain resizes).
+  const onResize = () => {
+    // 50ms, not 0ms: give OpenTUI's layout pass time to catch up.
+    setTimeout(() => {
+      const vw = viewportRef?.width ?? 0;
+      if (vw > 0) setViewportW(vw);
+    }, 50);
+  };
+  process.stdout.on("resize", onResize);
+  onCleanup(() => process.stdout.off("resize", onResize));
+
   return (
     <box style={{ flexDirection: "column", flexGrow: 1 }}>
       {/* Clipping viewport: fills the board zone, hides overflow. */}
@@ -214,6 +231,7 @@ export function BoardView(props: BoardViewProps) {
                   zoomed={ui().zoomed && isActive()}
                   tasksVisible={columnTasksVisible(i())}
                   boxId={columnId(props.board.filepath, originalIndex)}
+                  viewportWidth={viewportW()}
                 />
               );
             }}
@@ -243,6 +261,9 @@ interface ColumnViewProps {
   tasksVisible?: boolean;
   /** Stable DOM-equivalent id used by `scrollChildIntoView`. */
   boxId: string;
+  /** Real measured board viewport width in cells, used to size the
+   * title budget for a zoomed column instead of a hardcoded guess. */
+  viewportWidth?: number;
 }
 
 /** Stable id for a task row inside a column, used by scrollChildIntoView. */
@@ -393,9 +414,19 @@ function ColumnView(props: ColumnViewProps) {
                       }
                       // Column inner cell width for a TaskRow: COL_WIDTH 42 −
                       // border 2 − col padding 2 − TaskRow padding 2 = 36 cols
-                      // (when not zoomed). Zoomed → column grows to fill, so
-                      // ~terminal width − some chrome.
-                      availableWidth={props.zoomed ? 100 : 36}
+                      // (when not zoomed). Zoomed: use the real measured
+                      // viewport width, same 6-cell overhead, plus a 2-cell
+                      // safety margin for width-measurement drift (fixes a
+                      // double-truncation glitch, e.g. "walk t...gh backgro...").
+                      availableWidth={
+                        props.zoomed
+                          ? Math.max(6, (props.viewportWidth ?? 42) - 8)
+                          : 36
+                      }
+                      // Default hardCap (60 chars) was clipping titles well
+                      // short of the zoomed column's real width. Let
+                      // availableWidth alone govern the budget when zoomed.
+                      titleMaxChars={props.zoomed ? 1000 : undefined}
                       onClick={() => {
                         props.store.setActiveZone("board");
                         props.store.setCursor(props.columnIndex, ri());

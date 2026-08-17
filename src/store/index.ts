@@ -318,6 +318,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       // change — and spuriously flash "Reloaded after external edit". Skip.
       if (lastWrittenContent.get(filepath) === content) return;
       const { board } = parseBoard(content, { filepath });
+      const boardConfig = config.boards.find((cb) => cb.path === filepath);
+      if (boardConfig?.name) board.name = boardConfig.name;
       const mtimeMs = statMtime(filepath);
       setState(
         "boards",

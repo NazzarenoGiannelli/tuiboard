@@ -32,6 +32,7 @@
     "tb": "./bin/tuiboard.ts"
   },
   "files": [
+    "tsconfig.json",
     "src/",
     "bin/",
     ".tuiboard/config.example.yaml",
@@ -47,6 +48,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "agents:check": "bun run src/scripts/agents-check.ts",
+    "summary": "bun run src/cli/summary.ts",
     "prepublishOnly": "bun run typecheck && bun test"
   },
   "dependencies": {

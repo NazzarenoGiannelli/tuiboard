@@ -29,6 +29,10 @@ if (process.argv[2] === "calendar-setup") {
   const { runCalendarSetup } = await import("../src/calendar/setup.ts");
   process.exit(await runCalendarSetup(process.argv.slice(3)));
 }
+if (process.argv[2] === "summary") {
+  const { runSummary } = await import("../src/cli/summary.ts");
+  process.exit(await runSummary(process.argv.slice(3)));
+}
 const preload = fileURLToPath(import.meta.resolve("@opentui/solid/preload"));
 
 // Paint the splash from the (already-running) launcher and animate its booting

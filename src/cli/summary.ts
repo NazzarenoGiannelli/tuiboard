@@ -16,7 +16,8 @@ import { readFileSync } from "node:fs";
 
 import { isHiddenColumn, loadConfig } from "~/config/loader";
 import { isTask, parseBoard } from "~/parser/markdown";
-import type { PriorityLevel, Task } from "~/types";
+import { buildPlannerItems, type PlannerSection } from "~/store/planner-panel";
+import type { Board, PriorityLevel, Task } from "~/types";
 
 /** Lower sorts first, so "highest" leads an ascending sort. */
 const PRIORITY_RANK: Record<PriorityLevel, number> = {
@@ -59,10 +60,30 @@ export interface SummaryBoard {
   diagnostics: number;
 }
 
+/** One row of the Today/Tomorrow planner, flattened for consumers. */
+export interface PlannerEntry {
+  title: string;
+  board: string;
+  column: string;
+  /** "agenda" = time-blocked, "priority" = unscheduled priority, "rest" = everything else. */
+  bucket: string;
+  priority: PriorityLevel;
+  due?: string;
+  scheduled?: string;
+  timeBlock?: string;
+  assignee?: string;
+}
+
 export interface Summary {
   generatedAt: string;
   totals: { open: number; done: number; overdue: number; today: number };
   boards: SummaryBoard[];
+  /**
+   * The same Today/Tomorrow aggregation the TUI renders in its left column.
+   * Built with buildPlannerItems() rather than re-derived here, so a bar
+   * widget and the dashboard can never disagree about what is due.
+   */
+  planner: Record<PlannerSection, PlannerEntry[]>;
 }
 
 /** Local calendar date as YYYY-MM-DD — never UTC, or "today" flips at the wrong hour. */
@@ -80,6 +101,14 @@ function daysBetween(from: string, to: string): number {
   return Math.round((at(to) - at(from)) / 86_400_000);
 }
 
+/** "09:30-11:00" from minutes-since-midnight, or undefined when unblocked. */
+function formatTimeBlock(tb: Task["timeBlock"]): string | undefined {
+  if (!tb) return undefined;
+  const hhmm = (m: number) =>
+    String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  return hhmm(tb.startMin) + "-" + hhmm(tb.endMin);
+}
+
 /** The date a task is judged by: an explicit due date wins over a scheduled one. */
 function effectiveDate(task: Task): string | undefined {
   return task.due ?? task.scheduled;
@@ -91,6 +120,7 @@ export function buildSummary(options: { next?: number; today?: string } = {}): S
   const config = loadConfig();
 
   const boards: SummaryBoard[] = [];
+  const parsed: Board[] = [];
   const totals = { open: 0, done: 0, overdue: 0, today: 0 };
 
   for (const ref of config.boards) {
@@ -116,6 +146,7 @@ export function buildSummary(options: { next?: number; today?: string } = {}): S
 
     const { board, diagnostics } = parseBoard(content, { filepath: ref.path });
     const boardName = ref.name ?? board.name;
+    parsed.push(board);
 
     const columns: SummaryColumn[] = [];
     const openTasks: SummaryTask[] = [];
@@ -193,7 +224,26 @@ export function buildSummary(options: { next?: number; today?: string } = {}): S
     });
   }
 
-  return { generatedAt: new Date().toISOString(), totals, boards };
+  const planner: Record<PlannerSection, PlannerEntry[]> = {
+    overdue: [],
+    today: [],
+    tomorrow: [],
+  };
+  for (const item of buildPlannerItems(parsed)) {
+    planner[item.section].push({
+      title: item.task.displayTitle,
+      board: item.boardName,
+      column: item.columnName,
+      bucket: item.bucket,
+      priority: item.task.priority,
+      due: item.task.due,
+      scheduled: item.task.scheduled,
+      timeBlock: formatTimeBlock(item.task.timeBlock),
+      assignee: item.task.assignee,
+    });
+  }
+
+  return { generatedAt: new Date().toISOString(), totals, boards, planner };
 }
 
 export async function runSummary(argv: readonly string[]): Promise<number> {

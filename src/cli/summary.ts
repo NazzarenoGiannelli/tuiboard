@@ -72,6 +72,14 @@ export interface PlannerEntry {
   scheduled?: string;
   timeBlock?: string;
   assignee?: string;
+  /**
+   * Whether the task is already ticked. Today/Tomorrow keep completed tasks —
+   * the day's plan is a record of the day, not just of what is left — so a
+   * consumer that omits this renders a done task identically to an open one.
+   */
+  done: boolean;
+  /** Completion date, when the task carries one (✅ YYYY-MM-DD). */
+  doneDate?: string;
 }
 
 export interface Summary {
@@ -240,6 +248,8 @@ export function buildSummary(options: { next?: number; today?: string } = {}): S
       scheduled: item.task.scheduled,
       timeBlock: formatTimeBlock(item.task.timeBlock),
       assignee: item.task.assignee,
+      done: item.task.done,
+      doneDate: item.task.doneDate,
     });
   }
 

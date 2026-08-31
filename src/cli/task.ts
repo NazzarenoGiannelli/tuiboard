@@ -1,8 +1,9 @@
 /**
  * Headless mutations on a board, for scripts and widgets.
  *
- *   tuiboard task done  --board <name> --column <col> --match <text>
- *   tuiboard task add   --board <name> --column <col> --text <text>
+ *   tuiboard task done   --board <name> --column <col> --match <text>
+ *   tuiboard task undone --board <name> --column <col> --match <text>
+ *   tuiboard task add    --board <name> --column <col> --text <text>
  *   tuiboard task defer --board <name> --column <col> --match <text> [--days N|--to DATE]
  *   ... --dry-run     report what would change, write nothing
  *
@@ -114,9 +115,9 @@ function findTask(col: Column, needle: string): Task {
 
 export async function runTask(argv: readonly string[]): Promise<number> {
   const sub = argv[0];
-  if (sub !== "done" && sub !== "add" && sub !== "defer") {
+  if (sub !== "done" && sub !== "undone" && sub !== "add" && sub !== "defer") {
     console.error(
-      "usage: tuiboard task <done|add|defer> --board <b> --column <c> [--match|--text] <s>",
+      "usage: tuiboard task <done|undone|add|defer> --board <b> --column <c> [--match|--text] <s>",
     );
     return 2;
   }
@@ -133,7 +134,7 @@ export async function runTask(argv: readonly string[]): Promise<number> {
     console.error("tuiboard task: --board and --column are required");
     return 2;
   }
-  if ((sub === "done" || sub === "defer") && !a.match) {
+  if ((sub === "done" || sub === "undone" || sub === "defer") && !a.match) {
     console.error(`tuiboard task ${sub}: --match is required`);
     return 2;
   }
@@ -170,6 +171,20 @@ export async function runTask(argv: readonly string[]): Promise<number> {
       task.dirty = true;
       task.doneDate = task.doneDate ?? isoToday();
       summary = `done: ${task.displayTitle}`;
+    } else if (sub === "undone") {
+      // The counterpart of `done`: ticking a task by mistake, or reopening one
+      // that turned out not to be finished, must not require the TUI.
+      // The completion date goes with it — a task that is open has not been
+      // completed on any date, and a stale ✅ would outlive the tick.
+      const task = findTask(col, a.match!);
+      if (!task.done) {
+        console.log(`already open: ${task.displayTitle}`);
+        return 0;
+      }
+      task.done = false;
+      task.doneDate = undefined;
+      task.dirty = true;
+      summary = `reopened: ${task.displayTitle}`;
     } else if (sub === "defer") {
       const task = findTask(col, a.match!);
       const target = a.to ?? isoShift(a.days ?? 1);

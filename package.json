@@ -34,6 +34,8 @@
   "files": [
     "tsconfig.json",
     "src/",
+    "!src/**/*.test.ts",
+    "!src/scripts/",
     "bin/",
     ".tuiboard/config.example.yaml",
     "README.md",

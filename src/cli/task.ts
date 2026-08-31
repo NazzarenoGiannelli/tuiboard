@@ -1,8 +1,9 @@
 /**
  * Headless mutations on a board, for scripts and widgets.
  *
- *   tuiboard task done --board <name> --column <col> --match <text>
- *   tuiboard task add  --board <name> --column <col> --text <text>
+ *   tuiboard task done  --board <name> --column <col> --match <text>
+ *   tuiboard task add   --board <name> --column <col> --text <text>
+ *   tuiboard task defer --board <name> --column <col> --match <text> [--days N|--to DATE]
  *   ... --dry-run     report what would change, write nothing
  *
  * Why match by text and not by index: a task's id is `${column}:${position}`,
@@ -28,6 +29,8 @@ interface Args {
   column?: string;
   match?: string;
   text?: string;
+  days?: number;
+  to?: string;
   dryRun: boolean;
 }
 
@@ -40,11 +43,15 @@ function parse(argv: readonly string[]): Args {
     else if (arg === "--column") a.column = take();
     else if (arg === "--match") a.match = take();
     else if (arg === "--text") a.text = take();
+    else if (arg === "--days") a.days = Number(take());
+    else if (arg === "--to") a.to = take();
     else if (arg === "--dry-run") a.dryRun = true;
     else if (arg.startsWith("--board=")) a.board = arg.slice(8);
     else if (arg.startsWith("--column=")) a.column = arg.slice(9);
     else if (arg.startsWith("--match=")) a.match = arg.slice(8);
     else if (arg.startsWith("--text=")) a.text = arg.slice(7);
+    else if (arg.startsWith("--days=")) a.days = Number(arg.slice(7));
+    else if (arg.startsWith("--to=")) a.to = arg.slice(5);
     else throw new Error(`unknown argument "${arg}"`);
   }
   return a;
@@ -52,6 +59,13 @@ function parse(argv: readonly string[]): Args {
 
 function isoToday(): string {
   const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function isoShift(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
@@ -100,8 +114,10 @@ function findTask(col: Column, needle: string): Task {
 
 export async function runTask(argv: readonly string[]): Promise<number> {
   const sub = argv[0];
-  if (sub !== "done" && sub !== "add") {
-    console.error("usage: tuiboard task <done|add> --board <b> --column <c> [--match|--text] <s>");
+  if (sub !== "done" && sub !== "add" && sub !== "defer") {
+    console.error(
+      "usage: tuiboard task <done|add|defer> --board <b> --column <c> [--match|--text] <s>",
+    );
     return 2;
   }
 
@@ -117,8 +133,16 @@ export async function runTask(argv: readonly string[]): Promise<number> {
     console.error("tuiboard task: --board and --column are required");
     return 2;
   }
-  if (sub === "done" && !a.match) {
-    console.error("tuiboard task done: --match is required");
+  if ((sub === "done" || sub === "defer") && !a.match) {
+    console.error(`tuiboard task ${sub}: --match is required`);
+    return 2;
+  }
+  if (sub === "defer" && a.days !== undefined && !Number.isFinite(a.days)) {
+    console.error("tuiboard task defer: --days must be a number");
+    return 2;
+  }
+  if (sub === "defer" && a.to !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(a.to)) {
+    console.error("tuiboard task defer: --to must be YYYY-MM-DD");
     return 2;
   }
   if (sub === "add" && !a.text) {
@@ -146,6 +170,21 @@ export async function runTask(argv: readonly string[]): Promise<number> {
       task.dirty = true;
       task.doneDate = task.doneDate ?? isoToday();
       summary = `done: ${task.displayTitle}`;
+    } else if (sub === "defer") {
+      const task = findTask(col, a.match!);
+      const target = a.to ?? isoShift(a.days ?? 1);
+
+      // Move the field the planner actually reads. buildPlannerItems() buckets
+      // on `scheduled ?? due`, so shifting `due` on a task that also carries a
+      // `scheduled` date would write a change that never moves the row.
+      // A task with neither date gets a scheduled one, which is what puts it
+      // on the agenda in the first place.
+      if (task.scheduled !== undefined) task.scheduled = target;
+      else if (task.due !== undefined) task.due = target;
+      else task.scheduled = target;
+
+      task.dirty = true;
+      summary = `deferred to ${target}: ${task.displayTitle}`;
     } else {
       const task: Task = {
         id: `${board.columns.indexOf(col)}:${col.children.filter(isTask).length}`,

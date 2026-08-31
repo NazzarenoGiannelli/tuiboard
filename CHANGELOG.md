@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.5] - 2026-08-31
+
+### Added
+- **`tuiboard summary` — JSON snapshot for status bars and scripts.** Totals, a
+  per-board breakdown, and `planner`: the same Today / Tomorrow / Overdue
+  aggregation the planner zone renders, built from `buildPlannerItems()` so a
+  bar widget and the dashboard can never disagree about what is due. `--pretty`
+  to read it, `--next N` to size (or drop) the per-board upcoming list.
+- **`tuiboard task` — headless mutations.** `done`, `undone`, `defer` and `add`
+  against a board file, matched **by title rather than index** so a task that
+  moved is a miss instead of the wrong task. `--dry-run` reports without
+  writing; an ambiguous title is refused rather than guessed at; exit 3 means
+  the board changed on disk since it was read.
+- **`undone` reopens a completed task**, dropping its `✅` date with the tick —
+  the exact inverse of `done`, and the same semantics as the TUI's Enter.
+- **`defer` moves the date the planner actually reads** (`scheduled`, else
+  `due`, else adds a `scheduled`), so the row really moves. Defaults to
+  tomorrow; `--days N` or `--to YYYY-MM-DD` for anything else, `--days 0` to
+  pull a task back to today.
+- **Planner entries in `summary` now report `done` and `doneDate`.** Today and
+  Tomorrow keep completed tasks — a day's plan is a record of the day — so
+  without this a consumer had no way to tell a ticked task from an open one.
+
+### Fixed
+- **Node's warnings no longer scribble on the dashboard.** OpenTUI registers one
+  `selection` listener per `<scrollbox>`, and a full dashboard keeps more than
+  ten alive (one per board column, plus planner, timeline and agents), tripping
+  Node's default `MaxListeners` cap of 10 — usually when `Tab` mounted a new
+  board's columns. The warning went to stderr, which is the alternate screen the
+  renderer believes it owns: two lines scrolled the buffer and every repaint
+  after that landed rows off, so the layout appeared to break on a keypress. The
+  cap is now sized for the real number of zones, and any remaining warning is
+  filed in `~/.cache/tuiboard/warnings.log` instead of on the screen.
+
 ## [0.8.4] - 2026-07-31
 
 ### Added
@@ -195,6 +229,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.8.5]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.5
 [0.8.4]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.4
 [0.8.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.3
 [0.8.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.2

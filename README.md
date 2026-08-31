@@ -448,6 +448,56 @@ session (until the next terminal resize).
 | `?` | Help modal with the full reference |
 | `q` · `Ctrl-C` | Quit |
 
+## Headless commands
+
+Two subcommands run without the TUI, for status bars, widgets and scripts.
+Both reuse the same config loader and parser as the dashboard, so they can
+never disagree with it about what is on your board.
+
+### `tuiboard summary` — JSON snapshot
+
+```bash
+tuiboard summary                # compact JSON on stdout
+tuiboard summary --pretty       # indented, for reading
+tuiboard summary --next 8       # upcoming tasks per board (default 5, 0 = none)
+```
+
+Returns totals, a per-board breakdown, and `planner` — the same Today /
+Tomorrow / Overdue aggregation the planner zone renders, each entry carrying
+its title, board, column, bucket, priority, dates, time block, assignee, and
+whether it is already `done` (with `doneDate`). Today and Tomorrow keep
+completed tasks, as the panel does: a day's plan is a record of the day, not
+only of what is left.
+
+### `tuiboard task` — mutations
+
+```bash
+tuiboard task done   --board Personal --column Home --match "Bollette"
+tuiboard task undone --board Personal --column Home --match "Bollette"
+tuiboard task defer  --board Personal --column Home --match "Bollette" [--days N | --to YYYY-MM-DD]
+tuiboard task add    --board Personal --column Home --text "Nuova task 🔺 ⏳ 2026-09-01"
+```
+
+`--dry-run` reports what would change and writes nothing. `defer` defaults to
+one day and moves the date the planner actually reads (`scheduled`, else
+`due`, else adds a `scheduled`), so the row really moves; `--days 0` pulls a
+task back to today.
+
+Tasks are matched **by title, not by index**: a position is only valid inside
+one render pass, and a widget polling every couple of minutes holds a stale
+snapshot — matching on text makes a moved task a miss rather than a mistake.
+An ambiguous match is refused rather than guessed at.
+
+| Exit | Meaning |
+|---|---|
+| `0` | Done (including "already done" / "already open" — both are no-ops) |
+| `1` | No match, ambiguous match, or unknown board/column |
+| `2` | Bad arguments |
+| `3` | The board changed on disk since it was read — refresh and retry |
+
+Exit 3 is the mtime watermark: a write is refused rather than allowed to
+clobber an edit made in the TUI or another editor in the meantime.
+
 ## Status
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.

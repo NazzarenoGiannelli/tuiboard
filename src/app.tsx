@@ -16,6 +16,11 @@
 // (OpenTUI) and the ~600ms store build below run. See ui/splash-boot.ts.
 import "~/ui/splash-boot";
 
+import { EventEmitter } from "node:events";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
 import { createMemo } from "solid-js";
 import { render, useKeyboard } from "@opentui/solid";
 
@@ -34,6 +39,35 @@ import { BoardOnly } from "~/views/BoardOnly";
 import { Dashboard } from "~/views/Dashboard";
 import { TimelineOnly } from "~/views/TimelineOnly";
 import { AgentsOnly } from "~/views/AgentsOnly";
+
+// ─── Keep Node's own output off the screen ──────────────────────────────────
+//
+// OpenTUI registers one "selection" listener on the renderer per <scrollbox>,
+// and a dashboard keeps more than ten alive at once: one per board column,
+// plus planner, timeline and agents. That is a legitimate count, not a leak,
+// but it trips Node's default MaxListeners cap of 10 — and switching board
+// with Tab crosses the threshold as the new columns mount.
+EventEmitter.defaultMaxListeners = 64;
+
+// Whatever still warns must never reach the terminal. Node writes warnings to
+// stderr, which here means straight onto the alternate screen the renderer
+// believes it owns: the two extra lines scroll the buffer, and from then on
+// every absolutely-positioned repaint lands a couple of rows off — the layout
+// appears to "break" on the next keypress. Removing the default handler stops
+// Node printing them; ours files them where they can still be read.
+process.removeAllListeners("warning");
+process.on("warning", (w: Error) => {
+  try {
+    const dir = join(homedir(), ".cache", "tuiboard");
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(
+      join(dir, "warnings.log"),
+      `${new Date().toISOString()} ${w.name}: ${w.message}\n${w.stack ?? ""}\n`,
+    );
+  } catch {
+    // A log we cannot write is not worth losing the screen over.
+  }
+});
 
 // ─── Bootstrap ──────────────────────────────────────────────────────────────
 

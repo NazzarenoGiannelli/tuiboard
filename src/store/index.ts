@@ -803,6 +803,32 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   // ─── Cursor / UI ─────────────────────────────────────────────────────────
 
+  /**
+   * Adopt a board while tuiboard is running: parse it, append it, start
+   * watching it, and move the cursor onto it.
+   *
+   * Called after the file and the config entry already exist (that ordering is
+   * what keeps a failure conservative — see the board lifecycle spec), so this
+   * is the last and least destructive step: if it fails, the board is still
+   * registered and appears on the next launch.
+   */
+  function addBoard(path: string, name?: string): { ok: true } | { ok: false; error: string } {
+    if (state.boards.some((b) => b.board.filepath === path)) {
+      return { ok: false, error: "that board is already open" };
+    }
+    let loaded: LoadedBoard;
+    try {
+      loaded = loadOne(path, name);
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+    setState("boards", (boards) => [...boards, loaded]);
+    watcher.watch(path);
+    setState("rev", (r) => r + 1);
+    setActiveBoard(state.boards.length - 1);
+    return { ok: true };
+  }
+
   function setActiveBoard(idx: number): void {
     const len = state.boards.length;
     if (len === 0) return;
@@ -1308,6 +1334,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     addTask,
     deleteTask,
     moveTaskWithinBoard,
+    // boards
+    addBoard,
     // ui
     setActiveBoard,
     setCursor,
@@ -1375,15 +1403,27 @@ function noopCalendarStore(): CalendarStore {
   };
 }
 
+/**
+ * Read and parse one board. Throws on failure — the caller decides what to do
+ * with the message, because at runtime it must reach the screen through the
+ * banner, never through stderr: writing to stderr while the renderer owns the
+ * alternate screen is what breaks the layout.
+ */
+function loadOne(path: string, name?: string): LoadedBoard {
+  const content = readFileSync(path, "utf-8");
+  const { board } = parseBoard(content, { filepath: path });
+  if (name) board.name = name;
+  return { board, mtimeMs: statMtime(path) };
+}
+
 function loadAll(config: Config): LoadedBoard[] {
   const out: LoadedBoard[] = [];
   for (const b of config.boards) {
     try {
-      const content = readFileSync(b.path, "utf-8");
-      const { board } = parseBoard(content, { filepath: b.path });
-      if (b.name) board.name = b.name;
-      out.push({ board, mtimeMs: statMtime(b.path) });
+      out.push(loadOne(b.path, b.name));
     } catch (e) {
+      // Startup only, before the renderer takes the screen — safe to print,
+      // and better than starting with a board silently missing.
       console.error(`Skipping ${b.path}: ${(e as Error).message}`);
     }
   }

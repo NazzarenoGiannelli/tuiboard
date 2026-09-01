@@ -22,6 +22,12 @@ export interface BoardWatcher {
   onChange: (listener: ChangeListener) => () => void;
   /** Mark the next change event for `filepath` as a self-write, to be ignored. */
   markSelfWrite: (filepath: string) => void;
+  /**
+   * Track one more file, after start(). A board adopted while tuiboard is
+   * running would otherwise stay deaf to external edits until the next
+   * launch — broken in the quietest possible way.
+   */
+  watch: (filepath: string) => void;
 }
 
 export interface WatcherOptions {
@@ -75,6 +81,11 @@ export function createBoardWatcher(
     onChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+    watch(filepath) {
+      if (filepaths.includes(filepath)) return;
+      filepaths.push(filepath);
+      watcher?.add(filepath);
     },
     markSelfWrite(filepath) {
       selfWrites.add(filepath);

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Tests
+        run: bun test
+
+      # The rule that keeps tuiboard's files readable by Obsidian: parse →
+      # serialize must return the same bytes. It ran only when someone
+      # remembered to, and the demo boards in examples/ were failing it —
+      # they carry no `%% kanban:settings %%` trailer, so every save added a
+      # blank line. A rule nobody enforces is a preference.
+      - name: Markdown round trip
+        run: bun run src/scripts/roundtrip-check.ts examples/Home.md examples/Personal.md examples/Work.md

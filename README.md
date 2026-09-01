@@ -116,6 +116,19 @@ https://github.com/NazzarenoGiannelli/tuiboard). Set it up for me from scratch:
 Confirm the directory and file names with me before writing any files.
 ```
 
+## First run
+
+Launch `tuiboard` with nothing set up and it opens its own onboarding rather
+than an error: point it at a folder and adopt the markdown files already in it,
+or give a name and get a new board. Either way it writes the config for you and
+opens the board. The same screen is behind the `+` in the top bar, so adding a
+board later is the gesture you already learned.
+
+New boards are created next to the boards you already have — usually a vault,
+so they inherit whatever sync and versioning it has — falling back to
+`~/.local/share/tuiboard/boards/` when there is nothing to learn from. The path
+is always shown and editable before anything is written.
+
 ## Configure
 
 Copy `.tuiboard/config.example.yaml` to a config location and edit the
@@ -389,6 +402,7 @@ session (until the next terminal resize).
 | `1`..`9` | Jump to board N |
 | `v` | Toggle Today/Tomorrow planner panel focus |
 | `Shift-Tab` | Cycle active zone (planner → board → timeline → agents) |
+| `+` | New board — create one, or adopt markdown files you already have (also the `+` chip in the top bar) |
 | `F1` / `F2` / `F3` | Toggle visibility of Planner / Timeline / Agents zones |
 | `z` | Zoom active zone to full screen |
 | `r` | Refresh everything — reload boards from disk, rescan agents, force-refetch the agenda calendar (bypasses the 30-min cache) |
@@ -468,6 +482,21 @@ its title, board, column, bucket, priority, dates, time block, assignee, and
 whether it is already `done` (with `doneDate`). Today and Tomorrow keep
 completed tasks, as the panel does: a day's plan is a record of the day, not
 only of what is left.
+
+### `tuiboard board` — create, adopt, list
+
+```bash
+tuiboard board add --path ~/vault/Work.md --name Work   # adopt it if it exists, create it if not
+tuiboard board add --path ~/vault/New.md --columns "Todo,Doing,Done"
+tuiboard board scan ~/vault                             # which files there are boards
+tuiboard board list                                     # what is configured, and where new boards would go
+```
+
+The same operations the `+` button performs in the dashboard, over the same
+code. `add` writes the board file when it is missing and registers it in your
+config either way — the config is edited by insertion, never rewritten, so
+comments and every other setting survive untouched. A duplicate name or path
+is refused rather than guessed at, and `--dry-run` reports without writing.
 
 ### `tuiboard task` — mutations
 

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Boards can be created from inside tuiboard.** A `+` chip at the end of the
+  board tabs — clickable, or the `+` key — opens a wizard that either creates a
+  new markdown board or scans a folder and adopts the boards already in it.
+- **First run onboards instead of failing.** Launching with no config used to
+  print `No boards found` and exit, sending the user to write a file they had
+  never seen. The same wizard now opens, writes the config, and opens the board.
+- **`tuiboard board add|scan|list`** — the same operations headless, for scripts
+  and widgets. Adding a board edits the config **by insertion**: comments,
+  calendars, `resume_command` and formatting survive because they are never
+  rewritten.
+- New boards are proposed next to the boards you already have, so they inherit
+  that folder's sync and versioning; the fallback is `~/.local/share/tuiboard/boards/`.
+
+### Fixed
+- **A board without a `%% kanban:settings %%` trailer grew a blank line on every
+  save.** The final newline of the file was parsed as a blank line and written
+  back as one, plus a new terminator. Boards with the trailer were unaffected,
+  which is why it went unseen — but the demo boards in `examples/` were failing
+  the round-trip check, and any board tuiboard creates itself would have too.
+
 ### Changed
 - **Slimmer published package.** The `files` field shipped `src/` whole, so the
   tarball carried the test suite and the dev check scripts to every install.

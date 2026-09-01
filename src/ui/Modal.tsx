@@ -931,6 +931,7 @@ function HelpModal(props: { store: TuiStore }) {
         <span style={{ fg: T.textDim }}>{"Navigation\n"}</span>
         <span style={{ fg: T.text }}>{"  h j k l  ←↑↓→     Move cursor inside the active zone\n"}</span>
         <span style={{ fg: T.text }}>{"  Tab               Next board (kanban zone)\n"}</span>
+        <span style={{ fg: T.text }}>{"  +                 New board — create one, or adopt files you have\n"}</span>
         <span style={{ fg: T.text }}>{"  1..9              Jump to board N\n"}</span>
         <span style={{ fg: T.text }}>{"  v                 Toggle Today/Tomorrow planner panel focus\n"}</span>
         <span style={{ fg: T.text }}>{"  Shift-Tab         Cycle active zone (planner → board → timeline → agents)\n"}</span>

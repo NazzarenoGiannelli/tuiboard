@@ -103,6 +103,16 @@ export function parseBoard(
   const trailer = lines.slice(trailerStart).join(lineEnding);
   const bodyLines = lines.slice(0, trailerStart);
 
+  // Splitting "a\nb\n" yields ["a", "b", ""]: that last empty element is the
+  // file's terminating newline, not a blank line. Keeping it would make the
+  // serializer — which emits one line ending per child — write it back as a
+  // real blank line AND terminate the file, growing the board by one blank
+  // line on every single save. Boards carrying a `%% kanban:settings %%`
+  // trailer never showed this: the trailer absorbs the final newline verbatim.
+  if (trailerStart === lines.length && bodyLines.length > 0 && bodyLines.at(-1) === "") {
+    bodyLines.pop();
+  }
+
   // 3. Walk lines top-down. Build columns; *every line* before the first
   //    column is preamble, every line after a heading is a child of that
   //    column (task / section-break / blank / raw). Nothing is silently

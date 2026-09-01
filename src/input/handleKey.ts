@@ -46,7 +46,36 @@ export function handleKey(
   // Modal dispatcher first — most keys go to the modal's <input>.
   if (ui.modal) {
     if (key.name === "escape") {
+      // The board wizard owns its own dismissal: on first run there is no
+      // board behind it, so Escape must not leave the user on a blank screen.
+      if (ui.modal.kind === "board-new") {
+        const b = store.state.ui.boardNew;
+        if (b?.step === "pick") { store.boardNewChooseMode("adopt"); return; }
+        store.closeBoardNew();
+        return;
+      }
       store.closeModal();
+      return;
+    }
+    if (ui.modal.kind === "board-new") {
+      const b = store.state.ui.boardNew;
+      if (!b) return;
+      // Steps with a text field let the <input> have every key: only the list
+      // steps are driven from here.
+      if (b.step === "mode") {
+        if (key.name === "j" || key.name === "down") { store.boardNewMove(1); return; }
+        if (key.name === "k" || key.name === "up") { store.boardNewMove(-1); return; }
+        if (key.name === "enter" || key.name === "return") {
+          store.boardNewChooseMode(b.sel === 0 ? "create" : "adopt");
+          return;
+        }
+      }
+      if (b.step === "pick") {
+        if (key.name === "j" || key.name === "down") { store.boardNewMove(1); return; }
+        if (key.name === "k" || key.name === "up") { store.boardNewMove(-1); return; }
+        if (key.name === "space") { store.boardNewToggle(); return; }
+        if (key.name === "enter" || key.name === "return") { store.boardNewConfirmPick(); return; }
+      }
       return;
     }
     if (ui.modal.kind === "confirm-delete") {
@@ -162,6 +191,13 @@ export function handleKey(
   }
   if (key.name === "f3") {
     store.toggleZoneDesired("agents");
+    return;
+  }
+
+  // New board — the `+` chip in the top bar, and its key. Free at this level:
+  // `+` is otherwise only used inside the timeline's duration sub-mode.
+  if (key.name === "+" || key.sequence === "+" || (key.name === "=" && key.shift)) {
+    store.openBoardNew();
     return;
   }
 

@@ -19,6 +19,8 @@
  */
 
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { createMemo } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 
@@ -39,6 +41,10 @@ import {
   type WritableCalendar,
 } from "./calendar";
 import { ConflictError, statMtime, writeBoardFile } from "~/io/writer";
+import { addBoardToConfig } from "~/boards/config-writer";
+import { createBoardFile } from "~/boards/create";
+import { scanDirectory, type BoardCandidate } from "~/boards/scan";
+import { suggestBoardsDir } from "~/boards/suggest";
 import { isTask, parseBoard } from "~/parser/markdown";
 import { serializeBoard } from "~/parser/serialize";
 import type {
@@ -80,6 +86,7 @@ export type ModalKind =
   | { kind: "event-edit" }
   | { kind: "confirm-delete-event" }
   | { kind: "search" }
+  | { kind: "board-new" }
   | { kind: "help" };
 
 /**
@@ -87,6 +94,33 @@ export type ModalKind =
  * title+time `<input>`; step 2 is the calendar picker, navigated via handleKey
  * (no input focused). Lives in UI state so the key handler can drive it.
  */
+/**
+ * State of the board-creation wizard, alive only while
+ * `modal.kind === "board-new"`. Kept beside the modal rather than inside it,
+ * the way `eventPicker` is: the modal says *what* is open, this says where the
+ * user has got to.
+ */
+export interface BoardNew {
+  step: "mode" | "name" | "columns" | "dir" | "pick";
+  /** Chosen path through the wizard. */
+  mode?: "create" | "adopt";
+  /** Selection index — the mode list on step 1, the candidate list on "pick". */
+  sel: number;
+  name: string;
+  /** Comma-separated, as typed. */
+  columns: string;
+  dir: string;
+  candidates: BoardCandidate[];
+  /** Indexes of the candidates ticked for adoption. */
+  ticked: number[];
+  /**
+   * True on first run, when there is no board behind the modal to go back to.
+   * Escape does not dismiss it.
+   */
+  mandatory: boolean;
+  error?: string;
+}
+
 export interface EventPicker {
   step: 1 | 2;
   /** Selection index into `cals` (step 2). */
@@ -201,6 +235,8 @@ export interface UIState {
   modal?: ModalKind;
   /** Two-step new-event modal state (set only while `modal.kind === "event"`). */
   eventPicker?: EventPicker;
+  /** Board-creation wizard state (set only while `modal.kind === "board-new"`). */
+  boardNew?: BoardNew;
 }
 
 export interface UndoEntry {
@@ -803,6 +839,148 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   // ─── Cursor / UI ─────────────────────────────────────────────────────────
 
+  // ─── Board creation wizard ───────────────────────────────────────────────
+  // The screen is thin on purpose: everything that touches the disk lives in
+  // src/boards/, so the same steps are reachable from `tuiboard board add`.
+
+  function openBoardNew(mandatory = false): void {
+    setState("ui", "boardNew", {
+      step: "mode",
+      sel: 0,
+      name: "",
+      columns: "Todo, Doing, Done",
+      dir: suggestBoardsDir(config),
+      candidates: [],
+      ticked: [],
+      mandatory,
+    });
+    openModal({ kind: "board-new" });
+  }
+
+  function patchBoardNew(patch: Partial<BoardNew>): void {
+    setState("ui", "boardNew", produce((b: BoardNew | undefined) => {
+      if (b) Object.assign(b, patch);
+    }));
+  }
+
+  function closeBoardNew(): void {
+    // A mandatory wizard has nothing behind it: there is no board to return to.
+    if (state.ui.boardNew?.mandatory) return;
+    setState("ui", "boardNew", undefined);
+    closeModal();
+  }
+
+  /** Step 1: which way through. */
+  function boardNewChooseMode(mode: "create" | "adopt"): void {
+    patchBoardNew({ mode, step: mode === "create" ? "name" : "dir", error: undefined });
+  }
+
+  function boardNewMove(delta: number): void {
+    const b = state.ui.boardNew;
+    if (!b) return;
+    const len = b.step === "pick" ? b.candidates.length : 2;
+    if (len === 0) return;
+    patchBoardNew({ sel: Math.max(0, Math.min(len - 1, b.sel + delta)) });
+  }
+
+  /** Step "pick": Space ticks a candidate. Already-configured ones are inert. */
+  function boardNewToggle(): void {
+    const b = state.ui.boardNew;
+    if (!b || b.step !== "pick") return;
+    const c = b.candidates[b.sel];
+    if (!c || c.alreadyInConfig) return;
+    const ticked = b.ticked.includes(b.sel)
+      ? b.ticked.filter((i) => i !== b.sel)
+      : [...b.ticked, b.sel];
+    patchBoardNew({ ticked });
+  }
+
+  /** Text submitted by the modal's <input>, per step. */
+  function boardNewSubmitText(text: string): void {
+    const b = state.ui.boardNew;
+    if (!b) return;
+    const value = text.trim();
+
+    if (b.step === "name") {
+      if (!value) return patchBoardNew({ error: "the board needs a name" });
+      return patchBoardNew({ name: value, step: "columns", error: undefined });
+    }
+    if (b.step === "columns") {
+      return commitCreate(b.name, value || b.columns);
+    }
+    if (b.step === "dir") {
+      const dir = expandHome(value || b.dir);
+      const candidates = scanDirectory(dir, {
+        existingPaths: state.boards.map((lb) => lb.board.filepath),
+      });
+      if (candidates.length === 0) {
+        return patchBoardNew({ dir, error: `no board files in ${dir}` });
+      }
+      return patchBoardNew({ dir, candidates, step: "pick", sel: 0, ticked: [], error: undefined });
+    }
+  }
+
+  /** Create the file, register it, open it — in that order. */
+  function commitCreate(name: string, columnsText: string): void {
+    const b = state.ui.boardNew;
+    if (!b) return;
+    const columns = columnsText.split(",").map((c) => c.trim()).filter(Boolean);
+    const path = join(b.dir, `${name}.md`);
+    try {
+      createBoardFile(path, { columns });
+    } catch (e) {
+      return patchBoardNew({ error: (e as Error).message });
+    }
+    try {
+      addBoardToConfig({ path, name });
+    } catch (e) {
+      // The file is on disk and is not lost: say exactly that, and stay put.
+      return patchBoardNew({
+        error: `created ${path}, but not registered: ${(e as Error).message}`,
+      });
+    }
+    finishBoardNew([{ path, name }]);
+  }
+
+  /** Adopt every ticked candidate; one failure does not stop the others. */
+  function boardNewConfirmPick(): void {
+    const b = state.ui.boardNew;
+    if (!b || b.step !== "pick") return;
+    const chosen = (b.ticked.length > 0 ? b.ticked : [b.sel])
+      .map((i) => b.candidates[i])
+      .filter((c): c is BoardCandidate => !!c && !c.alreadyInConfig);
+    if (chosen.length === 0) return patchBoardNew({ error: "nothing to adopt" });
+
+    const added: Array<{ path: string; name: string }> = [];
+    const failed: string[] = [];
+    for (const c of chosen) {
+      try {
+        addBoardToConfig({ path: c.path, name: c.suggestedName });
+        added.push({ path: c.path, name: c.suggestedName });
+      } catch (e) {
+        failed.push(`${c.suggestedName}: ${(e as Error).message}`);
+      }
+    }
+    if (added.length === 0) return patchBoardNew({ error: failed.join(" · ") });
+    finishBoardNew(added, failed);
+  }
+
+  function finishBoardNew(
+    added: Array<{ path: string; name: string }>,
+    failed: string[] = [],
+  ): void {
+    const problems = [...failed];
+    for (const a of added) {
+      const res = addBoard(a.path, a.name);
+      if (!res.ok) problems.push(`${a.name}: ${res.error}`);
+    }
+    setState("ui", "boardNew", undefined);
+    closeModal();
+    const what = added.length === 1 ? added[0]!.name : `${added.length} boards`;
+    if (problems.length > 0) flashBanner("warn", `Added ${what} — ${problems.join(" · ")}`);
+    else flashBanner("info", `Added ${what}`);
+  }
+
   /**
    * Adopt a board while tuiboard is running: parse it, append it, start
    * watching it, and move the cursor onto it.
@@ -1336,6 +1514,13 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     moveTaskWithinBoard,
     // boards
     addBoard,
+    openBoardNew,
+    closeBoardNew,
+    boardNewChooseMode,
+    boardNewMove,
+    boardNewToggle,
+    boardNewSubmitText,
+    boardNewConfirmPick,
     // ui
     setActiveBoard,
     setCursor,
@@ -1409,6 +1594,13 @@ function noopCalendarStore(): CalendarStore {
  * banner, never through stderr: writing to stderr while the renderer owns the
  * alternate screen is what breaks the layout.
  */
+/** `~` is what people type; node's fs does not know it. */
+function expandHome(p: string): string {
+  if (p === "~") return homedir();
+  if (p.startsWith("~/")) return join(homedir(), p.slice(2));
+  return p;
+}
+
 function loadOne(path: string, name?: string): LoadedBoard {
   const content = readFileSync(path, "utf-8");
   const { board } = parseBoard(content, { filepath: path });

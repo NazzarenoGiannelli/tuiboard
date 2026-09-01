@@ -63,6 +63,16 @@ export function TopBar(props: { store: TuiStore }) {
             );
           }}
         </For>
+        {/* New board — the browser's new-tab button, in a terminal. Clickable
+            like the tabs beside it; `+` does the same from the keyboard. */}
+        <box
+          style={{ flexShrink: 0, flexDirection: "row" }}
+          onMouseDown={() => props.store.openBoardNew()}
+        >
+          <text wrapMode="none">
+            <span style={{ fg: T.textDim }}> + </span>
+          </text>
+        </box>
       </box>
       <Show when={activeStats()}>
         <text wrapMode="none" style={{ flexShrink: 0, marginLeft: 2 }}>

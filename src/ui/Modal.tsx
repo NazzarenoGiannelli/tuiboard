@@ -55,6 +55,7 @@ function ModalRouter(props: { store: TuiStore; modal: NonNullable<TuiStore["stat
     case "event-edit": return <EventEditModal store={props.store} />;
     case "confirm-delete-event": return <ConfirmDeleteEventModal store={props.store} />;
     case "search":   return <SearchModal store={props.store} />;
+    case "board-new": return <BoardNewModal store={props.store} />;
     case "help":     return <HelpModal store={props.store} />;
   }
 }
@@ -66,6 +67,131 @@ interface DialogShellProps {
   hint?: string;
   children: any;
   width?: number;
+}
+
+// ─── New board ───────────────────────────────────────────────────────────────
+
+/**
+ * Onboarding and the `+` button are the same screen, differing only in title
+ * and in whether Escape works: on first run there is nothing behind it.
+ *
+ * Deliberately thin. Every step that touches the disk calls into
+ * `src/boards/`, which is also what `tuiboard board add` calls, so the two
+ * entry points cannot drift apart.
+ */
+function BoardNewModal(props: { store: TuiStore }) {
+  const w = createMemo(() => props.store.state.ui.boardNew);
+
+  const title = createMemo(() =>
+    w()?.mandatory ? "Welcome to tuiboard" : "New board",
+  );
+
+  const hint = createMemo(() => {
+    const b = w();
+    if (!b) return "";
+    if (b.step === "mode") return "j/k choose · Enter confirm" + (b.mandatory ? "" : " · Esc cancel");
+    if (b.step === "pick") return "j/k move · Space tick · Enter adopt · Esc back";
+    return "Enter confirm" + (b.mandatory ? "" : " · Esc cancel");
+  });
+
+  return (
+    <DialogShell title={title()} hint={hint()} width={MODAL_WIDTH}>
+      <Show when={w()}>
+        {(b: () => NonNullable<ReturnType<typeof w>>) => (
+          <box style={{ flexDirection: "column" }}>
+            <Show when={b().mandatory && b().step === "mode"}>
+              <text>
+                <span style={{ fg: T.textDim }}>
+                  No boards configured yet. Boards are plain markdown files.
+                </span>
+              </text>
+              <text> </text>
+            </Show>
+
+            {/* Step 1 — which way through */}
+            <Show when={b().step === "mode"}>
+              <For each={[
+                { key: "create", label: "Create a new board", desc: "a new markdown file" },
+                { key: "adopt", label: "Use files I already have", desc: "scan a folder" },
+              ]}>
+                {(opt, i) => (
+                  <text>
+                    <span style={{ fg: b().sel === i() ? T.accent : T.text }}>
+                      {b().sel === i() ? "▶ " : "  "}{opt.label}
+                    </span>
+                    <span style={{ fg: T.textDim }}>{"  — " + opt.desc}</span>
+                  </text>
+                )}
+              </For>
+            </Show>
+
+            {/* Step 2a — name, then columns */}
+            <Show when={b().step === "name"}>
+              <text><span style={{ fg: T.textDim }}>Board name</span></text>
+              <input
+                focused
+                value=""
+                onSubmit={((v: string) => props.store.boardNewSubmitText(v)) as any}
+              />
+              <text>
+                <span style={{ fg: T.textDim }}>{"It will live in " + b().dir}</span>
+              </text>
+            </Show>
+
+            <Show when={b().step === "columns"}>
+              <text><span style={{ fg: T.textDim }}>Columns, comma separated</span></text>
+              <input
+                focused
+                value={b().columns}
+                onSubmit={((v: string) => props.store.boardNewSubmitText(v)) as any}
+              />
+              <text>
+                <span style={{ fg: T.textDim }}>{"Creating " + b().name + ".md"}</span>
+              </text>
+            </Show>
+
+            {/* Step 2b — a folder, then what was found in it */}
+            <Show when={b().step === "dir"}>
+              <text><span style={{ fg: T.textDim }}>Folder to scan</span></text>
+              <input
+                focused
+                value={b().dir}
+                onSubmit={((v: string) => props.store.boardNewSubmitText(v)) as any}
+              />
+            </Show>
+
+            <Show when={b().step === "pick"}>
+              <text>
+                <span style={{ fg: T.textDim }}>
+                  {b().candidates.length + " board file(s) in " + b().dir}
+                </span>
+              </text>
+              <For each={b().candidates}>
+                {(c, i) => (
+                  <text>
+                    <span style={{ fg: b().sel === i() ? T.accent : T.text }}>
+                      {b().sel === i() ? "▶ " : "  "}
+                      {c.alreadyInConfig ? "· " : b().ticked.includes(i()) ? "✓ " : "  "}
+                      {c.suggestedName}
+                    </span>
+                    <span style={{ fg: T.textDim }}>
+                      {"  " + c.taskCount + (c.taskCount === 1 ? " task" : " tasks")
+                        + (c.alreadyInConfig ? " · already open" : "")}
+                    </span>
+                  </text>
+                )}
+              </For>
+            </Show>
+
+            <Show when={b().error}>
+              <text> </text>
+              <text><span style={{ fg: T.overdue }}>{b().error}</span></text>
+            </Show>
+          </box>
+        )}
+      </Show>
+    </DialogShell>
+  );
 }
 
 function DialogShell(props: DialogShellProps) {

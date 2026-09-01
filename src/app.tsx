@@ -72,19 +72,16 @@ process.on("warning", (w: Error) => {
 // ─── Bootstrap ──────────────────────────────────────────────────────────────
 
 const config = loadConfig();
-if (config.boards.length === 0) {
-  console.error(
-    "No boards found. Create `.tuiboard/config.yaml` with a `boards:` list," +
-      " or run from a directory containing markdown files with `- [ ]` tasks.",
-  );
-  process.exit(1);
-}
-
 const store = createTuiStore({ config });
 
-if (store.state.boards.length === 0) {
-  console.error("All boards failed to load. Check paths in .tuiboard/config.yaml.");
-  process.exit(1);
+// No boards — a fresh install, or a config whose files have all gone. Rather
+// than printing an error and exiting, which sends the user off to read
+// documentation about a file they have never seen, tuiboard opens on its own
+// onboarding: point it at markdown you already have, or make a board here.
+// The same screen the `+` chip opens, so the first run teaches the gesture.
+const needsOnboarding = store.state.boards.length === 0;
+if (needsOnboarding) {
+  store.openBoardNew(true);
 }
 
 process.on("SIGINT", () => {
@@ -122,7 +119,7 @@ process.stdout.on("resize", applyResponsiveLayout);
 // Land on the Today/Tomorrow panel by default — for a daily-planning tool the
 // first question is "what's on my plate today", and that panel answers it. On
 // a narrow terminal where the panel auto-hides, fall back to the board.
-if (store.state.ui.visibleZones.planner) {
+if (!needsOnboarding && store.state.ui.visibleZones.planner) {
   store.setActiveZone("planner");
 }
 

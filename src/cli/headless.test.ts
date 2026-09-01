@@ -174,9 +174,20 @@ describe("tuiboard task — refusing to guess", () => {
 });
 
 describe("tuiboard summary — planner entries", () => {
+  // The planner buckets against the system clock — `buildSummary({ today })`
+  // steers the totals but not `buildPlannerItems()` — so this board is dated
+  // relative to the real today. A fixture with hardcoded dates passes on the
+  // day it is written and fails the next morning.
+  beforeEach(() => {
+    writeFileSync(
+      boardPath,
+      BOARD.replace(/2026-08-31/g, iso(0)),
+      "utf-8",
+    );
+  });
+
   it("reports whether a Today entry is already ticked", async () => {
-    // The board's dates are fixed, so the summary is asked for that same day.
-    const s = buildSummary({ next: 0, today: "2026-08-31" });
+    const s = buildSummary({ next: 0 });
     const today = s.planner.today;
     const bollette = today.find((e) => e.title === "Bollette");
     const spesa = today.find((e) => e.title === "Spesa");
@@ -184,17 +195,17 @@ describe("tuiboard summary — planner entries", () => {
     expect(bollette?.done).toBe(false);
     expect(bollette?.doneDate).toBeUndefined();
     expect(spesa?.done).toBe(true);
-    expect(spesa?.doneDate).toBe("2026-08-31");
+    expect(spesa?.doneDate).toBe(iso(0));
   });
 
   it("follows a task through done and back", async () => {
     await runTask(["done", ...args("--match", "Bollette")]);
-    const done = buildSummary({ next: 0, today: "2026-08-31" })
+    const done = buildSummary({ next: 0 })
       .planner.today.find((e) => e.title === "Bollette");
     expect(done?.done).toBe(true);
 
     await runTask(["undone", ...args("--match", "Bollette")]);
-    const reopened = buildSummary({ next: 0, today: "2026-08-31" })
+    const reopened = buildSummary({ next: 0 })
       .planner.today.find((e) => e.title === "Bollette");
     expect(reopened?.done).toBe(false);
     expect(reopened?.doneDate).toBeUndefined();

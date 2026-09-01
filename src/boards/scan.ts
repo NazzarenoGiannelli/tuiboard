@@ -18,6 +18,8 @@ const SNIFF_BYTES = 4096;
 
 const RE_TASK = /^- \[[ xX]\] /m;
 const RE_TASK_GLOBAL = /^- \[[ xX]\] /gm;
+/** Obsidian Kanban's marker — what tuiboard itself writes into a new board. */
+const RE_KANBAN = /^kanban-plugin:\s*board\s*$/m;
 
 export interface BoardCandidate {
   /** Absolute path to the markdown file. */
@@ -35,12 +37,20 @@ export interface ScanOptions {
   existingPaths?: readonly string[];
 }
 
-/** True when the file looks like a task board: markdown holding checkboxes. */
+/**
+ * True when the file looks like a task board.
+ *
+ * Two ways to qualify, and the second is not optional: a board tuiboard has
+ * just created holds no tasks yet, so a checkbox-only rule would make the
+ * program blind to its own output until someone typed into it. The Kanban
+ * frontmatter marker settles those.
+ */
 export function isBoardFile(path: string): boolean {
   if (extname(path).toLowerCase() !== ".md") return false;
   try {
     if (!statSync(path).isFile()) return false;
-    return RE_TASK.test(readFileSync(path, "utf-8").slice(0, SNIFF_BYTES));
+    const head = readFileSync(path, "utf-8").slice(0, SNIFF_BYTES);
+    return RE_TASK.test(head) || RE_KANBAN.test(head);
   } catch {
     return false;
   }

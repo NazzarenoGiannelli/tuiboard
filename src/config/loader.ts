@@ -18,6 +18,8 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import * as YAML from "js-yaml";
 
+import { isBoardFile } from "~/boards/scan";
+
 export interface BoardConfig {
   /** Path to the .md file, absolute or relative to the config directory. */
   path: string;
@@ -351,20 +353,13 @@ function normalize(raw: Partial<RawConfig>, root: string, loaded: boolean): Conf
 }
 
 function scanFallbackBoards(dir: string): BoardConfig[] {
+  // Delegates to the same recogniser the onboarding screen uses. Two rules
+  // would mean a file adopted by one path and ignored by the other.
   try {
-    const entries = readdirSync(dir);
-    return entries
-      .filter((f) => f.endsWith(".md"))
-      .map((f) => join(dir, f))
-      .filter((p) => {
-        try {
-          if (!statSync(p).isFile()) return false;
-          const head = readFileSync(p, "utf-8").slice(0, 4096);
-          return /^- \[[ xX]\] /m.test(head);
-        } catch {
-          return false;
-        }
-      })
+    return readdirSync(dir)
+      .map((name) => join(dir, name))
+      .filter(isBoardFile)
+      .sort()
       .map((path) => ({ path }));
   } catch {
     return [];

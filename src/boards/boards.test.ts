@@ -144,6 +144,11 @@ describe("scanDirectory", () => {
     expect(scanDirectory(dir)[0]!.alreadyInConfig).toBe(false);
   });
 
+  it("recognises a freshly created board that has no tasks yet", () => {
+    createBoardFile(join(dir, "Empty.md"), { columns: ["Todo"] });
+    expect(scanDirectory(dir).map((c) => c.suggestedName)).toEqual(["Board", "Empty"]);
+  });
+
   it("returns nothing for an empty or missing directory instead of throwing", () => {
     expect(scanDirectory(join(dir, "does-not-exist"))).toEqual([]);
     mkdirSync(join(dir, "empty"));

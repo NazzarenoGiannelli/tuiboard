@@ -37,6 +37,10 @@ if (process.argv[2] === "task") {
   const { runTask } = await import("../src/cli/task.ts");
   process.exit(await runTask(process.argv.slice(3)));
 }
+if (process.argv[2] === "board") {
+  const { runBoard } = await import("../src/cli/board.ts");
+  process.exit(await runBoard(process.argv.slice(3)));
+}
 const preload = fileURLToPath(import.meta.resolve("@opentui/solid/preload"));
 
 // Paint the splash from the (already-running) launcher and animate its booting

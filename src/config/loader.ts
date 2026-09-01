@@ -140,6 +140,35 @@ export interface LoadConfigOptions {
   startDir?: string;
 }
 
+/**
+ * Where the config lives, or where it would be created.
+ *
+ * Same resolution order as `loadConfig`, but it also answers for the case
+ * loadConfig cannot: no config anywhere. Writers need a target path even when
+ * nothing exists yet, and the user-global location is the one that works from
+ * any directory.
+ */
+export function findConfigPath({ startDir }: LoadConfigOptions = {}): {
+  path: string;
+  exists: boolean;
+} {
+  // $TUIBOARD_CONFIG comes first and is absolute about it: when it is set,
+  // that file IS the config, whether or not it exists yet. Falling through to
+  // the home config when the named file is missing is how a caller aiming at a
+  // scratch path ends up writing to the user's real one.
+  const env = process.env.TUIBOARD_CONFIG;
+  if (env) {
+    const abs = resolve(env);
+    return { path: abs, exists: existsSync(abs) };
+  }
+
+  const start = resolve(startDir ?? process.cwd());
+  const found = findConfigFile(start) ?? findGlobalConfigFile();
+  if (found) return { path: found.path, exists: true };
+
+  return { path: join(homedir(), ".config", "tuiboard", "config.yaml"), exists: false };
+}
+
 export function loadConfig({ startDir }: LoadConfigOptions = {}): Config {
   const start = resolve(startDir ?? process.cwd());
 

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-08
+
 ### Fixed
 - **Modals were unreadable in single-pane.** With one zone filling the screen a
   dialog floated over it as an absolute overlay — and had nothing to paint over,
@@ -288,6 +290,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.9.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.9.1
 [0.9.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.9.0
 [0.8.5]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.5
 [0.8.4]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.4

@@ -126,9 +126,14 @@ applyResponsiveLayout();
 process.stdout.on("resize", applyResponsiveLayout);
 
 // Land on the Today/Tomorrow panel by default — for a daily-planning tool the
-// first question is "what's on my plate today", and that panel answers it. On
-// a narrow terminal where the panel auto-hides, fall back to the board.
-if (!needsOnboarding && store.state.ui.visibleZones.planner) {
+// first question is "what's on my plate today", and that panel answers it.
+//
+// The condition is that the planner is *enabled*, not that it fits: on a narrow
+// terminal it does not fit beside anything, but single-pane makes it the one
+// thing on screen, which is exactly where a daily planner belongs. Keying this
+// off `visibleZones` was the last place still reading "does not fit" as "does
+// not exist", and it left a vertical strip opening on the first board column.
+if (!needsOnboarding && store.state.ui.enabledZones.planner) {
   store.setActiveZone("planner");
 }
 

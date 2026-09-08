@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A narrow terminal now opens on Today/Tomorrow**, like a wide one, instead of
+  on the first column of the first board. The default was conditioned on the
+  planner *fitting* rather than being enabled — the last place still reading
+  "does not fit" as "does not exist" — so single-pane skipped it.
+
 ## [0.9.1] - 2026-09-08
 
 ### Fixed

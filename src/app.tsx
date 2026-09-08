@@ -132,12 +132,25 @@ if (!needsOnboarding && store.state.ui.visibleZones.planner) {
   store.setActiveZone("planner");
 }
 
+
 const { view } = parseArgs(process.argv.slice(2));
+// `--view=planner`: open on the Today/Tomorrow panel alone. The flag beats the
+// `zones:` config — someone typing it is asking for that zone — and it is a
+// starting state, not a cage: Shift-Tab still walks to the other zones.
+if (view === "planner") {
+  store.setZoneVisible("planner", true);
+  store.setActiveZone("planner");
+  store.setZoomed(true);
+}
 
 // ─── App shell ──────────────────────────────────────────────────────────────
 
 function rootViewFor(v: ViewKind | undefined, s: TuiStore) {
   switch (v) {
+    // `planner` is BoardOnly with the planner focused and single-pane forced:
+    // in that state BoardOnly already renders the panel alone, so a vertical
+    // strip needs a launch flag, not a new view.
+    case "planner":  return <BoardOnly store={s} />;
     case "board":    return <BoardOnly store={s} />;
     case "timeline": return <TimelineOnly store={s} />;
     case "agents":   return <AgentsOnly store={s} />;

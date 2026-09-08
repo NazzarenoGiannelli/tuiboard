@@ -4,9 +4,9 @@
  * value flags) would warrant a real CLI library — YAGNI here.
  */
 
-export type ViewKind = "board" | "timeline" | "agents";
+export type ViewKind = "board" | "planner" | "timeline" | "agents";
 
-const VALID_VIEWS: readonly ViewKind[] = ["board", "timeline", "agents"];
+const VALID_VIEWS: readonly ViewKind[] = ["board", "planner", "timeline", "agents"];
 
 export interface ParsedArgs {
   /** Undefined means: render the default Dashboard (all 4 zones). */

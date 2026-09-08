@@ -30,7 +30,21 @@ export function TopBar(props: { store: TuiStore }) {
     return { open, done, cols };
   };
 
+  // Single-pane: one zone fills the screen, so the tab strip has nothing left
+  // to orient anybody — you cannot see the zones you are not in. It is replaced
+  // by where you are in the ring. When the two compete for room the position
+  // wins: the board name is one keystroke from being obvious, the ring
+  // position is not.
+  const singlePane = () => props.store.singlePane();
+  const paneLabel = () => {
+    const p = props.store.currentPane();
+    if (!p) return "";
+    const { at, of } = p.position;
+    return `⤢ ${p.label}  ‹ ${at + 1}/${of} ›`;
+  };
+
   return (
+    <Show when={!singlePane()} fallback={<CompactBar store={props.store} label={paneLabel()} />}>
     <box style={{ flexDirection: "row", justifyContent: "space-between", height: 1 }}>
       <box style={{ flexDirection: "row", flexShrink: 1, overflow: "hidden" }}>
         {/* Brand + date */}
@@ -81,6 +95,27 @@ export function TopBar(props: { store: TuiStore }) {
           </span>
         </text>
       </Show>
+    </box>
+    </Show>
+  );
+}
+
+/**
+ * The narrow-terminal top bar: board name, then the ring position. Everything
+ * else — the date, the per-board counters, the other tabs — is dropped rather
+ * than truncated mid-word, which is what the full bar does at 60 columns.
+ */
+function CompactBar(props: { store: TuiStore; label: string }) {
+  const boardName = () =>
+    props.store.state.boards[props.store.state.ui.activeBoardIndex]?.board.name ?? "";
+  return (
+    <box style={{ flexDirection: "row", justifyContent: "space-between", height: 1 }}>
+      <text wrapMode="none" style={{ flexShrink: 1 }}>
+        <span style={{ fg: T.textDim }}>{boardName() + "  "}</span>
+      </text>
+      <text wrapMode="none" style={{ flexShrink: 0 }}>
+        <span style={{ fg: T.accent, attributes: ATTR.bold }}>{props.label}</span>
+      </text>
     </box>
   );
 }

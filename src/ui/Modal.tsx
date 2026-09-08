@@ -214,16 +214,20 @@ function BoardNewModal(props: { store: TuiStore }) {
  * unreadable squeezed into 50, while a 60-column strip needs it to shrink
  * rather than overflow.
  */
-function dialogWidth(desired: number | undefined, singlePane: boolean): number {
+function dialogWidth(singlePane: boolean): number {
   if (!singlePane) return MODAL_WIDTH;
+  // Standing in for a pane means behaving like one: take the strip. A dialog
+  // that keeps its slot-sized box while the rest of the screen sits empty
+  // reads as a window that failed to open, not as a panel.
   const terminal = process.stdout.columns ?? 80;
-  const room = Math.max(20, terminal - 4);
-  return Math.min(desired ?? MODAL_WIDTH, room);
+  return Math.max(20, terminal - 4);
 }
 
 function DialogShell(props: DialogShellProps) {
   const singlePane = useContext(SinglePaneContext);
-  const width = () => dialogWidth(props.width, singlePane());
+  const width = () => dialogWidth(singlePane());
+  // `width` survives as the four-zone hint it always was; single-pane fills.
+  void props.width;
   return (
     <box
       style={{
@@ -234,7 +238,10 @@ function DialogShell(props: DialogShellProps) {
         flexDirection: "column",
         width: width(),
         minWidth: Math.min(MODAL_WIDTH, width()),
-        flexGrow: 0,
+        // In the Agenda's slot the box must not grow, or the dashboard shifts.
+        // Filling a pane, it must — in both axes, like the zone it replaces.
+        flexGrow: singlePane() ? 1 : 0,
+        height: singlePane() ? "100%" : undefined,
         marginLeft: 1,
         backgroundColor: T.panelBgActive,
         border: true,

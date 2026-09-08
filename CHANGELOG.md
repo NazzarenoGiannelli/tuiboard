@@ -15,12 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   character; the new-task and edit dialogs were effectively invisible. A modal
   now takes the pane's place, exactly as the four-zone layout drops it into the
   Agenda's slot: with one zone on screen, that zone *is* the slot.
-- **A dialog can use the width it asks for when it stands in for a pane.** The
-  requested width was ignored outright, which kept the four-zone layout from
-  shifting but squeezed the 92-column keyboard reference into 50. It is now
-  honoured in single-pane only, clamped to the terminal; the Agenda slot keeps
-  its exact width, verified by the dashboard rendering identically with and
-  without a modal open.
+- **A dialog standing in for a pane now fills it**, in both axes, like the zone
+  it replaces — instead of keeping a slot-sized box while the rest of the strip
+  sits empty, which read as a window that had failed to open. In the four-zone
+  layout it still matches the Agenda's slot to the cell, or the whole dashboard
+  would shift when a modal opens; verified by the frame borders landing on
+  identical columns with and without a modal.
 
 ## [0.9.0] - 2026-09-08
 

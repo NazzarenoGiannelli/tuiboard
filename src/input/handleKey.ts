@@ -331,7 +331,14 @@ function handlePlannerZone(
     return;
   }
   if (key.name === "l" || key.name === "right") {
+    if (store.stepPane(1)) return;
     store.setActiveZone("board");
+    return;
+  }
+  if (key.name === "h" || key.name === "left") {
+    // Nothing to the planner's left at full width; in single-pane it wraps to
+    // the last pane of the ring.
+    if (store.stepPane(-1)) return;
     return;
   }
 
@@ -442,7 +449,12 @@ function handleTimelineZone(
     return;
   }
   if (key.name === "h" || key.name === "left") {
+    if (store.stepPane(-1)) return;
     store.setActiveZone("board");
+    return;
+  }
+  if (key.name === "l" || key.name === "right") {
+    if (store.stepPane(1)) return;
     return;
   }
   // Enter on a timeline block bounces the kanban cursor to its source task.
@@ -492,7 +504,10 @@ function handleAgentsZone(store: TuiStore, key: KeyEvent): void {
       );
     }
   } else if (key.name === "h" || key.name === "left") {
+    if (store.stepPane(-1)) return;
     store.setActiveZone("board");
+  } else if (key.name === "l" || key.name === "right") {
+    store.stepPane(1);
   }
 }
 
@@ -599,7 +614,12 @@ function handleBoardZone(
     }
   }
 
+  // In single-pane the zones are a ring, not a layout: h/l walk it one pane at
+  // a time — column, column, agenda, agents, planner — and wrap. stepPane
+  // returns false when it does not apply, and the side-by-side behaviour below
+  // takes over unchanged.
   if (key.name === "h" || key.name === "left") {
+    if (store.stepPane(-1)) return;
     // Step left over rendered columns. Hidden columns (Done / Archive) are
     // never displayed, so navigating onto one would strand the cursor on an
     // unrendered, unscrollable column.
@@ -612,6 +632,7 @@ function handleBoardZone(
     return;
   }
   if (key.name === "l" || key.name === "right") {
+    if (store.stepPane(1)) return;
     const next = adjacentVisibleColumn(store, board, ui.col, +1);
     if (next !== undefined) {
       store.setCursor(next, 0);

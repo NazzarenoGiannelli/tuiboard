@@ -24,7 +24,7 @@ import { join } from "node:path";
 import { createMemo } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 
-import type { Config } from "~/config/loader";
+import { isHiddenColumn, type Config } from "~/config/loader";
 import {
   createBoardWatcher,
   type BoardWatcher,
@@ -46,6 +46,7 @@ import { createBoardFile } from "~/boards/create";
 import { scanDirectory, type BoardCandidate } from "~/boards/scan";
 import { suggestBoardsDir } from "~/boards/suggest";
 import { isTask, parseBoard } from "~/parser/markdown";
+import { buildRing, ringPosition, samePane, stepRing, type Pane } from "~/ui/pane-ring";
 import { serializeBoard } from "~/parser/serialize";
 import type {
   Board,
@@ -1129,6 +1130,74 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     recomputeVisible();
   }
 
+  /**
+   * One step along the single-pane ring: `h` / `l` when only one pane is on
+   * screen. Left and right stop meaning geometry there and mean sequence —
+   * planner, each drawn board column, agenda, agents — closing into a ring.
+   *
+   * Returns false when it did not apply (not in single-pane, or the ring holds
+   * a single pane), so the caller can fall back to today's behaviour.
+   */
+  /** The ring as it stands right now, plus where the cursor sits on it. */
+  function ringNow(): { ring: Pane[]; current: Pane } {
+    const board = state.boards[state.ui.activeBoardIndex]?.board;
+    const rendered = (board?.columns ?? [])
+      .map((c, i) => ({ name: c.name, i }))
+      .filter(({ name }) => !isHiddenColumn(config, name))
+      .map(({ i }) => i);
+
+    const ring = buildRing({
+      enabledZones: {
+        planner: enabledZones.planner && desiredVisible.planner,
+        board: rendered.length > 0,
+        timeline: enabledZones.timeline && desiredVisible.timeline,
+        agents: enabledZones.agents && desiredVisible.agents,
+      },
+      renderedColumns: rendered,
+    });
+
+    const current: Pane =
+      state.ui.activeZone === "board"
+        ? { kind: "column", index: state.ui.col }
+        : { kind: "zone", zone: state.ui.activeZone };
+
+    return { ring, current };
+  }
+
+  /** What the single-pane top bar shows: this pane's name and its place. */
+  function currentPane(): { label: string; position: { at: number; of: number } } | undefined {
+    const { ring, current } = ringNow();
+    if (ring.length === 0) return undefined;
+    const board = state.boards[state.ui.activeBoardIndex]?.board;
+    const label =
+      current.kind === "column"
+        ? (board?.columns[current.index]?.name ?? "Board")
+        : current.zone === "planner"
+          ? "Today / Tomorrow"
+          : current.zone === "timeline"
+            ? "Agenda"
+            : "Agents";
+    return { label, position: ringPosition(ring, current) };
+  }
+
+  function stepPane(delta: 1 | -1): boolean {
+    if (!singlePane()) return false;
+
+    const { ring, current } = ringNow();
+    if (ring.length <= 1) return false;
+
+    const next = stepRing(ring, current, delta);
+    if (samePane(next, current)) return false;
+
+    if (next.kind === "column") {
+      setActiveZone("board");
+      setCursor(next.index, 0);
+    } else {
+      setActiveZone(next.zone);
+    }
+    return true;
+  }
+
   function toggleZoom(): void {
     // Below the threshold there is nothing to zoom out to: leaving would put
     // back the cramped multi-column layout this mode exists to escape.
@@ -1592,6 +1661,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     applyResponsiveFits,
     cycleActiveZone,
     singlePane,
+    stepPane,
+    currentPane,
     setNarrow,
     toggleZoom,
     toggleGrab,

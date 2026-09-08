@@ -20,6 +20,12 @@ export interface TimeBlock {
 /** Where the time block was found in the source — drives writer behavior. */
 export type TimeBlockSource = "legacy-prefix" | "watch-emoji";
 
+/** Where a task's note lives: a note name (wiki style) or a path. */
+export interface TaskNoteLink {
+  target: string;
+  kind: "wikilink" | "path";
+}
+
 export interface Task {
   /** Stable identity within a board: `${columnIndex}:${indexInColumn}`. */
   id: string;
@@ -38,6 +44,14 @@ export interface Task {
   tags: string[];
   /** Wikilinks: alias if present, otherwise target. */
   wikilinks: string[];
+  /**
+   * The link that wraps the title, when there is one: this task's note.
+   *
+   * Distinct from `wikilinks`, which lists every link in the line. A link in
+   * the middle of a sentence is a mention — showing a person's page as a
+   * task's context would be worse than showing nothing.
+   */
+  note?: TaskNoteLink;
   scheduled?: ISODate;
   due?: ISODate;
   start?: ISODate;

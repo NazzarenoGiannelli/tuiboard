@@ -26,6 +26,7 @@ import type {
   RawOther,
   SectionBreak,
   Task,
+  TaskNoteLink,
   TimeBlock,
   TimeBlockSource,
 } from "~/types";
@@ -268,6 +269,12 @@ function parseTask(input: ParseTaskInput): Task {
   // Wikilinks — capture displayed text (alias if present, target otherwise)
   const wikilinks = Array.from(body.matchAll(RE_WIKILINK), (m) => m[2] ?? m[1]!);
 
+  // The task's note: a link that WRAPS the title, i.e. opens the line. A link
+  // in the middle of a sentence is a mention — `Mandare materiale a [[Lisa]]`
+  // is not a task documented by Lisa's page. Trailing metadata (dates, tags)
+  // does not disqualify it, only text before the link does.
+  const note = titleNoteLink(body);
+
   // Priority
   let priority: PriorityLevel = "none";
   for (const [emoji, level] of PRIORITY_EMOJI) {
@@ -290,6 +297,7 @@ function parseTask(input: ParseTaskInput): Task {
     assignee: am?.[1],
     tags,
     wikilinks,
+    note,
     scheduled: sched?.[1],
     due: due?.[1],
     start: start?.[1],
@@ -324,12 +332,36 @@ function buildDisplayTitle(
   t = t.replace(RE_TAG, "");
   // Replace wikilinks with their displayed text (alias or target)
   t = t.replace(RE_WIKILINK, (_m, target: string, alias?: string) => alias ?? target);
+  // Same for markdown links: show the text, drop the target. Without this a
+  // board written in plain markdown — the form that needs no Obsidian — shows
+  // `[Titolo](Tasks/Nota.md)` as its title everywhere, widget included.
+  t = t.replace(RE_MDLINK, (_m, text: string) => text);
   // Strip priority and decorative emoji
   for (const [emoji] of PRIORITY_EMOJI) t = t.replaceAll(emoji, "");
   for (const emoji of DECORATIVE_EMOJI) t = t.replaceAll(emoji, "");
   // Collapse whitespace
   t = t.replace(/\s+/g, " ").trim();
   return t;
+}
+
+/** `[[Target|shown]]` or `[shown](path.md)` at the very start of the line. */
+/** `[shown](target)` anywhere in the line — for display only. */
+const RE_MDLINK = /\[([^\]]*)\]\(([^)]+)\)/g;
+
+const RE_TITLE_WIKILINK = /^\s*\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/;
+const RE_TITLE_MDLINK = /^\s*\[[^\]]*\]\(([^)]+)\)/;
+
+function titleNoteLink(body: string): TaskNoteLink | undefined {
+  const wiki = body.match(RE_TITLE_WIKILINK);
+  if (wiki) return { target: wiki[1]!.trim(), kind: "wikilink" };
+  const md = body.match(RE_TITLE_MDLINK);
+  if (md) {
+    const target = md[1]!.trim();
+    // A URL is not a note. Nothing to read from the filesystem.
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(target)) return undefined;
+    return { target, kind: "path" };
+  }
+  return undefined;
 }
 
 function extractBoardName(frontmatter: string, filepath: string): string {

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-09-08
+
 ### Fixed
 - **A narrow terminal now opens on Today/Tomorrow**, like a wide one, instead of
   on the first column of the first board. The default was conditioned on the
@@ -296,6 +298,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.9.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.9.2
 [0.9.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.9.1
 [0.9.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.9.0
 [0.8.5]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.5

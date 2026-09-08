@@ -223,3 +223,67 @@ describe("zones config", () => {
     expect(s.state.ui.visibleZones.timeline).toBe(true);
   });
 });
+
+describe("single-pane mode", () => {
+  /** A store at a width where nothing but the board fits. */
+  function narrowStore() {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.applyResponsiveFits(
+      { planner: false, timeline: false, agents: false },
+      { narrow: true },
+    );
+    return store;
+  }
+
+  it("keeps cycling zones even when none of them fit", () => {
+    // The defect this mode exists to fix: cycleActiveZone used to filter on
+    // visibleZones, so a narrow terminal left one candidate and Shift-Tab
+    // silently did nothing.
+    const store = narrowStore();
+    const seen = new Set<string>();
+    for (let i = 0; i < 4; i++) {
+      store.cycleActiveZone();
+      seen.add(store.state.ui.activeZone);
+    }
+    expect(seen.size).toBeGreaterThan(1);
+    expect(seen.has("planner")).toBe(true);
+  });
+
+  it("does not move the user when the window narrows", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setActiveZone("planner");
+
+    // Exactly how app.tsx calls it: one shot, so the order of the two can
+    // never be got wrong.
+    store.applyResponsiveFits(
+      { planner: false, timeline: false, agents: false },
+      { narrow: true },
+    );
+
+    expect(store.state.ui.activeZone).toBe("planner");
+    expect(store.singlePane()).toBe(true);
+  });
+
+  it("still parks focus on the board when a zone is hidden at full width", () => {
+    // Outside single-pane the old rule stands: a zone that is not drawn must
+    // not keep the cursor.
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setActiveZone("planner");
+    store.applyResponsiveFits({ planner: false });
+    expect(store.state.ui.activeZone).toBe("board");
+  });
+
+  it("is entered by `z` as well as by width", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    expect(store.singlePane()).toBe(false);
+    store.toggleZoom();
+    expect(store.singlePane()).toBe(true);
+  });
+
+  it("refuses to zoom out of a narrow terminal — there is nothing else to show", () => {
+    const store = narrowStore();
+    store.toggleZoom();
+    expect(store.singlePane()).toBe(true);
+    expect(store.state.ui.banner?.text).toContain("Nothing else fits");
+  });
+});

@@ -40,7 +40,7 @@ export function PlannerPanel(props: { store: TuiStore }) {
   const groups = createMemo(() => groupPlannerItems(items()));
   const isActive = createMemo(() => props.store.state.ui.activeZone === "planner");
   const isZoomed = createMemo(
-    () => props.store.state.ui.zoomed && props.store.state.ui.activeZone === "planner",
+    () => props.store.singlePane() && props.store.state.ui.activeZone === "planner",
   );
   const cursorRow = createMemo(() => props.store.state.ui.row);
   let scrollBoxRef: ScrollBoxLike | undefined;

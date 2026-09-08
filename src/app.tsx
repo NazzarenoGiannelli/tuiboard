@@ -107,11 +107,20 @@ function applyResponsiveLayout(): void {
   // Report which zones FIT at this width. The store ANDs this with each zone's
   // enabled flag and the user's desired visibility, so a disabled or
   // intentionally-hidden zone is never force-shown just because there's room.
-  store.applyResponsiveFits({
-    planner: width >= 100,
-    timeline: width >= 150,
-    agents: width >= 120,
-  });
+  // `narrow` travels with the fits, in one call: below the planner's own
+  // breakpoint there is no room for two zones side by side, so rather than
+  // dropping every zone but the kanban — the least readable at that width, and
+  // the only one that cannot be hidden — the zones queue and are shown one at
+  // a time. Same threshold as the planner's, opposite effect: "does not fit"
+  // now means "not simultaneously", not "unreachable".
+  store.applyResponsiveFits(
+    {
+      planner: width >= 100,
+      timeline: width >= 150,
+      agents: width >= 120,
+    },
+    { narrow: width < 100 },
+  );
 }
 applyResponsiveLayout();
 process.stdout.on("resize", applyResponsiveLayout);

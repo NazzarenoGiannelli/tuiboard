@@ -185,6 +185,16 @@ export interface UIState {
    */
   zoomed: boolean;
   /**
+   * The terminal is too narrow to host more than one zone. Set by the
+   * responsive layer, never by the user.
+   *
+   * Distinct from `zoomed`, which is the user's own choice, because the two
+   * must not overwrite each other: widening the window has to restore the
+   * layout without also cancelling a `z` the user pressed on purpose. What the
+   * renderer reads is the OR of the two — see `singlePane`.
+   */
+  narrow: boolean;
+  /**
    * Grab mode: when true, h/l moves the cursor task between adjacent
    * columns instead of just moving the cursor. Toggled with `g`. Exit
    * with `g` again or `Esc`. Mirrors Python kanban `toggle_move`.
@@ -311,6 +321,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       col: 0,
       row: 0,
       zoomed: false,
+      narrow: false,
       grabbing: false,
       armMode: false,
       agendaOffset: 0,
@@ -1033,7 +1044,11 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   function recomputeVisible(): void {
     const v = computeVisible();
     setState("ui", "visibleZones", v);
-    if (!v[state.ui.activeZone]) setActiveZone("board");
+    // In single-pane the active zone is drawn because it is active, not
+    // because it "fits", so it is never orphaned — and dragging focus to the
+    // board on every narrowing is exactly the behaviour that made a resize
+    // throw the user off the planner.
+    if (!v[state.ui.activeZone] && !singlePane()) setActiveZone("board");
   }
 
   /** Set a zone's desired visibility (user intent). Showing a disabled zone is
@@ -1055,25 +1070,72 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   /** Update the terminal-width fit cache (called by the responsive layout) and
    *  recompute. Never overrides enablement or the user's desired visibility. */
-  function applyResponsiveFits(fits: Partial<Record<ActiveZone, boolean>>): void {
+  /**
+   * What the terminal's width allows, applied in one shot.
+   *
+   * `narrow` travels with the fits rather than in its own call on purpose:
+   * `recomputeVisible` behaves differently in single-pane, so setting the two
+   * separately makes the result depend on which came first — and the wrong
+   * order silently reintroduces the focus-stealing this mode removes.
+   */
+  function applyResponsiveFits(
+    fits: Partial<Record<ActiveZone, boolean>>,
+    opts: { narrow?: boolean } = {},
+  ): void {
     lastFits = {
       board: true,
       planner: fits.planner !== false,
       timeline: fits.timeline !== false,
       agents: fits.agents !== false,
     };
+    if (opts.narrow !== undefined) setState("ui", "narrow", opts.narrow);
     recomputeVisible();
   }
 
+  /**
+   * Next zone, wrapping.
+   *
+   * Reachability is decided by what the user enabled and wants — never by what
+   * fits. Width governs how many zones are drawn at once, not which ones
+   * exist: filtering on `visibleZones` here is what used to leave a narrow
+   * terminal with a single candidate, making this function return immediately
+   * and Shift-Tab do nothing.
+   */
   function cycleActiveZone(): void {
-    const visible = ZONE_ORDER.filter((z) => state.ui.visibleZones[z]);
-    if (visible.length <= 1) return;
-    const currentIdx = visible.indexOf(state.ui.activeZone);
-    const nextIdx = (currentIdx + 1) % visible.length;
-    setActiveZone(visible[nextIdx]!);
+    const reachable = ZONE_ORDER.filter(
+      (z) => enabledZones[z] && (singlePane() ? desiredVisible[z] : state.ui.visibleZones[z]),
+    );
+    if (reachable.length <= 1) return;
+    const currentIdx = reachable.indexOf(state.ui.activeZone);
+    const nextIdx = (currentIdx + 1) % reachable.length;
+    setActiveZone(reachable[nextIdx]!);
+  }
+
+  /**
+   * One pane on screen at a time — the state the whole renderer keys off.
+   *
+   * Two roads in: the user pressed `z`, or the terminal is too narrow to hold
+   * two zones side by side. They are deliberately the same state: a narrow
+   * terminal should behave like a deliberate focus, not like a degraded
+   * dashboard.
+   */
+  function singlePane(): boolean {
+    return state.ui.narrow || state.ui.zoomed;
+  }
+
+  function setNarrow(v: boolean): void {
+    if (state.ui.narrow === v) return;
+    setState("ui", "narrow", v);
+    recomputeVisible();
   }
 
   function toggleZoom(): void {
+    // Below the threshold there is nothing to zoom out to: leaving would put
+    // back the cramped multi-column layout this mode exists to escape.
+    if (state.ui.narrow) {
+      flashBanner("info", "Nothing else fits at this width");
+      return;
+    }
     setState("ui", "zoomed", (z: boolean) => !z);
   }
 
@@ -1529,6 +1591,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     toggleZoneDesired,
     applyResponsiveFits,
     cycleActiveZone,
+    singlePane,
+    setNarrow,
     toggleZoom,
     toggleGrab,
     exitGrab,

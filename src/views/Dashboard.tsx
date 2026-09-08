@@ -38,7 +38,7 @@ export function Dashboard(props: { store: TuiStore }) {
 
   return (
     <Show
-      when={ui().zoomed}
+      when={props.store.singlePane()}
       fallback={<FourZoneLayout store={props.store} />}
     >
       <ZoomedLayout store={props.store} />

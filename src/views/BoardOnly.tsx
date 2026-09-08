@@ -18,16 +18,17 @@ import type { TuiStore } from "~/store/index";
 
 export function BoardOnly(props: { store: TuiStore }) {
   const ui = () => props.store.state.ui;
+  const singlePane = () => props.store.singlePane();
   const activeBoard = createMemo(
     () => props.store.state.boards[ui().activeBoardIndex]?.board,
   );
 
   return (
     <box style={{ flexDirection: "row", flexGrow: 1 }}>
-      <Show when={!ui().zoomed || ui().activeZone === "planner"}>
+      <Show when={!singlePane() || ui().activeZone === "planner"}>
         <PlannerPanel store={props.store} />
       </Show>
-      <Show when={(!ui().zoomed || ui().activeZone !== "planner") && activeBoard()}>
+      <Show when={(!singlePane() || ui().activeZone !== "planner") && activeBoard()}>
         <BoardView store={props.store} board={activeBoard()!} />
       </Show>
     </box>

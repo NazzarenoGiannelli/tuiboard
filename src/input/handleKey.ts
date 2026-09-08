@@ -533,7 +533,7 @@ function handleBoardZone(
   const openTasks = store.applyBoardFilter(allTasks.filter((t) => !t.done));
   // Visible task list mirrors what the column renders: in zoom mode the
   // user can navigate into done tasks too; otherwise only open.
-  const visibleTasks = ui.zoomed
+  const visibleTasks = store.singlePane()
     ? [...openTasks, ...allTasks.filter((t) => t.done)]
     : openTasks;
 

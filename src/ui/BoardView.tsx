@@ -68,6 +68,8 @@ function columnId(boardPath: string, idx: number): string {
 
 export function BoardView(props: BoardViewProps) {
   const ui = () => props.store.state.ui;
+  // One pane on screen — by the user's `z` or by the terminal's width.
+  const singlePane = () => props.store.singlePane();
   // Width of the clipping viewport (the board zone), read from layout.
   let viewportRef: SizedBoxLike | undefined;
   // Horizontal scroll offset in cells, applied as a negative left margin on
@@ -95,7 +97,7 @@ export function BoardView(props: BoardViewProps) {
    * (Python kanban `z`).
    */
   const renderedColumns = createMemo(() => {
-    if (!ui().zoomed || ui().activeZone === "planner") return visibleColumns();
+    if (!singlePane() || ui().activeZone === "planner") return visibleColumns();
     const cols = visibleColumns();
     // ui.col is a board.columns index (carries Archive); map it to the
     // rendered list so zoom focuses the column actually under the cursor.
@@ -118,7 +120,7 @@ export function BoardView(props: BoardViewProps) {
   // geometry used everywhere (COL_WIDTH + COL_GAP).
   createEffect(() => {
     const colIdx = ui().col;
-    if (ui().zoomed || ui().activeZone === "planner") {
+    if (singlePane() || ui().activeZone === "planner") {
       setScrollX(0);
       return;
     }
@@ -156,7 +158,7 @@ export function BoardView(props: BoardViewProps) {
    */
   const columnTasksVisible = (i: number): boolean => {
     const vw = viewportW();
-    if (vw <= 0 || ui().zoomed) return true;
+    if (vw <= 0 || singlePane()) return true;
     const stride = COL_WIDTH + COL_GAP;
     const start = i * stride;
     const left = Math.max(start, scrollX());
@@ -192,11 +194,11 @@ export function BoardView(props: BoardViewProps) {
         <box
           style={{
             flexDirection: "row",
-            flexGrow: ui().zoomed ? 1 : 0,
+            flexGrow: singlePane() ? 1 : 0,
             flexShrink: 0,
             height: "100%",
             alignItems: "stretch",
-            marginLeft: ui().zoomed ? 0 : -scrollX(),
+            marginLeft: singlePane() ? 0 : -scrollX(),
           }}
         >
           <For each={renderedColumns()}>
@@ -211,7 +213,7 @@ export function BoardView(props: BoardViewProps) {
                   column={col}
                   columnIndex={originalIndex}
                   active={isActive()}
-                  zoomed={ui().zoomed && isActive()}
+                  zoomed={singlePane() && isActive()}
                   tasksVisible={columnTasksVisible(i())}
                   boxId={columnId(props.board.filepath, originalIndex)}
                 />

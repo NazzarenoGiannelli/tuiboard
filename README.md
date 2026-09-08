@@ -375,6 +375,7 @@ Launch `tuiboard` with no flag for the default dashboard (every enabled zone).
 | Flag | View | Use case |
 |---|---|---|
 | (none) | **Dashboard** — every enabled zone | Default; your configured layout |
+| `--view=planner` | Today/Tomorrow alone, full width | A narrow vertical strip beside other work |
 | `--view=board` | Kanban + planner panel only | Focus mode, or a single WezTerm pane |
 | `--view=timeline` | Timeline fullscreen | Wall-mounted "what's now" |
 | `--view=agents` | Agent view fullscreen | Cross-machine session monitor |
@@ -386,7 +387,7 @@ The dashboard auto-collapses optional zones on narrow terminals:
 | ≥ 150 cols | planner + board + timeline + agents |
 | 120–149 | planner + board + agents |
 | 100–119 | planner + board |
-| < 100 | board only |
+| < 100 | **single-pane**: one zone at a time, `h`/`l` to walk them, `Shift-Tab` to jump |
 
 `F1` / `F2` / `F3` toggles override the auto-collapse for the current
 session (until the next terminal resize).
@@ -403,6 +404,8 @@ session (until the next terminal resize).
 | `v` | Toggle Today/Tomorrow planner panel focus |
 | `Shift-Tab` | Cycle active zone (planner → board → timeline → agents) |
 | `+` | New board — create one, or adopt markdown files you already have (also the `+` chip in the top bar) |
+| `z` | Focus one pane (single-pane mode) — automatic below 100 columns |
+| `h` / `l` | In single-pane, walk the ring: planner → each column → agenda → agents, wrapping |
 | `F1` / `F2` / `F3` | Toggle visibility of Planner / Timeline / Agents zones |
 | `z` | Zoom active zone to full screen |
 | `r` | Refresh everything — reload boards from disk, rescan agents, force-refetch the agenda calendar (bypasses the 30-min cache) |

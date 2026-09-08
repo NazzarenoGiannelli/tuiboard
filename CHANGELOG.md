@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Single-pane mode for narrow terminals.** Below 100 columns tuiboard used to
+  drop every zone but the kanban — the least readable thing at that width, and
+  the only one that cannot be hidden — leaving the planner and agenda
+  unreachable. Now the zones queue instead of disappearing: one on screen at a
+  time, `h`/`l` walking a ring (planner → each board column → agenda → agents,
+  wrapping), `Shift-Tab` jumping whole zones, and the top bar showing where you
+  are (`⤢ Today / Tomorrow ‹ 1/8 ›`). `z` still enters and leaves it by hand at
+  any width. Resizing no longer moves your focus.
+- **`tuiboard --view=planner`** — open on Today/Tomorrow alone, for a vertical
+  strip beside other work.
 - **Boards can be created from inside tuiboard.** A `+` chip at the end of the
   board tabs — clickable, or the `+` key — opens a wizard that either creates a
   new markdown board or scans a folder and adopts the boards already in it.

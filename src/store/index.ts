@@ -46,6 +46,7 @@ import { createBoardFile } from "~/boards/create";
 import { scanDirectory, type BoardCandidate } from "~/boards/scan";
 import { suggestBoardsDir } from "~/boards/suggest";
 import { isTask, parseBoard } from "~/parser/markdown";
+import { buildNoteIndex, readNoteBody, resolveNote, type NoteIndex } from "~/notes/index";
 import { buildRing, ringPosition, samePane, stepRing, type Pane } from "~/ui/pane-ring";
 import { serializeBoard } from "~/parser/serialize";
 import type {
@@ -119,6 +120,18 @@ export interface BoardNew {
    * Escape does not dismiss it.
    */
   mandatory: boolean;
+  error?: string;
+}
+
+/** What the detail view needs to show a task's note, or to explain its absence. */
+export interface TaskNoteView {
+  path?: string;
+  body?: string;
+  /** Same-named notes that lost to this one. */
+  shadowed?: string[];
+  /** The link pointed at something that is not there. */
+  missing?: string;
+  /** The file exists but could not be read. */
   error?: string;
 }
 
@@ -1295,9 +1308,47 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   function refreshAll(): void {
     setState("boards", loadAll(config));
     setState("rev", (r) => r + 1);
+    noteIndex = undefined; // rebuilt on the next note opened
     agentsStore.refresh();
     calendarStore.refresh(true);
     flashBanner("info", "Refreshed boards · agents · agenda");
+  }
+
+  // ─── Task notes ──────────────────────────────────────────────────────────
+  // The index is built the first time a note is opened and thrown away by `r`.
+  // Watching the tree instead would cost a second chokidar over a thousand
+  // files to save a keystroke the user already has.
+  let noteIndex: NoteIndex | undefined;
+
+  /**
+   * The note behind the task at `ref`, ready to render: its text, where it came
+   * from, or why it could not be read. `undefined` means the task has no note —
+   * which is most tasks, and must produce no message at all.
+   */
+  function taskNote(ref: TaskRef): TaskNoteView | undefined {
+    const task = getTask(ref);
+    if (!task?.note) return undefined;
+
+    noteIndex ??= buildNoteIndex(suggestBoardsDir(config));
+    const found = resolveNote(task.note, { index: noteIndex, boardPath: ref.boardPath });
+    if ("missing" in found) return { missing: found.missing };
+
+    // Shown from the boards' own root: an absolute path is noise, and the
+    // config's root is the config's directory, not where the notes live.
+    const root = suggestBoardsDir(config);
+    const shown = found.path.startsWith(root)
+      ? found.path.slice(root.length).replace(/^[/\\]/, "")
+      : found.path;
+
+    try {
+      return {
+        path: shown,
+        body: readNoteBody(found.path),
+        shadowed: found.shadowed?.map((p) => (p.startsWith(root) ? p.slice(root.length + 1) : p)),
+      };
+    } catch (e) {
+      return { path: shown, error: (e as Error).message };
+    }
   }
 
   // ─── Multi-select ────────────────────────────────────────────────────────
@@ -1643,6 +1694,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     addTask,
     deleteTask,
     moveTaskWithinBoard,
+    // notes
+    taskNote,
     // boards
     addBoard,
     openBoardNew,

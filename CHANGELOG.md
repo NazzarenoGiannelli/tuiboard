@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A task's note is readable inside tuiboard.** When a task's title is a link —
+  `[[Nome nota|Titolo]]` or `[Titolo](Tasks/Nome.md)` — the detail view (`o`)
+  shows that note's text, scrollable, instead of pointing at Obsidian. Both link
+  forms work, so the convention stands on its own: a board written in plain
+  markdown gets the feature too. Links *inside* a sentence stay mentions and are
+  listed as before — a task that mentions a person is not documented by that
+  person's page. A missing note says which name it looked for; two notes sharing
+  a name resolve to the nearest and the shadowed one is named.
+
+### Fixed
+- **Markdown links no longer show as raw syntax in task titles.** `displayTitle`
+  stripped wikilinks but not `[text](path.md)`, so a board written without
+  Obsidian showed the whole link as its title — in the board, the planner and
+  the bar widget.
+
 ## [0.9.2] - 2026-09-08
 
 ### Fixed

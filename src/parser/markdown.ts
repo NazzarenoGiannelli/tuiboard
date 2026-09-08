@@ -351,7 +351,26 @@ const RE_MDLINK = /\[([^\]]*)\]\(([^)]+)\)/g;
 const RE_TITLE_WIKILINK = /^\s*\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]/;
 const RE_TITLE_MDLINK = /^\s*\[[^\]]*\]\(([^)]+)\)/;
 
-function titleNoteLink(body: string): TaskNoteLink | undefined {
+/**
+ * What can sit between the checkbox and the title without being the title:
+ * priority and decorative emoji, and markdown emphasis. `- [ ] 🔥 [[Nota]]`
+ * is still a task whose title is a link.
+ */
+function stripTitleDecorations(body: string): string {
+  let t = body;
+  let changed = true;
+  while (changed) {
+    const before = t;
+    t = t.trimStart().replace(/^[*_~]+/, "");
+    for (const [emoji] of PRIORITY_EMOJI) if (t.startsWith(emoji)) t = t.slice(emoji.length);
+    for (const emoji of DECORATIVE_EMOJI) if (t.startsWith(emoji)) t = t.slice(emoji.length);
+    changed = t !== before;
+  }
+  return t;
+}
+
+function titleNoteLink(rawBody: string): TaskNoteLink | undefined {
+  const body = stripTitleDecorations(rawBody);
   const wiki = body.match(RE_TITLE_WIKILINK);
   if (wiki) return { target: wiki[1]!.trim(), kind: "wikilink" };
   const md = body.match(RE_TITLE_MDLINK);

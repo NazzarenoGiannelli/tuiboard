@@ -64,6 +64,13 @@ describe("recognising a task's note", () => {
     expect(t.wikilinks).toContain("Lisa Montagner");
   });
 
+  it("looks past decorations — emoji and emphasis are not the title", () => {
+    // Real board line: `- [ ] 🔥 [[Rotazione Chiavi Produzione BackendV2]] 🔺 ⏳ …`
+    expect(task("- [ ] 🔥 [[Rotazione Chiavi]] 🔺 ⏳ 2026-09-08").note?.target)
+      .toBe("Rotazione Chiavi");
+    expect(task("- [ ] **[[Runbook Deploy|Deploy]]**").note?.target).toBe("Runbook Deploy");
+  });
+
   it("has no note when the title is plain text — most tasks", () => {
     expect(task("- [ ] Comprare il latte ⏳ 2026-09-08").note).toBeUndefined();
   });

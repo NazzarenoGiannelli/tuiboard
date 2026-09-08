@@ -720,8 +720,9 @@ function DetailModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiSto
   if (!task) {
     return <DialogShell title="Task not found" hint="Esc to close" width={50}><text>{" "}</text></DialogShell>;
   }
+  const note = createMemo(() => props.store.taskNote(props.modal.ref));
   return (
-    <DialogShell title="Detail" hint="Esc to close" width={90}>
+    <DialogShell title="Detail" hint="j/k scroll the note · Esc to close" width={90}>
       <text wrapMode="word">
         <span style={{ fg: T.text, attributes: ATTR.bold }}>{task.displayTitle}</span>
       </text>
@@ -773,6 +774,48 @@ function DetailModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiSto
           <span style={{ fg: T.textDim }}>Tags:      </span>
           <span style={{ fg: T.tag }}>{task.tags.map((t) => "#" + t).join(" ")}</span>
         </text>
+      </Show>
+      {/* The task's note, when its title is a link. Most tasks have none, and
+          for those nothing is drawn at all: silence is the correct output. */}
+      <Show when={note()}>
+        {(n: () => NonNullable<ReturnType<typeof note>>) => (
+          <box style={{ flexDirection: "column", flexGrow: 1, minHeight: 0 }}>
+            <box style={{ height: 1 }} />
+            <Show when={n().path}>
+              <text wrapMode="word">
+                <span style={{ fg: T.textDim }}>Note: </span>
+                <span style={{ fg: T.tag }}>{n().path}</span>
+              </text>
+            </Show>
+            <Show when={n().missing}>
+              <text wrapMode="word">
+                <span style={{ fg: T.overdue }}>{"Note not found: " + n().missing}</span>
+              </text>
+            </Show>
+            <Show when={n().error}>
+              <text wrapMode="word">
+                <span style={{ fg: T.overdue }}>{"Note unreadable: " + n().error}</span>
+              </text>
+            </Show>
+            <Show when={n().shadowed?.length}>
+              <text wrapMode="word">
+                <span style={{ fg: T.textDim }}>
+                  {"Another note shares this name: " + (n().shadowed ?? []).join(", ")}
+                </span>
+              </text>
+            </Show>
+            <Show when={n().body !== undefined}>
+              <box style={{ height: 1 }} />
+              <scrollbox style={{ flexGrow: 1, minHeight: 0 }}>
+                <text wrapMode="word">
+                  <span style={{ fg: T.text }}>
+                    {n().body === "" ? "(the note is empty)" : n().body}
+                  </span>
+                </text>
+              </scrollbox>
+            </Show>
+          </box>
+        )}
       </Show>
       <Show when={task.wikilinks.length > 0}>
         <box style={{ height: 1 }} />

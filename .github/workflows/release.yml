@@ -1,0 +1,95 @@
+name: Release
+
+# Publishing used to need a human: npm has 2FA on this package, so every
+# `npm publish` stopped for a one-time code typed by hand. That is how 0.8.4
+# ended up tagged in July and never shipped — the tag is not the release.
+#
+# This publishes from CI with no token at all, over npm's trusted publishing
+# (OIDC): GitHub mints a short-lived credential scoped to this workflow and
+# this package, so there is nothing stored to leak, rotate, or forget.
+# Requires the package's trusted publisher on npmjs.com to name this file.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the GitHub release
+  id-token: write # mint the OIDC token npm verifies
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # npm ≥ 11.5.1 and Node ≥ 22.14 are what understand trusted publishing.
+      # The runner's bundled npm is older, so it is upgraded explicitly rather
+      # than hoped for.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm install -g npm@latest
+      - run: npm --version
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+
+      # The tag is the claim; these are the checks that the claim is true.
+      - name: Tag matches package.json
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then
+            echo "tag v$TAG does not match package.json $PKG" >&2
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Tests
+        run: bun test
+
+      - name: Markdown round trip
+        run: bun run src/scripts/roundtrip-check.ts examples/Home.md examples/Personal.md examples/Work.md
+
+      # No NODE_AUTH_TOKEN: the OIDC exchange happens inside npm publish.
+      # --provenance records which commit and which workflow built this
+      # tarball, and npm shows it on the package page.
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+
+      # Notes come from the CHANGELOG section for this version, not from the
+      # commit list: the changelog says what changed for a user, the commits
+      # say what changed in the code. Falls back to generated notes only if
+      # the version has no section — a missing changelog entry should be
+      # visible, not silently papered over with commit subjects.
+      - name: Release notes from CHANGELOG
+        id: notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if awk -v v="## [$VERSION]" 'index($0, v)==1 {found=1; next} /^## \[/ && found {exit} found' CHANGELOG.md > /tmp/notes.md && [ -s /tmp/notes.md ]; then
+            echo "have_notes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_notes=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::no CHANGELOG section for $VERSION — falling back to generated notes"
+          fi
+
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Idempotent: a release may already exist if it was cut by hand.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists — leaving it alone"
+            exit 0
+          fi
+          if [ "${{ steps.notes.outputs.have_notes }}" = "true" ]; then
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file /tmp/notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+          fi

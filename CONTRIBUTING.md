@@ -106,6 +106,33 @@ Open an [issue](https://github.com/NazzarenoGiannelli/tuiboard/issues). For bugs
 include your OS, terminal, Bun version, and the steps to reproduce. For features,
 a sentence on the problem it solves is more useful than the solution.
 
+## Releasing (maintainer)
+
+Releases are cut by a tag, and published by CI — there is no npm token
+anywhere. `.github/workflows/release.yml` authenticates over npm's trusted
+publishing (OIDC): GitHub mints a short-lived credential scoped to that
+workflow and this package, so there is nothing stored to leak or rotate.
+
+```bash
+# 1. Move the [Unreleased] entries under a new version heading in CHANGELOG.md
+#    and add the link at the bottom of the file
+# 2. Bump "version" in package.json to match
+git commit -am "release: X.Y.Z — one line on what it is"
+git push origin main
+git tag -a vX.Y.Z -m "vX.Y.Z — title"
+git push origin vX.Y.Z        # this is what publishes
+```
+
+The workflow refuses to publish if the tag and `package.json` disagree, runs
+typecheck, tests and the markdown round trip first, then publishes with
+`--provenance` and opens the GitHub release using that version's CHANGELOG
+section as its notes.
+
+Set up once, on npmjs.com → the package → *Trusted publishers*: organisation
+or user, repository, workflow filename (`release.yml`), and — for
+configurations created after 2026-09-03 — explicitly allow direct
+`npm publish` rather than only staged publishing.
+
 ## License
 
 By contributing, you agree your contributions are licensed under the project's

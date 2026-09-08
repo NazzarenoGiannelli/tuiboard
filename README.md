@@ -534,6 +534,10 @@ clobber an edit made in the TUI or another editor in the meantime.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
+- **v0.9** — tuiboard makes its own boards: a `+` that creates or adopts them,
+  onboarding on first run instead of an error, `tuiboard board` headless, and
+  single-pane mode so a narrow vertical panel shows one zone at a time instead
+  of clipped kanban columns.
 - **v0.8** — write to Google Calendar from the Agenda: create, edit, and delete
   events (opt-in), set their date and time in the modal, plus all-day events in
   the top strip, consistent `t`/`m` date shortcuts, and a boot splash.

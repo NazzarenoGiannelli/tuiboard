@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-08
+
 ### Added
 - **Single-pane mode for narrow terminals.** Below 100 columns tuiboard used to
   drop every zone but the kanban — the least readable thing at that width, and
@@ -32,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that folder's sync and versioning; the fallback is `~/.local/share/tuiboard/boards/`.
 
 ### Fixed
+- **The key hints no longer truncate mid-word on a narrow terminal.** The
+  bottom bar is a 130-character line that truncates rather than wraps, so at 60
+  columns it read `⏎ don…schedule`. In single-pane it keeps only the keys that
+  matter with one pane on screen; the full sheet is one `?` away.
 - **A board without a `%% kanban:settings %%` trailer grew a blank line on every
   save.** The final newline of the file was parsed as a blank line and written
   back as one, plus a new terminator. Boards with the trailer were unaffected,
@@ -267,6 +273,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.9.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.9.0
 [0.8.5]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.5
 [0.8.4]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.4
 [0.8.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.8.3

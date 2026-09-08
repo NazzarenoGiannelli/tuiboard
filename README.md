@@ -534,6 +534,9 @@ clobber an edit made in the TUI or another editor in the meantime.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
+- **v0.10** — a task's note, read inside tuiboard: when a task's title is a
+  link, `o` shows that note's text instead of pointing at Obsidian. Works with
+  plain markdown links too, so the convention needs no vault.
 - **v0.9** — tuiboard makes its own boards: a `+` that creates or adopts them,
   onboarding on first run instead of an error, `tuiboard board` headless, and
   single-pane mode so a narrow vertical panel shows one zone at a time instead

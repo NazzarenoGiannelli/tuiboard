@@ -55,17 +55,19 @@ export function Dashboard(props: { store: TuiStore }) {
  * zone of the normal layout and BoardOnly already respects ui.zoomed
  * to render only the active panel between them.
  *
- * Modals: the normal layout drops them into the Agenda's slot, which doesn't
- * exist while zoomed — so here the modal floats as a centered absolute overlay
- * on top of the zoomed view. The user stays zoomed; close the modal and the
- * zoomed view is exactly as they left it (no exit-zoom / re-zoom flip).
+ * Modals take the pane's place, exactly as the four-zone layout drops them
+ * into the Agenda's slot: with one zone filling the screen, that zone IS the
+ * slot. They used to float as an absolute overlay, which had nothing to paint
+ * over — the theme leaves panel backgrounds transparent so the terminal shows
+ * through — so the dialog's text interleaved with the pane underneath and both
+ * became unreadable. Closing returns to the pane exactly as it was.
  */
 function ZoomedLayout(props: { store: TuiStore }) {
   const ui = () => props.store.state.ui;
   const zone = () => ui().activeZone;
 
   return (
-    <>
+    <Show when={ui().modal} fallback={
       <Show when={zone() === "timeline"} fallback={
         <Show when={zone() === "agents"} fallback={<BoardOnly store={props.store} />}>
           <AgentsOnly store={props.store} />
@@ -73,27 +75,9 @@ function ZoomedLayout(props: { store: TuiStore }) {
       }>
         <TimelineOnly store={props.store} />
       </Show>
-      {/* Modal overlay — only while zoomed AND a modal is open. Absolute + high
-          zIndex so it paints over the zoomed view; centered; transparent
-          backdrop so the board stays visible behind the (opaque) modal panel. */}
-      <Show when={ui().modal}>
-        <box
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 100,
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <ModalLayer store={props.store} />
-        </box>
-      </Show>
-    </>
+    }>
+      <ModalLayer store={props.store} />
+    </Show>
   );
 }
 

@@ -11,7 +11,7 @@
  * checks `ui.modal` first and bails if set (only Escape passes through).
  */
 
-import { For, Show, createMemo, createSignal } from "solid-js";
+import { For, Show, createContext, createMemo, createSignal, useContext } from "solid-js";
 
 import { isTask } from "~/parser/markdown";
 import {
@@ -29,14 +29,23 @@ import type { PriorityLevel, TimeBlock } from "~/types";
  *  slot (the Dashboard renders it there while a modal is open) with no reflow. */
 const MODAL_WIDTH = AGENDA_WIDTH;
 
+/**
+ * Whether the dialog is standing in for a whole pane (single-pane) or sitting
+ * in the Agenda's slot (four-zone). It decides how wide the dialog may be, and
+ * only ModalLayer is in a position to know.
+ */
+const SinglePaneContext = createContext<() => boolean>(() => false);
+
 export function ModalLayer(props: { store: TuiStore }) {
   const modal = createMemo(() => props.store.state.ui.modal);
   return (
+    <SinglePaneContext.Provider value={() => props.store.singlePane()}>
     <Show when={modal()}>
       {/* Each modal's DialogShell IS the panel box (border + title + slot
           dimensions), so it drops into the Agenda's slot directly. */}
       <ModalRouter store={props.store} modal={modal()!} />
     </Show>
+    </SinglePaneContext.Provider>
   );
 }
 
@@ -194,8 +203,27 @@ function BoardNewModal(props: { store: TuiStore }) {
   );
 }
 
+/**
+ * How wide the dialog may be.
+ *
+ * In the four-zone layout it takes the Agenda's slot and must match it to the
+ * cell, or the whole dashboard shifts when a modal opens — that invariant is
+ * why the requested width used to be ignored outright. In single-pane the
+ * dialog takes a whole pane's place instead, so there it can use what the
+ * terminal actually offers: the keyboard reference asks for 92 columns and is
+ * unreadable squeezed into 50, while a 60-column strip needs it to shrink
+ * rather than overflow.
+ */
+function dialogWidth(desired: number | undefined, singlePane: boolean): number {
+  if (!singlePane) return MODAL_WIDTH;
+  const terminal = process.stdout.columns ?? 80;
+  const room = Math.max(20, terminal - 4);
+  return Math.min(desired ?? MODAL_WIDTH, room);
+}
+
 function DialogShell(props: DialogShellProps) {
-  void props.width;
+  const singlePane = useContext(SinglePaneContext);
+  const width = () => dialogWidth(props.width, singlePane());
   return (
     <box
       style={{
@@ -204,8 +232,8 @@ function DialogShell(props: DialogShellProps) {
         // slot at the exact same size and the dashboard doesn't shift when a
         // modal opens. The title rides in the top border like the columns/zones.
         flexDirection: "column",
-        width: MODAL_WIDTH,
-        minWidth: MODAL_WIDTH,
+        width: width(),
+        minWidth: Math.min(MODAL_WIDTH, width()),
         flexGrow: 0,
         marginLeft: 1,
         backgroundColor: T.panelBgActive,

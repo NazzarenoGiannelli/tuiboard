@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Modals were unreadable in single-pane.** With one zone filling the screen a
+  dialog floated over it as an absolute overlay — and had nothing to paint over,
+  because the theme leaves panel backgrounds transparent so the terminal shows
+  through. The keyboard reference interleaved with the pane character by
+  character; the new-task and edit dialogs were effectively invisible. A modal
+  now takes the pane's place, exactly as the four-zone layout drops it into the
+  Agenda's slot: with one zone on screen, that zone *is* the slot.
+- **A dialog can use the width it asks for when it stands in for a pane.** The
+  requested width was ignored outright, which kept the four-zone layout from
+  shifting but squeezed the 92-column keyboard reference into 50. It is now
+  honoured in single-pane only, clamped to the terminal; the Agenda slot keeps
+  its exact width, verified by the dashboard rendering identically with and
+  without a modal open.
+
 ## [0.9.0] - 2026-09-08
 
 ### Added

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Keyboard reference (`?`) restyle + scroll.** The help modal now groups
+  shortcuts under emoji section headers, color-codes the key (accent) vs. its
+  description (dim) with a dotted leader between them, and wraps long
+  descriptions into their own aligned column (no more continuation text running
+  under the keys). The whole reference now lives in a scrollbox so it never
+  clips on short terminals — `j`/`k` (or arrows) scroll it. Shortcut text is
+  unchanged.
+
 ## [0.10.0] - 2026-09-09
 
 ### Added

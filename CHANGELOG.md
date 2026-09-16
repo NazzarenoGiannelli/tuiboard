@@ -5,7 +5,24 @@ All notable changes to **tuiboard** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.0] - 2026-09-16
+
+### Fixed
+- **Zoomed column titles no longer truncate short of the available width.**
+  The zoomed `<TaskRow>` read a hardcoded `availableWidth` of `100` regardless
+  of the terminal's real size, and a separate 60-character cap on the title
+  never lifted for zoomed columns — together they clipped titles well before
+  the column's actual right edge, sometimes with a garbled double-truncation
+  (`walk t...gh backgro…`). The real measured viewport width now drives the
+  budget, the cap lifts when zoomed, and the width is re-measured on
+  zoom-toggle and terminal resize. Thanks @ArjunAnil2000.
+- **A board's configured display `name` no longer reverts to the filename on
+  an external edit.** `loadAll()` applied `config.boards[].name` on startup,
+  but the file-watcher's reload path re-parsed the board from disk without
+  reapplying it, so any edit made outside tuiboard (another editor, a sync
+  tool, a script) silently renamed the board back to its filename-derived
+  default. The reload path now reapplies the configured name, matched by
+  filepath, the same way the initial load already did. Thanks @ArjunAnil2000.
 
 ### Changed
 - **Keyboard reference (`?`) restyle + scroll.** The help modal now groups
@@ -14,7 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   descriptions into their own aligned column (no more continuation text running
   under the keys). The whole reference now lives in a scrollbox so it never
   clips on short terminals — `j`/`k` (or arrows) scroll it. Shortcut text is
-  unchanged.
+  unchanged, except that two entries missing from the rewrite (`+` New board,
+  `c` copy resume command in the Agents zone — both real, both still bound)
+  were restored during review. Thanks @k0-ba.
 
 ## [0.10.0] - 2026-09-09
 
@@ -86,6 +105,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that folder's sync and versioning; the fallback is `~/.local/share/tuiboard/boards/`.
 
 ### Fixed
+- **A fresh install could crash on the `~/*` path alias**
+  (`Cannot find module '~/ui/splash-boot'`) — `tsconfig.json` wasn't in the
+  published `files` list yet. Fixed as a side effect of the packaging cleanup
+  below, but never called out on its own at the time; three users hit it on
+  0.8.3/0.8.4 and filed independent issues before this line existed. Noted
+  retroactively on 2026-09-16.
 - **The key hints no longer truncate mid-word on a narrow terminal.** The
   bottom bar is a 130-character line that truncates rather than wraps, so at 60
   columns it read `⏎ don…schedule`. In single-pane it keeps only the keys that

@@ -404,10 +404,9 @@ session (until the next terminal resize).
 | `v` | Toggle Today/Tomorrow planner panel focus |
 | `Shift-Tab` | Cycle active zone (planner → board → timeline → agents) |
 | `+` | New board — create one, or adopt markdown files you already have (also the `+` chip in the top bar) |
-| `z` | Focus one pane (single-pane mode) — automatic below 100 columns |
 | `h` / `l` | In single-pane, walk the ring: planner → each column → agenda → agents, wrapping |
 | `F1` / `F2` / `F3` | Toggle visibility of Planner / Timeline / Agents zones |
-| `z` | Zoom active zone to full screen |
+| `z` | Zoom active zone to full screen (single-pane below 100 columns is automatic, not triggered by `z`) |
 | `r` | Refresh everything — reload boards from disk, rescan agents, force-refetch the agenda calendar (bypasses the 30-min cache) |
 
 ### Agenda (timeline zone)
@@ -534,6 +533,10 @@ clobber an edit made in the TUI or another editor in the meantime.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
+- **v0.11** — zoomed columns no longer clip task titles short of the available
+  width, a board's custom name survives external edits instead of reverting to
+  the filename, and the keyboard reference (`?`) got a scroll + visual restyle
+  grouped by section.
 - **v0.10** — a task's note, read inside tuiboard: when a task's title is a
   link, `o` shows that note's text instead of pointing at Obsidian. Works with
   plain markdown links too, so the convention needs no vault.

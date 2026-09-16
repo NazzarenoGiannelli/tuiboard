@@ -37,7 +37,6 @@
     "!src/**/*.test.ts",
     "!src/scripts/",
     "bin/",
-    "tsconfig.json",
     ".tuiboard/config.example.yaml",
     "README.md",
     "CHANGELOG.md",

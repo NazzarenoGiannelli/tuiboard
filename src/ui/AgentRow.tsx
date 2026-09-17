@@ -42,11 +42,14 @@ const STATUS_GLYPH: Record<AgentStatus, string> = {
   "archived":  "·",
 };
 
-/** One hue per harness so the badge reads before the letters do. */
+/**
+ * One hue per harness so the badge reads before the letters do.
+ * Pi, once its adapter lands: acid yellow-green `#c3d94e`.
+ */
 export const HARNESS_COLOR: Record<AgentProvider, string> = {
-  "claude-code": T.warm,   // Claude orange
-  codex:         T.low,    // sage
-  opencode:      T.accent, // blue-cyan
+  "claude-code": T.warm,    // orange
+  codex:         T.accent,  // blue-cyan
+  opencode:      "#d27ee0", // violet-fuchsia
 };
 
 /** Card cwd: `~`-relative when under $HOME, shortened when still long. */

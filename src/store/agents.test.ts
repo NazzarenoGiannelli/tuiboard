@@ -38,10 +38,20 @@ function fakeAdapter(
   return { provider: "claude-code", watchPaths: () => watchPaths, discover };
 }
 
-const waitFor = async (cond: () => boolean, timeoutMs = 5000) => {
+/**
+ * Wait for `cond`, re-running `poke` every 250 ms meanwhile. The watcher arms
+ * asynchronously and can miss a write made before it's ready (slow CI), so
+ * watcher tests keep writing until the store notices.
+ */
+const waitFor = async (cond: () => boolean, poke?: () => void, timeoutMs = 10_000) => {
   const start = Date.now();
+  let lastPoke = 0;
   while (!cond()) {
     if (Date.now() - start > timeoutMs) throw new Error("timed out");
+    if (poke && Date.now() - lastPoke >= 250) {
+      poke();
+      lastPoke = Date.now();
+    }
     await new Promise((r) => setTimeout(r, 25));
   }
 };
@@ -138,15 +148,14 @@ describe("createAgentsStore watching", () => {
     ]);
     try {
       expect(scans).toEqual({ a: 1, b: 1 });
-      await new Promise((r) => setTimeout(r, 300)); // let the watcher arm
-      writeFileSync(bFile, "changed");
-      await waitFor(() => scans.b === 2);
+      let n = 0;
+      await waitFor(() => scans.b >= 2, () => writeFileSync(bFile, `changed ${n++}`));
       expect(scans.a).toBe(1);
     } finally {
       await store.dispose();
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("starts watching a path created after launch", async () => {
     const dir = mkdtempSync(join(tmpdir(), "tuiboard-agents-"));
@@ -159,14 +168,13 @@ describe("createAgentsStore watching", () => {
       mkdirSync(late);
       await waitFor(() => scans >= 2); // picked up by the poll
       const before = scans;
-      await new Promise((r) => setTimeout(r, 300)); // let the watcher arm
-      writeFileSync(join(late, "s.jsonl"), "{}");
-      await waitFor(() => scans > before);
+      let n = 0;
+      await waitFor(() => scans > before, () => writeFileSync(join(late, "s.jsonl"), `{"n":${n++}}`));
     } finally {
       await store.dispose();
       rmSync(dir, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 });
 
 describe("shortModel", () => {

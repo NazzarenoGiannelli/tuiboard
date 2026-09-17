@@ -19,6 +19,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import * as YAML from "js-yaml";
 
 import { isBoardFile } from "~/boards/scan";
+import { LAUNCHERS, type Launcher } from "~/input/open-session";
 
 export interface BoardConfig {
   /** Path to the .md file, absolute or relative to the config directory. */
@@ -46,6 +47,12 @@ export interface Config {
    * When unset, tuiboard falls back to opening a tab + the agent's resume command.
    */
   resumeCommand?: string[];
+  /**
+   * Terminal Enter opens sessions in (config `resume_terminal`). `auto`
+   * detects it from the environment; set one explicitly when detection
+   * guesses wrong. Ignored when `resumeCommand` is set.
+   */
+  resumeTerminal: "auto" | Launcher;
   /**
    * Template for the shell command copied to the clipboard by `c` in the agents
    * zone — one paste that `cd`s into the session's directory and resumes it.
@@ -126,6 +133,7 @@ export const DEFAULT_CONFIG: Omit<Config, "root" | "loaded" | "boards"> = {
   assignees: [],
   doneColumn: "Done",
   archiveColumn: "Archive",
+  resumeTerminal: "auto",
   copyResumeCommand: DEFAULT_COPY_RESUME_COMMAND,
   zones: { planner: "on", agenda: "on", agents: "on" },
 };
@@ -199,6 +207,7 @@ interface RawConfig {
   done_column: string;
   archive_column: string;
   resume_command: string[];
+  resume_terminal: string;
   copy_resume_command: string;
   calendars: {
     google?: {
@@ -344,6 +353,9 @@ function normalize(raw: Partial<RawConfig>, root: string, loaded: boolean): Conf
       Array.isArray(raw.resume_command) && raw.resume_command.length > 0
         ? raw.resume_command.map(String)
         : undefined,
+    resumeTerminal: (LAUNCHERS as readonly string[]).includes(raw.resume_terminal ?? "")
+      ? (raw.resume_terminal as Launcher)
+      : "auto",
     copyResumeCommand:
       typeof raw.copy_resume_command === "string" &&
       raw.copy_resume_command.trim().length > 0

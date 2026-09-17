@@ -29,7 +29,8 @@ project coherent — please keep them in mind when proposing changes:
 - [**Bun**](https://bun.sh) ≥ 1.2 — tuiboard runs on the Bun runtime (it is *not*
   a Node CLI). OpenTUI ships its own native renderer binaries; Bun picks the
   right one per platform.
-- A terminal that handles 256/true-color and Unicode. Developed on WezTerm.
+- A terminal that handles 256/true-color and Unicode. Used daily on Windows
+  Terminal, WezTerm and Ghostty.
 
 ## Quick start
 

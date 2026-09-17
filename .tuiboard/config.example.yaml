@@ -43,14 +43,22 @@ archive_column: Archive
 # zones:
 #   planner: on      # Today/Tomorrow cross-board panel        (F1)
 #   agenda: on       # 24h agenda + calendar overlay           (F2)
-#   agents: on       # live Claude Code session view           (F3)
+#   agents: on       # live agent sessions view                (F3)
 
-# Optional: override what Enter does in the Agents zone ("open the selected
-# agent session"). An argv array — the tokens {cwd}, {sessionId} and {resume}
+# Enter in the Agents zone opens the selected session in a new tab/window of
+# the terminal tuiboard runs in, detected automatically: tmux, herdr, WezTerm,
+# Windows Terminal, Ghostty — else the OS default (Linux: xdg-terminal-exec,
+# Windows: a new PowerShell window, macOS: Terminal.app). If nothing works, the
+# resume command is copied to the clipboard instead. Force one when detection
+# guesses wrong (e.g. a multiplexer env var leaking into another terminal):
+# resume_terminal: auto   # tmux | herdr | wezterm | windows-terminal | ghostty
+#                         # | xdg-terminal-exec | windows-console | macos-terminal
+
+# Optional: replace that with your own launcher script. An argv array — the tokens {cwd}, {sessionId} and {resume}
 # (the agent's own resume command, e.g. `claude --resume <sessionId>`) are
 # substituted, then it's run directly (no shell). Point it at your own script
-# to spawn a custom terminal layout. When omitted, tuiboard just opens a new
-# WezTerm tab and runs the agent's resume command.
+# to spawn a custom terminal layout. Takes precedence over resume_terminal —
+# remove it to get the automatic behavior above.
 #
 # The first element must be a DIRECTLY EXECUTABLE program — a real binary on
 # PATH or an absolute path. It is NOT run through a shell, so shell builtins

@@ -14,6 +14,13 @@
  */
 
 import { isHiddenColumn } from "~/config/loader";
+import {
+  LAUNCHER_NAME,
+  detectLauncher,
+  planLaunch,
+  runLaunchPlan,
+  type LaunchEnv,
+} from "~/input/open-session";
 import { HARNESS, type AgentSession } from "~/store/agents";
 import { googleTokenCanWrite } from "~/store/calendar";
 import { isTask } from "~/parser/markdown";
@@ -491,13 +498,13 @@ function handleAgentsZone(store: TuiStore, key: KeyEvent): void {
   } else if (key.name === "k" || key.name === "up") {
     store.setCursor(0, Math.max(0, ui.row - 1));
   } else if (key.name === "enter" || key.name === "return") {
-    // Open (resume) the selected session in a new WezTerm tab.
+    // Open (resume) the selected session in a new terminal tab/window.
     const target = sessions[ui.row];
-    if (target) void openSessionInWezterm(store, target);
+    if (target) void openSession(store, target);
   } else if (key.name === "c") {
     // Copy a one-paste "cd + resume" command for the selected session, so you
     // can drop it into any tab/pane anywhere and land in the right directory
-    // resuming the right session (no WezTerm dependency, unlike Enter).
+    // resuming the right session (works in any terminal, unlike Enter).
     const target = sessions[ui.row];
     if (target) {
       const cmd = store.config.copyResumeCommand
@@ -876,30 +883,18 @@ function fmtHm(m: number): string {
 }
 
 /**
- * Open (resume) an agent session in a new WezTerm tab.
- *
- * Two steps:
- *   1. `wezterm cli spawn --cwd <cwd>` opens a new tab running your DEFAULT
- *      shell in the session's directory (prints the new pane id).
- *   2. `wezterm cli send-text` types the adapter's resume command (e.g.
- *      `claude --resume <id>`) + Enter into it.
- *
- * Running it through the interactive shell (rather than `spawn -- claude …`
- * directly) means the agent CLI gets your full shell environment — PATH, env
- * vars, any wrapper — which is why the direct form exited 1. And if it still
- * errors, you're left at a live prompt that shows it instead of a vanishing
- * tab. Failures (not inside WezTerm, `wezterm` off PATH) surface as a banner.
+ * Open (resume) an agent session in a new tab/window of the terminal tuiboard
+ * runs in — tmux, herdr, WezTerm, Windows Terminal, Ghostty, or the OS default
+ * (see open-session.ts). Config `resume_terminal` forces one. When nothing
+ * can open it, the resume command lands on the clipboard instead.
  */
-async function openSessionInWezterm(
-  store: TuiStore,
-  session: AgentSession,
-): Promise<void> {
-  const { spawn, spawnSync } = await import("node:child_process");
+async function openSession(store: TuiStore, session: AgentSession): Promise<void> {
+  const { spawn } = await import("node:child_process");
   const { cwd, sessionId } = session;
 
   // Custom override (config `resume_command`): an argv array with {cwd} /
-  // {sessionId} / {resume} placeholders, spawned directly (no shell). Lets you launch a
-  // personal terminal layout without baking it into the distributed tool.
+  // {sessionId} / {resume} placeholders, spawned directly (no shell). Lets you
+  // launch a personal terminal layout without baking it into the distributed tool.
   const custom = store.config.resumeCommand;
   if (custom && custom.length > 0) {
     const argv = custom.map((arg) =>
@@ -922,39 +917,40 @@ async function openSessionInWezterm(
         store.flashBanner("error", `resume_command failed: ${e.message}`),
       );
       child.unref();
-      store.flashBanner("info", `↗ Opening session (${sessionId.slice(0, 8)})`);
+      store.flashBanner("info", `↗ Opening session via resume_command (${sessionId.slice(0, 8)})`);
     } catch (e) {
       store.flashBanner("error", `resume_command failed: ${String(e)}`);
     }
     return;
   }
 
-  try {
-    const spawned = spawnSync("wezterm", ["cli", "spawn", "--cwd", cwd], {
-      encoding: "utf8",
-      windowsHide: true,
-    });
-    if (spawned.error) {
-      store.flashBanner("error", `WezTerm launch failed: ${spawned.error.message}`);
-      return;
-    }
-    if (spawned.status !== 0) {
-      store.flashBanner(
-        "error",
-        `WezTerm spawn failed: ${(spawned.stderr || "").trim() || `exit ${spawned.status}`}`,
-      );
-      return;
-    }
-    const paneId = spawned.stdout.trim();
-    // Type the resume command into the fresh pane (\r submits, like Enter).
-    spawnSync(
-      "wezterm",
-      ["cli", "send-text", "--pane-id", paneId, "--no-paste"],
-      { input: `${session.resumeCommand}\r`, encoding: "utf8", windowsHide: true },
+  const launchEnv: LaunchEnv = {
+    env: process.env,
+    platform: process.platform,
+    has: (c) => Bun.which(c) !== null,
+  };
+  const forced = store.config.resumeTerminal;
+  const launcher = forced === "auto" ? detectLauncher(launchEnv) : forced;
+  const fallBackToClipboard = (why: string) =>
+    copyToClipboard(session.resumeCommand).then(
+      () => store.flashBanner("warn", `${why} — resume command copied, paste it in ${cwd}`),
+      () => store.flashBanner("error", why),
     );
-    store.flashBanner("info", `↗ Opened session in WezTerm (${sessionId.slice(0, 8)})`);
+
+  if (!launcher) {
+    await fallBackToClipboard("No supported terminal detected (set resume_terminal)");
+    return;
+  }
+  try {
+    await runLaunchPlan(planLaunch(launcher, { cwd, resume: session.resumeCommand }, launchEnv));
+    store.flashBanner(
+      "info",
+      `↗ Opened session in ${LAUNCHER_NAME[launcher]} (${sessionId.slice(0, 8)})`,
+    );
   } catch (e) {
-    store.flashBanner("error", `WezTerm launch failed: ${String(e)}`);
+    await fallBackToClipboard(
+      `${LAUNCHER_NAME[launcher]} launch failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 }
 

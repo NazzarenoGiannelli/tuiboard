@@ -167,11 +167,16 @@ assignees: [Alice, Bob]
 done_column: Done
 archive_column: Archive
 
-# Optional: override Enter in the Agents zone. argv array, {cwd}/{sessionId}/
+# Enter in the Agents zone opens the session in the terminal tuiboard runs in
+# (tmux, herdr, WezTerm, Windows Terminal, Ghostty, else the OS default
+# terminal; clipboard as last resort). Force one if detection guesses wrong:
+# resume_terminal: windows-terminal   # auto (default) | tmux | herdr | wezterm |
+#   ghostty | xdg-terminal-exec | windows-console | macos-terminal
+
+# Optional: replace Enter with your own launcher. argv array, {cwd}/{sessionId}/
 # {resume} substituted, run directly (no shell — element 0 must be a real binary/abs
-# path, NOT a shell builtin or Windows App Execution Alias). Defaults to
-# opening a WezTerm tab with the agent's resume command (`claude --resume
-# <id>`). For a custom layout:
+# path, NOT a shell builtin or Windows App Execution Alias). Takes precedence
+# over resume_terminal. For a custom layout:
 # resume_command: ["nu", "C:/Users/you/.config/tuiboard/code-resume.nu", "{cwd}", "{sessionId}"]
 
 # Optional: the command `c` copies to the clipboard in the Agents zone — one
@@ -389,7 +394,7 @@ Launch `tuiboard` with no flag for the default dashboard (every enabled zone).
 |---|---|---|
 | (none) | **Dashboard** — every enabled zone | Default; your configured layout |
 | `--view=planner` | Today/Tomorrow alone, full width | A narrow vertical strip beside other work |
-| `--view=board` | Kanban + planner panel only | Focus mode, or a single WezTerm pane |
+| `--view=board` | Kanban + planner panel only | Focus mode, or a single terminal pane |
 | `--view=timeline` | Timeline fullscreen | Wall-mounted "what's now" |
 | `--view=agents` | Agent view fullscreen | Cross-machine session monitor |
 
@@ -437,7 +442,7 @@ session (until the next terminal resize).
 | Key | Action |
 |---|---|
 | `j` / `k` | Move the cursor down / up the session list |
-| `Enter` | Open (resume) the selected session in a new WezTerm tab |
+| `Enter` | Open (resume) the selected session in a new tab/window of your terminal — tmux, herdr, WezTerm, Windows Terminal, Ghostty, or the OS default; falls back to copying the command (`resume_terminal` to force one) |
 | `c` | Copy a one-paste `cd … && <resume>` command (e.g. `claude --resume <id>`) for the selected session — drop it into any tab/pane to land in the right dir and resume (no WezTerm needed; format is `copy_resume_command`) |
 | `o` | Session detail (harness, model, cwd, branch, last prompts, resume command) |
 | `f` | Filter by harness: all → `cc` Claude Code → `cx` Codex → `oc` OpenCode (shown in the panel title; outside the Agents zone `f` is the board filter) |
@@ -570,7 +575,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 - **v0.5** — daily-driver ready. Kanban + planner + timeline + agents
   all functional, multi-select, undo, atomic file roundtrip, mouse click,
   responsive layout. Tested on Windows with WezTerm; Linux/macOS should
-  work via the same OpenTUI binaries (untested).
+  work via the same OpenTUI binaries (untested at the time).
 
 ## Contributing
 

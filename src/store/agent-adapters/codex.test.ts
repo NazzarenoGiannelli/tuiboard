@@ -243,15 +243,18 @@ describe("createCodexAdapter", () => {
     const store = createAgentsStore([createCodexAdapter(home)]);
     try {
       expect(store.sessions()).toEqual([]);
-      await new Promise((r) => setTimeout(r, 300)); // let the watcher arm
-      writeFileSync(join(dayDir(), rollout(ID)), [meta(ID), started, userItem("go")].join("\n"));
+      // Keep appending until the watcher (which arms asynchronously) notices.
+      const path = join(dayDir(), rollout(ID));
+      const lines = [meta(ID), started, userItem("go")];
       const start = Date.now();
-      while (store.sessions().length === 0 && Date.now() - start < 5000) {
-        await new Promise((r) => setTimeout(r, 25));
+      while (store.sessions().length === 0 && Date.now() - start < 10_000) {
+        writeFileSync(path, lines.join("\n"));
+        lines.push(userItem("go"));
+        await new Promise((r) => setTimeout(r, 250));
       }
       expect(store.sessions()[0]?.status).toBe("live-busy");
     } finally {
       await store.dispose();
     }
-  });
+  }, 15_000);
 });

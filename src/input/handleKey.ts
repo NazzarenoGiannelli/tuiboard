@@ -13,6 +13,7 @@
  * shares the same input contract.
  */
 
+import { quitApp } from "~/app-exit";
 import { isHiddenColumn } from "~/config/loader";
 import {
   LAUNCHER_NAME,
@@ -137,7 +138,7 @@ export function handleKey(
 
   // Quit
   if (key.name === "q" || (key.ctrl && key.name === "c")) {
-    store.dispose().finally(() => process.exit(0));
+    void quitApp(() => store.dispose());
     return;
   }
 

@@ -85,8 +85,17 @@ const child = spawn(
     env: { ...process.env, TUIBOARD_SPLASH_DONE: "1", TUIBOARD_READY_FLAG: readyFlag },
   },
 );
+// Safety net: whatever way the app ended (crash, kill), give the shell a sane
+// terminal back — mouse reporting off (else moving the mouse prints
+// `51;7;45M…`), focus/paste reporting off, cursor visible. Harmless when the
+// app already restored everything.
+const RESET_TERMINAL =
+  "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1015l" + // mouse
+  "\x1b[?1004l\x1b[?2004l" + // focus events, bracketed paste
+  "\x1b[?25h"; // cursor
 child.on("exit", (code, signal) => {
   stopSplash();
+  try { process.stdout.write(RESET_TERMINAL); } catch { /* ignore */ }
   process.exit(code ?? (signal ? 1 : 0));
 });
 child.on("error", (err) => {

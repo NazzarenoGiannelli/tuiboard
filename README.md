@@ -569,6 +569,40 @@ An ambiguous match is refused rather than guessed at.
 Exit 3 is the mtime watermark: a write is refused rather than allowed to
 clobber an edit made in the TUI or another editor in the meantime.
 
+## Omarchy bar widget
+
+On [Omarchy](https://omarchy.org), `omarchy-plugin/` ships a bar widget built
+on `tuiboard summary` and `tuiboard task`: an overdue/today badge in the bar,
+and a panel with the Today/Tomorrow planner where a task can be marked
+done/undone or deferred to tomorrow without leaving the bar. Right-click the
+badge to force a refresh, middle-click to open tuiboard itself.
+
+**Requires** `tuiboard` on `PATH` (see [Install](#install) above) and Omarchy
+with its shell plugin support.
+
+**Install** (from a checkout of this repo):
+
+```bash
+git clone https://github.com/NazzarenoGiannelli/tuiboard.git
+cd tuiboard
+./omarchy-plugin/install.sh
+```
+
+This symlinks `omarchy-plugin/` into `~/.config/omarchy/plugins/nazz.tuiboard`
+and enables it in the bar's right section. `omarchy plugin add <git-url>`
+isn't used here — it clones a git repo and expects `manifest.json` at its
+root, which doesn't fit a widget living inside this monorepo, and there's no
+separate Omarchy plugin marketplace to publish to at the time of writing. The
+symlink means `omarchy plugin update` doesn't apply; update by pulling this
+repo instead (`git pull`, then `omarchy-shell shell rescanPlugins` if the bar
+doesn't pick it up on its own).
+
+Refresh interval, the `tuiboard summary`/`tuiboard task` commands, the open
+command, and the completion sound are all configurable from Omarchy's own
+plugin settings (`manifest.json`'s schema) — no config file to hand-edit.
+
+Uninstall: `omarchy plugin remove nazz.tuiboard`.
+
 ## Status
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.

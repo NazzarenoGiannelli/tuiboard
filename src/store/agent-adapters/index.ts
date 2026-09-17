@@ -5,9 +5,11 @@
 
 import type { AgentAdapter } from "~/store/agents";
 import { claudeCodeAdapter } from "./claude-code";
+import { createCodexAdapter } from "./codex";
 import { createOpenCodeAdapter } from "./opencode";
 
 export const AGENT_ADAPTERS: AgentAdapter[] = [
   claudeCodeAdapter,
+  createCodexAdapter(),
   createOpenCodeAdapter(),
 ];

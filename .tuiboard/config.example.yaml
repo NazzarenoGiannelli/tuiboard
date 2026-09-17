@@ -59,6 +59,10 @@ archive_column: Archive
 # PowerShell (pwsh, else powershell); elsewhere your $SHELL. Force one with:
 # resume_shell: auto      # bash | zsh | fish | nu | pwsh | powershell | cmd
 #
+# Agent status symbols, the same as herdr's: × waiting for you, ◐ working,
+# ✓ done, ○ idle, · closed (△ = turn stopped updating). Or colored dots:
+# status_indicators: symbols   # symbols (default) | dots
+#
 # Enter not doing what you expect? From the directory you run tuiboard in (in a
 # checkout of the repo): `bun run agents:open <session-id-prefix> --dry-run`
 # prints the detected terminal, shell and exact command; the `o` detail of a

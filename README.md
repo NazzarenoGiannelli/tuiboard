@@ -85,6 +85,17 @@ record of running processes, so their sessions show as busy while a turn is in
 progress (stale if a turn stops updating for 30 minutes), never as
 idle-but-open.
 
+Each session's state uses the same symbols as [herdr](https://herdr.dev):
+`×` waiting for you, `◐` working, `✓` done, `○` idle, `·` closed, plus
+tuiboard's own `△` for a turn that stopped updating (`status_indicators: dots`
+switches to colored dots). **With herdr running**, tuiboard reads its live
+state for every session open in a herdr pane — so "waiting for you", "done"
+and "idle" show up for every agent, and a long Claude turn no longer turns
+stale — and the zoomed cards say where each one lives (`herdr blits · tab 3`).
+herdr reports the exact session when its agent integration is installed
+(`herdr integration install claude|codex|opencode|pi`); otherwise tuiboard
+matches by agent and directory.
+
 Every session carries a colored two-letter harness badge — `cc` Claude Code,
 `cx` Codex, `oc` OpenCode, `pi` Pi — plus the model it ran on. The dashboard strip keeps
 one line per session (on a narrow row the model gives way first, then the

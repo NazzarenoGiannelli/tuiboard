@@ -60,6 +60,11 @@ export interface Config {
    */
   resumeShell: "auto" | Shell;
   /**
+   * Agent status glyphs (config `status_indicators`): `symbols` (default —
+   * the same × ◐ ✓ ○ · herdr uses) or `dots` (● ○ ·).
+   */
+  statusIndicators: "dots" | "symbols";
+  /**
    * Template for the shell command copied to the clipboard by `c` in the agents
    * zone — one paste that `cd`s into the session's directory and resumes it.
    * The tokens `{cwd}`, `{sessionId}` and `{resume}` (the agent's own resume
@@ -141,6 +146,7 @@ export const DEFAULT_CONFIG: Omit<Config, "root" | "loaded" | "boards"> = {
   archiveColumn: "Archive",
   resumeTerminal: "auto",
   resumeShell: "auto",
+  statusIndicators: "symbols",
   copyResumeCommand: DEFAULT_COPY_RESUME_COMMAND,
   zones: { planner: "on", agenda: "on", agents: "on" },
 };
@@ -216,6 +222,7 @@ interface RawConfig {
   resume_command: string[];
   resume_terminal: string;
   resume_shell: string;
+  status_indicators: string;
   copy_resume_command: string;
   calendars: {
     google?: {
@@ -367,6 +374,7 @@ function normalize(raw: Partial<RawConfig>, root: string, loaded: boolean): Conf
     resumeShell: (SHELLS as readonly string[]).includes(raw.resume_shell ?? "")
       ? (raw.resume_shell as Shell)
       : "auto",
+    statusIndicators: raw.status_indicators === "dots" ? "dots" : "symbols",
     copyResumeCommand:
       typeof raw.copy_resume_command === "string" &&
       raw.copy_resume_command.trim().length > 0

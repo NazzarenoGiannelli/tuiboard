@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Live agent state from herdr** (#37). When [herdr](https://herdr.dev) is
+  running, tuiboard polls `herdr api snapshot` and links every pane running
+  Claude Code, Codex, OpenCode or Pi to its session — by the session id/file
+  herdr reports (with herdr's agent integrations installed), else by agent and
+  directory. Those sessions take herdr's state, including two new ones:
+  **waiting for you** (sorted first) and **done**; idle Codex/OpenCode/Pi
+  sessions become visible, and long Claude turns no longer show as stale
+  (#22). Zoomed cards and the `o` detail show the herdr workspace and tab.
+- **herdr's status symbols** — `×` waiting, `◐` working, `✓` done, `○` idle,
+  `·` closed (tuiboard's `△` for stale) — are now the default for everyone,
+  so both tools read the same; `status_indicators: dots` keeps colored dots.
+
+### Changed
+- Launch steps for Enter run asynchronously: a slow start (cold PowerShell)
+  no longer freezes the UI.
+
 ## [0.12.0] - 2026-09-17
 
 The Agents zone stops being Claude-Code-only: it now lists **Codex, OpenCode

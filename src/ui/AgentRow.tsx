@@ -15,6 +15,7 @@ import { Show, createMemo, createSignal, onMount } from "solid-js";
 import { homedir } from "node:os";
 
 import { layoutCardDetails, layoutCardName, layoutLine } from "~/ui/agent-line";
+import { clockNow } from "~/ui/clock";
 import { T } from "~/ui/glyphs";
 import { herdrPlace, type IndicatorStyle } from "~/store/herdr";
 import {
@@ -95,7 +96,7 @@ interface AgentRowProps {
 
 export function AgentRow(props: AgentRowProps) {
   const ageStr = createMemo(() =>
-    formatAge(props.session.lastActivityMs, Date.now()),
+    formatAge(props.session.lastActivityMs, clockNow()),
   );
   const nameMax = () => props.nameMaxChars ?? 40;
   const displayName = createMemo(() => {

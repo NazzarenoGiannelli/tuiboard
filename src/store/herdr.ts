@@ -213,6 +213,11 @@ export interface HerdrSource {
 }
 
 export const HERDR_POLL_MS = 2000;
+/**
+ * Consecutive failed polls before herdr counts as gone. A single slow or
+ * failed call used to drop every link at once, making states flicker.
+ */
+export const HERDR_MISSES_BEFORE_CLEAR = 3;
 
 /**
  * Poll `herdr api snapshot` in the background. Inert when herdr isn't on
@@ -220,7 +225,11 @@ export const HERDR_POLL_MS = 2000;
  * without noise.
  */
 export function createHerdrSource(
-  { pollMs = HERDR_POLL_MS, bin = Bun.which("herdr") }: { pollMs?: number; bin?: string | null } = {},
+  {
+    pollMs = HERDR_POLL_MS,
+    bin = Bun.which("herdr"),
+    missesBeforeClear = HERDR_MISSES_BEFORE_CLEAR,
+  }: { pollMs?: number; bin?: string | null; missesBeforeClear?: number } = {},
 ): HerdrSource {
   let current: HerdrSnapshot | undefined;
   let lastRaw = "";
@@ -229,6 +238,7 @@ export function createHerdrSource(
 
   let inFlight = false;
   let disposed = false;
+  let misses = 0;
   const poll = async () => {
     if (inFlight || disposed) return;
     inFlight = true;
@@ -242,7 +252,9 @@ export function createHerdrSource(
       const out = await new Response(proc.stdout).text();
       clearTimeout(timer);
       const code = await proc.exited;
-      const snap = code === 0 ? parseHerdrSnapshot(out) : undefined;
+      let snap = code === 0 ? parseHerdrSnapshot(out) : undefined;
+      if (snap) misses = 0;
+      else if (++misses < missesBeforeClear) snap = current; // ride out a blip
       // Only the parts we use decide whether anything changed.
       const key = snap
         ? JSON.stringify([snap.panes, [...snap.tabs], [...snap.workspaces]])
@@ -253,7 +265,8 @@ export function createHerdrSource(
         for (const cb of listeners) cb();
       }
     } catch {
-      // herdr vanished mid-call — try again next tick
+      // herdr vanished mid-call — counts as a miss, try again next tick
+      misses++;
     } finally {
       inFlight = false;
     }

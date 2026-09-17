@@ -10,7 +10,9 @@ import {
   shortModel,
   formatAge,
   sortSessions,
+  withSortKeys,
   type AgentAdapter,
+  type StateMemory,
   type AgentSession,
   type AgentStatus,
 } from "./agents";
@@ -76,8 +78,9 @@ describe("cwdShort", () => {
 describe("formatAge", () => {
   const now = 1_700_000_000_000;
 
-  it("formats seconds", () => {
-    expect(formatAge(now - 30_000, now)).toBe("30s");
+  it("reads now under a minute (no ticking seconds)", () => {
+    expect(formatAge(now - 30_000, now)).toBe("now");
+    expect(formatAge(now - 59_999, now)).toBe("now");
   });
 
   it("formats minutes", () => {
@@ -219,5 +222,51 @@ describe("filterSessions", () => {
     expect(filterSessions(all, "all")).toEqual(all);
     expect(filterSessions(all, "codex").map((s) => s.sessionId)).toEqual(["x"]);
     expect(filterSessions(all, "claude-code").map((s) => s.sessionId)).toEqual(["a", "b"]);
+  });
+});
+
+describe("withSortKeys", () => {
+  it("doesn't move a live session on every write, only when its state changes", () => {
+    const memory = new Map<string, StateMemory>();
+    const first = withSortKeys(
+      [fakeSession("working", "live-busy", 100), fakeSession("closed", "dormant", 90)],
+      memory,
+    );
+    expect(sortSessions(first).map((s) => s.sessionId)).toEqual(["working", "closed"]);
+
+    // "working" keeps writing (activity 200), a closed session got newer activity (150):
+    // the working one keeps its key and doesn't jump over it.
+    const writing = withSortKeys(
+      [fakeSession("working", "live-busy", 200), fakeSession("closed", "dormant", 150)],
+      memory,
+    );
+    expect(writing.find((s) => s.sessionId === "working")!.sortKeyMs).toBe(100);
+    expect(sortSessions(writing).map((s) => s.sessionId)).toEqual(["closed", "working"]);
+
+    // It finishes (and writes): state change → moves once, to its latest activity.
+    const done = withSortKeys(
+      [fakeSession("working", "live-done", 210), fakeSession("closed", "dormant", 150)],
+      memory,
+    );
+    expect(done.find((s) => s.sessionId === "working")!.sortKeyMs).toBe(210);
+    expect(sortSessions(done).map((s) => s.sessionId)).toEqual(["working", "closed"]);
+  });
+
+  it("doesn't reshuffle when a state is only newly known (herdr answering late)", () => {
+    const memory = new Map<string, StateMemory>();
+    withSortKeys([fakeSession("old", "stale", 10), fakeSession("recent", "stale", 50)], memory);
+    const linked = withSortKeys(
+      [fakeSession("old", "live-idle", 10), fakeSession("recent", "live-busy", 50)],
+      memory,
+    );
+    expect(sortSessions(linked).map((s) => s.sessionId)).toEqual(["recent", "old"]);
+  });
+
+  it("keys closed sessions by last activity and forgets vanished ones", () => {
+    const memory = new Map<string, StateMemory>();
+    const [s] = withSortKeys([fakeSession("a", "dormant", 42)], memory);
+    expect(s!.sortKeyMs).toBe(42);
+    withSortKeys([], memory);
+    expect(memory.size).toBe(0);
   });
 });

@@ -207,6 +207,13 @@ export function parseTranscript(content: string): TranscriptParseResult {
 
 // ─── Discovery ──────────────────────────────────────────────────────────────
 
+/**
+ * Last successfully parsed record per PID file. Claude Code rewrites these
+ * files in place, so a read can land mid-write; reusing the previous record
+ * keeps the session's live state from flickering for one scan.
+ */
+const lastGoodPid = new Map<string, { sessionId: string; record: LivePidRecord }>();
+
 function discoverLivePids(): Map<string, LivePidRecord> {
   const out = new Map<string, LivePidRecord>();
   if (!existsSync(SESSIONS_DIR)) return out;
@@ -216,25 +223,32 @@ function discoverLivePids(): Map<string, LivePidRecord> {
   } catch {
     return out;
   }
+  const seen = new Set<string>();
   for (const f of entries) {
     if (!f.endsWith(".json")) continue;
     const path = join(SESSIONS_DIR, f);
+    seen.add(path);
     try {
       const raw = JSON.parse(readFileSync(path, "utf-8"));
       const sid = raw.sessionId;
       if (!sid) continue;
       const stat = statSync(path);
-      out.set(sid, {
+      const record: LivePidRecord = {
         mtimeMs: stat.mtimeMs,
         status: raw.status?.toLowerCase(),
         pid: raw.pid,
         version: raw.version,
         cwd: raw.cwd,
-      });
+      };
+      lastGoodPid.set(path, { sessionId: sid, record });
+      out.set(sid, record);
     } catch {
-      // ignore — malformed PID files happen during writes
+      // Mid-write (or vanished): fall back to the last good read of this file.
+      const prev = lastGoodPid.get(path);
+      if (prev) out.set(prev.sessionId, prev.record);
     }
   }
+  for (const path of lastGoodPid.keys()) if (!seen.has(path)) lastGoodPid.delete(path);
   return out;
 }
 

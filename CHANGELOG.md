@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-09-17
+
 ### Fixed
 - **A calmer Agents list while agents work** (#58).
   - A failed herdr poll no longer drops every link at once (states briefly
@@ -499,6 +501,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.13.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.2
 [0.13.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.1
 [0.13.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.0
 [0.12.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.12.0

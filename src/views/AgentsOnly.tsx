@@ -1,7 +1,7 @@
 /**
  * Fullscreen list of every local agent session (Claude Code, Codex, OpenCode).
  * `tuiboard --view=agents`. Shows ALL sessions (including archived),
- * scrollable, cursor-navigable. The scrollbox follows the cursor via
+ * scrollable, cursor-navigable, as two-line cards (see AgentRow). The scrollbox follows the cursor via
  * scrollChildIntoView (same trick used in BoardView for active columns).
  */
 
@@ -9,6 +9,7 @@ import { For, Show, createEffect, createMemo } from "solid-js";
 
 import { AgentRow } from "~/ui/AgentRow";
 import { T } from "~/ui/glyphs";
+import { HARNESS } from "~/store/agents";
 import type { TuiStore } from "~/store/index";
 
 interface ScrollBoxLike {
@@ -24,7 +25,9 @@ function rowId(sessionId: string): string {
 export function AgentsOnly(props: { store: TuiStore }) {
   const isActive = () => props.store.state.ui.activeZone === "agents";
   const agentRow = () => props.store.state.ui.row;
-  const sessions = createMemo(() => props.store.agents.sessions());
+  const sessions = createMemo(() => props.store.agentSessions());
+  const filter = () => props.store.state.ui.agentsFilter;
+  const filterTag = () => (filter() === "all" ? "" : ` · ${HARNESS[filter() as keyof typeof HARNESS].code}`);
   let scrollBoxRef: ScrollBoxLike | undefined;
 
   // Auto-scroll the list so the active row is visible. setTimeout(0) waits
@@ -55,7 +58,7 @@ export function AgentsOnly(props: { store: TuiStore }) {
           paddingLeft: 1,
           paddingRight: 1,
         }}
-        title={`┤ Agents · ${sessions().length} sessions ├`}
+        title={`┤ Agents${filterTag()} · ${sessions().length} sessions ├`}
         titleAlignment="left"
       >
         <Show
@@ -63,7 +66,9 @@ export function AgentsOnly(props: { store: TuiStore }) {
           fallback={
             <text>
               <span style={{ fg: T.textDim }}>
-                No agent sessions found (Claude Code, Codex, OpenCode).
+                {filter() === "all"
+                  ? "No agent sessions found (Claude Code, Codex, OpenCode)."
+                  : `No ${HARNESS[filter() as keyof typeof HARNESS].name} sessions — press f to change the filter.`}
               </span>
             </text>
           }
@@ -87,6 +92,7 @@ export function AgentsOnly(props: { store: TuiStore }) {
                     session={session}
                     cursor={isActive() && i() === agentRow()}
                     nameMaxChars={120}
+                    variant="card"
                     onClick={() => {
                       props.store.setActiveZone("agents");
                       props.store.setCursor(0, i());

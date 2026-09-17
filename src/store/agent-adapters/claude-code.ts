@@ -93,6 +93,8 @@ export interface TranscriptParseResult {
   messageCount: number;
   toolCount: number;
   gitBranch?: string;
+  /** Model of the latest real assistant turn. */
+  model?: string;
 }
 
 /**
@@ -125,6 +127,7 @@ export function parseTranscript(content: string): TranscriptParseResult {
   let lastUser: string | undefined;
   let lastAssistant: string | undefined;
   let gitBranch: string | undefined;
+  let model: string | undefined;
   let messageCount = 0;
   let toolCount = 0;
 
@@ -174,6 +177,7 @@ export function parseTranscript(content: string): TranscriptParseResult {
       }
     } else if (role === "assistant") {
       messageCount++;
+      if (typeof msg.model === "string" && !msg.model.startsWith("<")) model = msg.model;
       const content = msg.content;
       if (Array.isArray(content)) {
         for (const part of content) {
@@ -197,6 +201,7 @@ export function parseTranscript(content: string): TranscriptParseResult {
     messageCount,
     toolCount,
     gitBranch,
+    model,
   };
 }
 
@@ -326,6 +331,7 @@ function buildSession(
     lastUser: parsed.lastUser,
     lastAssistant: parsed.lastAssistant,
     gitBranch: parsed.gitBranch,
+    model: parsed.model,
     resumeCommand: `claude --resume ${jsonl.sessionId}`,
   };
 }

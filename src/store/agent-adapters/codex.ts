@@ -64,6 +64,8 @@ const REQUEST_HEADING = "## My request for Codex:";
 export interface RolloutParseResult {
   cwd?: string;
   gitBranch?: string;
+  /** Model of the latest turn (`turn_context.model`). */
+  model?: string;
   /** Subagent / internal thread — not listed on its own. */
   hidden: boolean;
   firstUser?: string;
@@ -143,6 +145,8 @@ export function parseRollout(content: string, threadId?: string): RolloutParseRe
       out.cwd = typeof p.cwd === "string" ? p.cwd : out.cwd;
       out.gitBranch = p.git?.branch ?? out.gitBranch;
       out.hidden = isHiddenSource(p.source, p.thread_source);
+    } else if (obj.type === "turn_context") {
+      if (typeof p.model === "string") out.model = p.model;
     } else if (obj.type === "response_item") {
       if (TOOL_ITEM_TYPES.has(p.type)) out.toolCount++;
     } else if (obj.type === "event_msg") {
@@ -274,6 +278,7 @@ interface ThreadRow {
   archived: number | null;
   cwd: string | null;
   git_branch: string | null;
+  model?: string | null;
 }
 
 /** Newest `state_<n>.sqlite`, if any. */
@@ -297,9 +302,9 @@ function readThreadRows(dbPath: string | undefined): Map<string, ThreadRow> {
   try {
     db = new Database(dbPath, { readonly: true });
     for (const r of db
-      .query<ThreadRow, []>(
-        `SELECT id, title, name, archived, cwd, git_branch FROM threads`,
-      )
+      // SELECT * so optional columns (e.g. `model`, added in later schema
+      // versions) are read when present without failing when absent.
+      .query<ThreadRow, []>(`SELECT * FROM threads`)
       .all()) {
       rows.set(r.id.toLowerCase(), r);
     }
@@ -382,6 +387,7 @@ export function createCodexAdapter(codexHome = defaultCodexHome()): AgentAdapter
         lastUser: parsed.lastUser,
         lastAssistant: parsed.lastAssistant,
         gitBranch: parsed.gitBranch ?? row?.git_branch ?? undefined,
+        model: parsed.model ?? row?.model ?? undefined,
         resumeCommand: `codex resume ${f.threadId}`,
       });
     }

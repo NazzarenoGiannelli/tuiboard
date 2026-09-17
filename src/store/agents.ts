@@ -18,6 +18,16 @@ export const DORMANT_AFTER_MS = 7 * 86_400 * 1000;
 
 export type AgentProvider = "claude-code" | "codex" | "opencode";
 
+/** Two-letter harness badge + display name, per provider. (`pi` = Pi, once its adapter lands.) */
+export const HARNESS: Record<AgentProvider, { code: string; name: string }> = {
+  "claude-code": { code: "cc", name: "Claude Code" },
+  codex: { code: "cx", name: "Codex" },
+  opencode: { code: "oc", name: "OpenCode" },
+};
+
+/** Agents-zone filter: every harness, or just one. */
+export type AgentsFilter = "all" | AgentProvider;
+
 export type AgentStatus =
   | "live-busy"
   | "live-idle"
@@ -43,6 +53,8 @@ export interface AgentSession {
   lastUser?: string;
   lastAssistant?: string;
   gitBranch?: string;
+  /** Model id as the agent recorded it (latest turn), e.g. `claude-opus-5`. */
+  model?: string;
   /** Shell command that resumes this session when run from `cwd`. */
   resumeCommand: string;
 }
@@ -56,13 +68,33 @@ export interface AgentAdapter {
   discover(now: number): AgentSession[];
 }
 
-/** Last 3 path parts with leading ellipsis when path is long. */
+/** Last 3 path parts with leading ellipsis when path is long. Keeps the path's own separator. */
 export function cwdShort(cwd: string): string {
   const parts = cwd.split(/[\\/]/).filter((p) => p.length > 0);
   if (parts.length >= 4) {
-    return "…" + parts.slice(-3).join("\\");
+    const sep = cwd.includes("/") ? "/" : "\\";
+    return "…" + parts.slice(-3).join(sep);
   }
   return cwd;
+}
+
+/**
+ * Compact model label for tight rows: drops the provider prefix, the
+ * `claude-` family prefix, date stamps and context-window suffixes.
+ *   `claude-opus-5[1m]` → `opus-5` · `anthropic/claude-sonnet-4-5-20250929` → `sonnet-4-5`
+ */
+export function shortModel(raw: string | undefined): string | undefined {
+  if (!raw || raw.startsWith("<")) return undefined; // e.g. Claude's "<synthetic>"
+  const m = (raw.split("/").pop() ?? raw)
+    .replace(/\[[^\]]*\]$/, "")
+    .replace(/^claude-/, "")
+    .replace(/-\d{8}$/, "");
+  return m || undefined;
+}
+
+/** Apply the Agents-zone harness filter. Keeps the store's sort order. */
+export function filterSessions(arr: AgentSession[], filter: AgentsFilter): AgentSession[] {
+  return filter === "all" ? arr : arr.filter((s) => s.provider === filter);
 }
 
 /** Compact human-readable age. Mirrors av.py `_fmt_age`. */

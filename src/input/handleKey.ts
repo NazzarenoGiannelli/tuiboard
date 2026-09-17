@@ -14,7 +14,7 @@
  */
 
 import { isHiddenColumn } from "~/config/loader";
-import type { AgentSession } from "~/store/agents";
+import { HARNESS, type AgentSession } from "~/store/agents";
 import { googleTokenCanWrite } from "~/store/calendar";
 import { isTask } from "~/parser/markdown";
 import {
@@ -228,6 +228,13 @@ export function handleKey(
   // Cycle the board filter — affects which open tasks show up in board
   // columns. Mirrors Python kanban `action_cycle_filter`. Cycle order:
   // all → today → overdue → tomorrow → followup → all.
+  // In the Agents zone `f` filters sessions by harness instead.
+  if (key.name === "f" && ui.activeZone === "agents") {
+    const next = store.cycleAgentsFilter();
+    const label = next === "all" ? "all harnesses" : `${HARNESS[next].code} · ${HARNESS[next].name}`;
+    store.flashBanner("info", `Agents: ${label}`);
+    return;
+  }
   if (key.name === "f") {
     const cycle = ["all", "today", "overdue", "tomorrow", "followup"] as const;
     const idx = cycle.indexOf(ui.filter);
@@ -478,7 +485,7 @@ function handleTimelineZone(
 
 function handleAgentsZone(store: TuiStore, key: KeyEvent): void {
   const ui = store.state.ui;
-  const sessions = store.agents.sessions();
+  const sessions = store.agentSessions();
   if (key.name === "j" || key.name === "down") {
     store.setCursor(0, Math.min(sessions.length - 1, ui.row + 1));
   } else if (key.name === "k" || key.name === "up") {

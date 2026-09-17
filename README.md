@@ -82,6 +82,13 @@ keep no record of running processes, so their sessions show as busy while a
 turn is in progress (stale if a turn stops updating for 30 minutes), never as
 idle-but-open.
 
+Every session carries a colored two-letter harness badge — `cc` Claude Code,
+`cx` Codex, `oc` OpenCode — plus the model it ran on. The dashboard strip keeps
+one line per session (on a narrow row the model gives way first, then the
+branch, then the directory); zoom the Agents zone (`z`) or run
+`tuiboard --view=agents` for two-line cards with the model, branch and full
+directory under each title. `f` in the Agents zone filters by harness.
+
 See [Configure](#configure) for assignees, the done/archive column names, and
 the optional custom "open session in your terminal" command.
 
@@ -432,7 +439,8 @@ session (until the next terminal resize).
 | `j` / `k` | Move the cursor down / up the session list |
 | `Enter` | Open (resume) the selected session in a new WezTerm tab |
 | `c` | Copy a one-paste `cd … && <resume>` command (e.g. `claude --resume <id>`) for the selected session — drop it into any tab/pane to land in the right dir and resume (no WezTerm needed; format is `copy_resume_command`) |
-| `o` | Session detail (cwd, branch, last prompts, resume command) |
+| `o` | Session detail (harness, model, cwd, branch, last prompts, resume command) |
+| `f` | Filter by harness: all → `cc` Claude Code → `cx` Codex → `oc` OpenCode (shown in the panel title; outside the Agents zone `f` is the board filter) |
 
 ### Task actions (work in board, planner, AND timeline zones)
 

@@ -309,3 +309,24 @@ describe("UI helpScroll", () => {
     expect(store.state.ui.helpScroll).toBe(0);
   });
 });
+
+describe("Agents harness filter", () => {
+  it("cycles all → cc → cx → oc → all and resets the cursor", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setCursor(0, 3);
+    expect(store.state.ui.agentsFilter).toBe("all");
+    expect(store.cycleAgentsFilter()).toBe("claude-code");
+    expect(store.state.ui.row).toBe(0);
+    expect(store.cycleAgentsFilter()).toBe("codex");
+    expect(store.cycleAgentsFilter()).toBe("opencode");
+    expect(store.cycleAgentsFilter()).toBe("all");
+  });
+
+  it("agentSessions only returns the filtered harness", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.cycleAgentsFilter(); // claude-code
+    expect(store.agentSessions().every((s) => s.provider === "claude-code")).toBe(true);
+    store.cycleAgentsFilter(); // codex
+    expect(store.agentSessions().every((s) => s.provider === "codex")).toBe(true);
+  });
+});

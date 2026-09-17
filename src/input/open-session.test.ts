@@ -4,9 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
+  describePlan,
   detectLauncher,
+  findGitBash,
   planLaunch,
+  resolveShell,
   runLaunchPlan,
+  shellArgv,
   winQuoteArg,
   windowsStart,
   type LaunchEnv,
@@ -123,6 +127,82 @@ describe("planLaunch", () => {
       // sh escape '\'' → AppleScript doubles its backslash; " → \"
       `tell application "Terminal" to do script "cd '/Users/u/it'\\\\''s \\"x\\"' && claude --resume 1"`,
     );
+  });
+});
+
+const GIT = "C:\\Program Files\\Git";
+const gitBashEnv = (vars: Record<string, string>, files: string[], bashOnPath?: string): LaunchEnv => ({
+  env: vars,
+  platform: "win32",
+  has: () => false,
+  which: (c) => (c === "bash" ? bashOnPath : undefined),
+  exists: (p) => files.includes(p),
+});
+
+describe("findGitBash", () => {
+  it("prefers EXEPATH, then Git's usr\\bin bash mapped to bin, then Program Files", () => {
+    const bin = `${GIT}\\bin\\bash.exe`;
+    expect(findGitBash(gitBashEnv({ EXEPATH: GIT }, [bin]))).toBe(bin);
+    expect(findGitBash(gitBashEnv({}, [bin], `${GIT}\\usr\\bin\\bash.exe`))).toBe(bin);
+    expect(findGitBash(gitBashEnv({ ProgramFiles: "C:\\Program Files" }, [bin]))).toBe(bin);
+  });
+
+  it("never picks WSL's System32 bash", () => {
+    expect(findGitBash(gitBashEnv({}, ["C:\\Windows\\System32\\bash.exe"], "C:\\Windows\\System32\\bash.exe"))).toBeUndefined();
+  });
+});
+
+describe("resolveShell", () => {
+  const bin = `${GIT}\\bin\\bash.exe`;
+  it("auto on Windows follows the shell tuiboard was started from", () => {
+    expect(resolveShell("auto", gitBashEnv({ MSYSTEM: "MINGW64", EXEPATH: GIT }, [bin]))).toEqual({ kind: "bash", path: bin });
+    expect(resolveShell("auto", env({ NU_VERSION: "0.99" }, "win32", ["nu"]))).toEqual({ kind: "nu", path: "nu" });
+    expect(resolveShell("auto", env({}, "win32", ["pwsh"]))).toEqual({ kind: "pwsh", path: "pwsh" });
+    expect(resolveShell("auto", env({}, "win32"))).toEqual({ kind: "powershell", path: "powershell" });
+  });
+
+  it("auto on Windows falls back to PowerShell when Git Bash can't be found", () => {
+    expect(resolveShell("auto", gitBashEnv({ MSYSTEM: "MINGW64" }, []))).toEqual({ kind: "powershell", path: "powershell" });
+  });
+
+  it("auto elsewhere hands over to $SHELL; forced shells are used as named", () => {
+    expect(resolveShell("auto", env({ SHELL: "/bin/zsh" }))).toEqual({ kind: "posix-default" });
+    expect(resolveShell("fish", env({}))).toEqual({ kind: "fish", path: "fish" });
+    expect(resolveShell("bash", gitBashEnv({ EXEPATH: GIT }, [bin]))).toEqual({ kind: "bash", path: bin });
+  });
+});
+
+describe("shellArgv", () => {
+  const r = "opencode --session s";
+  it("keeps every shell open after the agent exits", () => {
+    expect(shellArgv({ kind: "posix-default" }, r)).toEqual(["sh", "-c", 'opencode --session s; exec "${SHELL:-sh}"']);
+    expect(shellArgv({ kind: "bash", path: "b.exe" }, r)).toEqual(["b.exe", "-l", "-i", "-c", "opencode --session s; exec bash -l -i"]);
+    expect(shellArgv({ kind: "fish", path: "fish" }, r)).toEqual(["fish", "-l", "-i", "-c", "opencode --session s; exec fish -l -i"]);
+    expect(shellArgv({ kind: "nu", path: "nu" }, r)).toEqual(["nu", "-e", r]);
+    expect(shellArgv({ kind: "pwsh", path: "pwsh" }, r)).toEqual(["pwsh", "-NoExit", "-Command", r]);
+    expect(shellArgv({ kind: "cmd", path: "cmd" }, r)).toEqual(["cmd", "/k", r]);
+  });
+});
+
+describe("planLaunch with shells", () => {
+  it("Windows Terminal + Git Bash: backslash cwd, escaped `;`, login bash that stays open", () => {
+    const bin = `${GIT}\\bin\\bash.exe`;
+    const le = gitBashEnv({ WT_SESSION: "g", MSYSTEM: "MINGW64", EXEPATH: GIT }, [bin]);
+    const [step] = planLaunch("windows-terminal", { cwd: "C:/Users/n/Vault", resume: "opencode --session s" }, le);
+    expect(decoded(step!)).toContain(
+      `-ArgumentList '-w 0 new-tab -d C:\\Users\\n\\Vault "C:\\Program Files\\Git\\bin\\bash.exe" -l -i -c "opencode --session s\\; exec bash -l -i"'`,
+    );
+  });
+
+  it("forced shell on Linux Ghostty", () => {
+    const [step] = planLaunch("ghostty", { ...target, shell: "nu" }, env({ TERM_PROGRAM: "ghostty" }, "linux", ["nu"]));
+    expect(step!.args).toEqual(["--working-directory=/home/u/my app", "-e", "nu", "-e", "codex resume 0199-abc"]);
+  });
+
+  it("describePlan decodes PowerShell and quotes spaced args", () => {
+    const [wt] = planLaunch("windows-terminal", target, env({ WT_SESSION: "g" }, "win32"));
+    expect(describePlan([wt!])).toContain("-EncodedCommand ⟨try { Start-Process -FilePath 'wt.exe'");
+    expect(describePlan(planLaunch("tmux", target, env({ TMUX: "x" })))).toContain('-c "/home/u/my app"');
   });
 });
 

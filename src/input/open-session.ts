@@ -2,12 +2,14 @@
  * Open (resume) an agent session in a new tab/window of the terminal tuiboard
  * runs in. There's no terminal-agnostic "open a tab" — each terminal has its
  * own IPC — so we detect the environment and build a launch plan for it.
+ * The session runs inside the user's shell (see `resolveShell`), which stays
+ * open when the agent exits.
  *
  * Planning is pure (env + platform in, argv out) so every OS's plan is unit
  * tested anywhere; `runLaunchPlan` does the spawning.
  */
 
-import { lstatSync } from "node:fs";
+import { existsSync, lstatSync } from "node:fs";
 import { join } from "node:path";
 
 export const LAUNCHERS = [
@@ -29,15 +31,22 @@ export const LAUNCHER_NAME: Record<Launcher, string> = {
   "windows-terminal": "Windows Terminal",
   ghostty: "Ghostty",
   "xdg-terminal-exec": "your default terminal",
-  "windows-console": "a new PowerShell window",
+  "windows-console": "a new console window",
   "macos-terminal": "Terminal.app",
 };
+
+export const SHELLS = ["bash", "zsh", "fish", "nu", "pwsh", "powershell", "cmd"] as const;
+export type Shell = (typeof SHELLS)[number];
 
 export interface LaunchEnv {
   env: Record<string, string | undefined>;
   platform: NodeJS.Platform;
-  /** Is this program on PATH? */
+  /** Is this program launchable (on PATH, or a Windows app alias)? */
   has: (cmd: string) => boolean;
+  /** Full path of a program on PATH. */
+  which?: (cmd: string) => string | undefined;
+  /** Does this file exist? */
+  exists?: (path: string) => boolean;
 }
 
 /**
@@ -73,6 +82,89 @@ export function hasCommand(cmd: string): boolean {
   }
 }
 
+/** The real environment, for the key handler and the dev script. */
+export function systemLaunchEnv(): LaunchEnv {
+  return {
+    env: process.env,
+    platform: process.platform,
+    has: hasCommand,
+    which: (c) => Bun.which(c) ?? undefined,
+    exists: existsSync,
+  };
+}
+
+// ─── Shells ─────────────────────────────────────────────────────────────────
+
+/**
+ * How the new tab's program is chosen: a named shell, or (POSIX `auto`) a
+ * plain `sh` that hands over to `$SHELL` — already the user's shell.
+ */
+export type ResolvedShell =
+  | { kind: "posix-default" }
+  | { kind: Shell; path: string };
+
+/** Windows: Git for Windows' `bin\bash.exe` (the login wrapper), never System32's WSL bash. */
+export function findGitBash({ env, which, exists = () => false }: LaunchEnv): string | undefined {
+  const candidates: string[] = [];
+  // Set by Git's launchers (git-bash.exe, bin\bash.exe) to the install dir.
+  if (env.EXEPATH) candidates.push(`${env.EXEPATH}\\bin\\bash.exe`);
+  const onPath = which?.("bash");
+  if (onPath && /\\git\\/i.test(onPath) && !/\\system32\\/i.test(onPath)) {
+    // …\Git\usr\bin\bash.exe is the bare MSYS binary; …\Git\bin\bash.exe sets up the login env.
+    candidates.push(onPath.replace(/\\usr\\bin\\bash\.exe$/i, "\\bin\\bash.exe"));
+  }
+  for (const pf of [env.ProgramFiles, env.ProgramW6432, "C:\\Program Files"]) {
+    if (pf) candidates.push(`${pf}\\Git\\bin\\bash.exe`);
+  }
+  return candidates.find((c) => exists(c));
+}
+
+/**
+ * The shell the session should run in. `auto` = the shell tuiboard was
+ * started from: on Windows Git Bash (`MSYSTEM`) or Nushell (`NU_VERSION`),
+ * else PowerShell; elsewhere `$SHELL` via the POSIX default.
+ */
+export function resolveShell(choice: "auto" | Shell, le: LaunchEnv): ResolvedShell {
+  const { env, platform, has } = le;
+  if (choice === "auto") {
+    if (platform !== "win32") return { kind: "posix-default" };
+    if (env.MSYSTEM) {
+      const bash = findGitBash(le);
+      if (bash) return { kind: "bash", path: bash };
+    }
+    if (env.NU_VERSION && has("nu")) return { kind: "nu", path: "nu" };
+    return has("pwsh") ? { kind: "pwsh", path: "pwsh" } : { kind: "powershell", path: "powershell" };
+  }
+  if (choice === "bash" && platform === "win32") {
+    const bash = findGitBash(le);
+    if (bash) return { kind: "bash", path: bash };
+  }
+  return { kind: choice, path: choice };
+}
+
+/** argv that runs `resume` in `shell`, leaving that shell open afterwards. */
+export function shellArgv(shell: ResolvedShell, resume: string): string[] {
+  switch (shell.kind) {
+    case "posix-default":
+      return ["sh", "-c", `${resume}; exec "\${SHELL:-sh}"`];
+    case "bash":
+    case "zsh":
+    case "fish":
+      // Login + interactive so the user's PATH/aliases are loaded, then
+      // replace the finished command with a fresh interactive shell.
+      return [shell.path, "-l", "-i", "-c", `${resume}; exec ${shell.kind === "bash" ? "bash" : shell.kind} -l -i`];
+    case "nu":
+      return [shell.path, "-e", resume];
+    case "pwsh":
+    case "powershell":
+      return [shell.path, "-NoExit", "-Command", resume];
+    case "cmd":
+      return [shell.path, "/k", resume];
+  }
+}
+
+// ─── Plans ──────────────────────────────────────────────────────────────────
+
 export interface LaunchStep {
   cmd: string;
   args: string[];
@@ -80,6 +172,8 @@ export interface LaunchStep {
   input?: string;
   /** Long-lived GUI process: spawn detached and don't wait for it. */
   detached?: boolean;
+  /** Sync step timeout (ms). */
+  timeoutMs?: number;
   /**
    * Extracts an id from this step's stdout; later steps' `{id}` args are
    * replaced with it.
@@ -91,15 +185,16 @@ export interface LaunchTarget {
   cwd: string;
   /** The agent's resume command, e.g. `codex resume <id>`. */
   resume: string;
+  /** Shell to run it in (defaults to `auto`). */
+  shell?: "auto" | Shell;
 }
 
-/** POSIX: run the agent, then leave the user in their shell when it exits. */
-function posixKeepOpen(resume: string): string[] {
-  return ["sh", "-c", `${resume}; exec "\${SHELL:-sh}"`];
+function shQuote(s: string): string {
+  return `'${s.replaceAll("'", `'\\''`)}'`;
 }
 
-function windowsShell(has: LaunchEnv["has"]): string {
-  return has("pwsh") ? "pwsh" : "powershell";
+function appleScriptString(s: string): string {
+  return `"${s.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
 /** Quote one argument by the Windows command-line (CommandLineToArgvW) rules. */
@@ -107,6 +202,11 @@ export function winQuoteArg(a: string): string {
   if (a !== "" && !/[\s"]/.test(a)) return a;
   const escaped = a.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, "$1$1");
   return `"${escaped}"`;
+}
+
+/** `C:/Users/x` (as OpenCode stores it) → `C:\Users\x`. */
+function winPath(p: string): string {
+  return /^[A-Za-z]:\//.test(p) ? p.replaceAll("/", "\\") : p;
 }
 
 /**
@@ -126,7 +226,7 @@ export function windowsStart(
   const start = [
     "Start-Process",
     `-FilePath ${lit(file)}`,
-    `-ArgumentList ${lit(args.map(winQuoteArg).join(" "))}`,
+    args.length > 0 ? `-ArgumentList ${lit(args.map(winQuoteArg).join(" "))}` : "",
     workingDirectory ? `-WorkingDirectory ${lit(workingDirectory)}` : "",
     "-ErrorAction Stop",
   ].filter(Boolean).join(" ");
@@ -140,22 +240,18 @@ export function windowsStart(
       "-EncodedCommand",
       Buffer.from(script, "utf16le").toString("base64"),
     ],
+    // A cold PowerShell start can take several seconds.
+    timeoutMs: 30_000,
   };
-}
-
-function shQuote(s: string): string {
-  return `'${s.replaceAll("'", `'\\''`)}'`;
-}
-
-function appleScriptString(s: string): string {
-  return `"${s.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
 export function planLaunch(
   launcher: Launcher,
-  { cwd, resume }: LaunchTarget,
-  { env, platform, has }: LaunchEnv,
+  { cwd, resume, shell: shellChoice = "auto" }: LaunchTarget,
+  le: LaunchEnv,
 ): LaunchStep[] {
+  const { env, platform } = le;
+  const shell = resolveShell(shellChoice, le);
   switch (launcher) {
     case "tmux":
       return [
@@ -164,7 +260,7 @@ export function planLaunch(
           args: ["new-window", "-P", "-F", "#{pane_id}", "-c", cwd],
           captureId: (out) => out.trim() || undefined,
         },
-        // Typed into the pane's interactive shell (full user env), then Enter.
+        // Typed into the pane's own interactive shell (full user env), then Enter.
         { cmd: "tmux", args: ["send-keys", "-t", "{id}", "-l", resume] },
         { cmd: "tmux", args: ["send-keys", "-t", "{id}", "Enter"] },
       ];
@@ -202,33 +298,31 @@ export function planLaunch(
           input: `${resume}\r`,
         },
       ];
-    case "windows-terminal":
+    case "windows-terminal": {
       // `-w 0` = the current window. wt treats `;` as its own command
-      // separator, so escape any in the resume command.
-      return [
-        windowsStart(
-          "wt.exe",
-          ["-w", "0", "new-tab", "-d", cwd, windowsShell(has), "-NoExit", "-Command", resume.replaceAll(";", "\\;")],
-          env,
-        ),
-      ];
-    case "windows-console":
+      // separator, so escape any in what it passes on.
+      const argv = shellArgv(shell, resume).map((a) => a.replaceAll(";", "\\;"));
+      return [windowsStart("wt.exe", ["-w", "0", "new-tab", "-d", winPath(cwd), ...argv], env)];
+    }
+    case "windows-console": {
       // Start-Process gives a console program its own new window.
-      return [windowsStart(windowsShell(has), ["-NoExit", "-Command", resume], env, cwd)];
+      const [file, ...args] = shellArgv(shell, resume);
+      return [windowsStart(file!, args, env, winPath(cwd))];
+    }
     case "ghostty":
       // Ghostty has no "new tab" CLI: open a new window in the session dir.
       return platform === "darwin"
         ? [
             {
               cmd: "open",
-              args: ["-na", "Ghostty", "--args", `--working-directory=${cwd}`, "-e", ...posixKeepOpen(resume)],
+              args: ["-na", "Ghostty", "--args", `--working-directory=${cwd}`, "-e", ...shellArgv(shell, resume)],
               detached: true,
             },
           ]
         : [
             {
               cmd: "ghostty",
-              args: [`--working-directory=${cwd}`, "-e", ...posixKeepOpen(resume)],
+              args: [`--working-directory=${cwd}`, "-e", ...shellArgv(shell, resume)],
               detached: true,
             },
           ];
@@ -236,11 +330,12 @@ export function planLaunch(
       return [
         {
           cmd: "xdg-terminal-exec",
-          args: [`--dir=${cwd}`, ...posixKeepOpen(resume)],
+          args: [`--dir=${cwd}`, ...shellArgv(shell, resume)],
           detached: true,
         },
       ];
     case "macos-terminal":
+      // Terminal.app types into the user's login shell itself.
       return [
         {
           cmd: "osascript",
@@ -253,6 +348,19 @@ export function planLaunch(
         },
       ];
   }
+}
+
+/** Human-readable plan, for diagnostics (decodes Windows -EncodedCommand). */
+export function describePlan(steps: LaunchStep[]): string {
+  return steps
+    .map((s) => {
+      const enc = s.args.indexOf("-EncodedCommand");
+      if (enc >= 0 && s.args[enc + 1]) {
+        return `${s.cmd} -EncodedCommand ⟨${Buffer.from(s.args[enc + 1]!, "base64").toString("utf16le")}⟩`;
+      }
+      return [s.cmd, ...s.args.map((a) => (/\s/.test(a) ? JSON.stringify(a) : a))].join(" ");
+    })
+    .join("\n");
 }
 
 /**
@@ -281,7 +389,7 @@ export async function runLaunchPlan(steps: LaunchStep[]): Promise<void> {
       input: step.input,
       encoding: "utf8",
       windowsHide: true,
-      timeout: 10_000,
+      timeout: step.timeoutMs ?? 10_000,
     });
     if (res.error) throw new Error(`${step.cmd}: ${res.error.message}`);
     if (res.status !== 0) {

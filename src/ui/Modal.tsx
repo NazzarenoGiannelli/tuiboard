@@ -986,6 +986,25 @@ function AgentDetailModal(props: { store: TuiStore; modal: Extract<NonNullable<T
                 </span>
               </text>
             </Show>
+            <Show
+              when={
+                props.store.state.ui.lastLaunch?.sessionId === s().sessionId
+                  ? props.store.state.ui.lastLaunch
+                  : undefined
+              }
+            >
+              {(l: () => NonNullable<TuiStore["state"]["ui"]["lastLaunch"]>) => (
+                <>
+                  <box style={{ height: 1 }} />
+                  <text>
+                    <span style={{ fg: T.textDim }}>last Enter ({new Date(l().ts).toLocaleTimeString()}):</span>
+                  </text>
+                  <text wrapMode="word">
+                    <span style={{ fg: l().ok ? T.done : T.overdue }}>{l().text}</span>
+                  </text>
+                </>
+              )}
+            </Show>
             <box style={{ height: 1 }} />
             <text>
               <span style={{ fg: T.textDim }}>

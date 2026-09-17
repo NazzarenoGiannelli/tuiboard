@@ -172,6 +172,9 @@ archive_column: Archive
 # terminal; clipboard as last resort). Force one if detection guesses wrong:
 # resume_terminal: windows-terminal   # auto (default) | tmux | herdr | wezterm |
 #   ghostty | xdg-terminal-exec | windows-console | macos-terminal
+# The session runs in your shell (auto: the one you started tuiboard from — Git
+# Bash / Nushell / PowerShell on Windows, $SHELL elsewhere). Force one with:
+# resume_shell: bash                  # auto | bash | zsh | fish | nu | pwsh | powershell | cmd
 
 # Optional: replace Enter with your own launcher. argv array, {cwd}/{sessionId}/
 # {resume} substituted, run directly (no shell — element 0 must be a real binary/abs
@@ -444,7 +447,7 @@ session (until the next terminal resize).
 | `j` / `k` | Move the cursor down / up the session list |
 | `Enter` | Open (resume) the selected session in a new tab/window of your terminal — tmux, herdr, WezTerm, Windows Terminal, Ghostty, or the OS default; falls back to copying the command (`resume_terminal` to force one) |
 | `c` | Copy a one-paste `cd … && <resume>` command (e.g. `claude --resume <id>`) for the selected session — drop it into any tab/pane to land in the right dir and resume (no WezTerm needed; format is `copy_resume_command`) |
-| `o` | Session detail (harness, model, cwd, branch, last prompts, resume command) |
+| `o` | Session detail (harness, model, cwd, branch, last prompts, resume command, result of the last `Enter`) |
 | `f` | Filter by harness: all → `cc` Claude Code → `cx` Codex → `oc` OpenCode (shown in the panel title; outside the Agents zone `f` is the board filter) |
 
 ### Task actions (work in board, planner, AND timeline zones)

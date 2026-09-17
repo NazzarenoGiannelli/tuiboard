@@ -269,6 +269,8 @@ export interface UIState {
   filter: "all" | "today" | "overdue" | "tomorrow" | "followup";
   /** Agents-zone harness filter (`f` while the Agents zone is active). */
   agentsFilter: AgentsFilter;
+  /** Outcome of the last Enter (open session), shown in that session's detail. */
+  lastLaunch?: { sessionId: string; ok: boolean; text: string; ts: number };
   /** Banner messages (errors, conflicts, undo notifications). */
   banner?: { kind: "info" | "warn" | "error"; text: string; ts: number };
   /** Open modal, if any. Keyboard handler routes input to the modal when set. */
@@ -1250,6 +1252,10 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     return filterSessions(agentsStore.sessions(), state.ui.agentsFilter);
   }
 
+  function setLastLaunch(sessionId: string, ok: boolean, text: string): void {
+    setState("ui", "lastLaunch", { sessionId, ok, text, ts: Date.now() });
+  }
+
   /** Cycle the Agents-zone filter: all → cc → cx → oc → all. */
   function cycleAgentsFilter(): AgentsFilter {
     const cycle: AgentsFilter[] = ["all", ...(Object.keys(HARNESS) as AgentsFilter[])];
@@ -1727,6 +1733,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     agents: agentsStore,
     agentSessions,
     cycleAgentsFilter,
+    setLastLaunch,
     calendar: calendarStore,
     // queries
     getBoardByPath,

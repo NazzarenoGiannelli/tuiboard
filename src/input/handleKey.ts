@@ -16,11 +16,11 @@
 import { isHiddenColumn } from "~/config/loader";
 import {
   LAUNCHER_NAME,
+  describePlan,
   detectLauncher,
-  hasCommand,
   planLaunch,
   runLaunchPlan,
-  type LaunchEnv,
+  systemLaunchEnv,
 } from "~/input/open-session";
 import { HARNESS, type AgentSession } from "~/store/agents";
 import { googleTokenCanWrite } from "~/store/calendar";
@@ -886,8 +886,9 @@ function fmtHm(m: number): string {
 /**
  * Open (resume) an agent session in a new tab/window of the terminal tuiboard
  * runs in — tmux, herdr, WezTerm, Windows Terminal, Ghostty, or the OS default
- * (see open-session.ts). Config `resume_terminal` forces one. When nothing
- * can open it, the resume command lands on the clipboard instead.
+ * — inside the user's shell (see open-session.ts). Config `resume_terminal` /
+ * `resume_shell` force them. When nothing can open it, the resume command lands
+ * on the clipboard instead. The outcome is kept for the session's detail modal.
  */
 async function openSession(store: TuiStore, session: AgentSession): Promise<void> {
   const { spawn } = await import("node:child_process");
@@ -925,33 +926,36 @@ async function openSession(store: TuiStore, session: AgentSession): Promise<void
     return;
   }
 
-  const launchEnv: LaunchEnv = {
-    env: process.env,
-    platform: process.platform,
-    has: hasCommand,
-  };
+  const launchEnv = systemLaunchEnv();
   const forced = store.config.resumeTerminal;
   const launcher = forced === "auto" ? detectLauncher(launchEnv) : forced;
-  const fallBackToClipboard = (why: string) =>
-    copyToClipboard(session.resumeCommand).then(
-      () => store.flashBanner("warn", `${why} — resume command copied, paste it in ${cwd}`),
-      () => store.flashBanner("error", why),
+  const fail = async (why: string) => {
+    const copied = await copyToClipboard(session.resumeCommand).then(
+      () => true,
+      () => false,
     );
+    const text = copied ? `${why} — resume command copied, paste it in ${cwd}` : why;
+    store.setLastLaunch(sessionId, false, text);
+    store.flashBanner(copied ? "warn" : "error", text);
+  };
 
   if (!launcher) {
-    await fallBackToClipboard("No supported terminal detected (set resume_terminal)");
+    await fail("No supported terminal detected (set resume_terminal)");
     return;
   }
+  const plan = planLaunch(
+    launcher,
+    { cwd, resume: session.resumeCommand, shell: store.config.resumeShell },
+    launchEnv,
+  );
   try {
-    await runLaunchPlan(planLaunch(launcher, { cwd, resume: session.resumeCommand }, launchEnv));
-    store.flashBanner(
-      "info",
-      `↗ Opened session in ${LAUNCHER_NAME[launcher]} (${sessionId.slice(0, 8)})`,
-    );
+    await runLaunchPlan(plan);
+    const text = `↗ Opened session in ${LAUNCHER_NAME[launcher]} (${sessionId.slice(0, 8)})`;
+    store.setLastLaunch(sessionId, true, `${text}\n${describePlan(plan)}`);
+    store.flashBanner("info", text);
   } catch (e) {
-    await fallBackToClipboard(
-      `${LAUNCHER_NAME[launcher]} launch failed: ${e instanceof Error ? e.message : String(e)}`,
-    );
+    const msg = e instanceof Error ? e.message : String(e);
+    await fail(`${LAUNCHER_NAME[launcher]} launch failed: ${msg}`);
   }
 }
 

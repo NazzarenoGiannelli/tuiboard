@@ -148,6 +148,11 @@ if (view === "planner") {
   store.setActiveZone("planner");
   store.setZoomed(true);
 }
+// The single-zone views show one zone; keys must act on it. Without this the
+// planner (the default landing zone above) stayed active behind them.
+if (view === "agents" || view === "timeline" || view === "board") {
+  store.setActiveZone(view);
+}
 
 // ─── App shell ──────────────────────────────────────────────────────────────
 

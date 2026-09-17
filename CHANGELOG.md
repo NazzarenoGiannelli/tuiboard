@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   position. The cursor also stays on the session you selected while the list
   reorders, instead of silently landing on another one (so Enter, `H` and `c`
   act on the session you picked).
+- **`--view=agents` / `--view=timeline` / `--view=board` start on their own
+  zone** (#54), so the cursor and keys work right away instead of acting on
+  the hidden planner.
 
 ## [0.13.0] - 2026-09-17
 

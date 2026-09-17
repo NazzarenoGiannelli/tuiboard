@@ -98,19 +98,36 @@ describe("formatAge", () => {
 });
 
 describe("sortSessions", () => {
-  it("orders by status rank, then most recent first", () => {
+  it("orders by most recent activity, whatever the status", () => {
     const sorted = sortSessions([
-      fakeSession("old-dormant", "dormant", 1),
+      fakeSession("idle-in-herdr-5h-ago", "live-idle", 1),
+      fakeSession("closed-40s-ago", "dormant", 9),
+      fakeSession("working", "live-busy", 8),
       fakeSession("stale", "stale", 5),
-      fakeSession("new-dormant", "dormant", 9),
-      fakeSession("busy", "live-busy", 0),
     ]);
     expect(sorted.map((s) => s.sessionId)).toEqual([
-      "busy",
+      "closed-40s-ago",
+      "working",
       "stale",
-      "new-dormant",
-      "old-dormant",
+      "idle-in-herdr-5h-ago",
     ]);
+  });
+
+  it("breaks ties by status", () => {
+    const sorted = sortSessions([
+      fakeSession("idle", "live-idle", 3),
+      fakeSession("waiting", "live-blocked", 3),
+      fakeSession("busy", "live-busy", 3),
+    ]);
+    expect(sorted.map((s) => s.sessionId)).toEqual(["waiting", "busy", "idle"]);
+  });
+
+  it("keeps archived sessions last even when recently archived", () => {
+    const sorted = sortSessions([
+      fakeSession("archived-just-now", "archived", 10),
+      fakeSession("old", "dormant", 1),
+    ]);
+    expect(sorted.map((s) => s.sessionId)).toEqual(["old", "archived-just-now"]);
   });
 });
 

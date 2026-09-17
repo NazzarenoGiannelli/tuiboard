@@ -138,11 +138,18 @@ export function isLive(status: AgentStatus): boolean {
   return status.startsWith("live-");
 }
 
+/**
+ * Most recently active first; status only breaks ties. Archived sessions
+ * always go last — the dashboard strip hides them and relies on that to keep
+ * cursor indices aligned with the full list.
+ */
 export function sortSessions(arr: AgentSession[]): AgentSession[] {
   return arr.slice().sort((a, b) => {
-    const r = STATUS_RANK[a.status] - STATUS_RANK[b.status];
-    if (r !== 0) return r;
-    return b.lastActivityMs - a.lastActivityMs;
+    const archived = Number(a.status === "archived") - Number(b.status === "archived");
+    if (archived !== 0) return archived;
+    const recency = b.lastActivityMs - a.lastActivityMs;
+    if (recency !== 0) return recency;
+    return STATUS_RANK[a.status] - STATUS_RANK[b.status];
   });
 }
 

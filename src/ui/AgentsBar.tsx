@@ -8,9 +8,10 @@
  * visible. Clicking a row sets activeZone + agent cursor.
  */
 
-import { For, Show, createEffect, createMemo } from "solid-js";
+import { Index, Show, createEffect, createMemo } from "solid-js";
 
 import { AgentRow } from "~/ui/AgentRow";
+import { useStickyAgentCursor } from "~/ui/agent-cursor";
 import { T } from "~/ui/glyphs";
 import { HARNESS } from "~/store/agents";
 import type { TuiStore } from "~/store/index";
@@ -42,6 +43,7 @@ export function AgentsBar(props: AgentsBarProps) {
   };
 
   let scrollBoxRef: ScrollBoxLike | undefined;
+  useStickyAgentCursor(props.store, allShown);
 
   // Keep the cursor row visible as j/k moves it (mouse wheel scrolls freely
   // via the scrollbox itself). setTimeout(0) waits for layout to commit.
@@ -96,22 +98,23 @@ export function AgentsBar(props: AgentsBarProps) {
             scrollbarOptions: { visible: false },
           }}
         >
-          <For each={allShown()}>
+          {/* <Index>: stable rows by position — see AgentsOnly (#52). */}
+          <Index each={allShown()}>
             {(session, i) => (
-              <box id={agentRowId(i())}>
+              <box id={agentRowId(i)}>
                 <AgentRow
                   indicators={props.store.agentIndicators}
-                  session={session}
-                  cursor={isActive() && i() === agentRow()}
+                  session={session()}
+                  cursor={isActive() && i === agentRow()}
                   nameMaxChars={48}
                   onClick={() => {
                     props.store.setActiveZone("agents");
-                    props.store.setCursor(0, i());
+                    props.store.setCursor(0, i);
                   }}
                 />
               </box>
             )}
-          </For>
+          </Index>
         </scrollbox>
       </Show>
     </box>

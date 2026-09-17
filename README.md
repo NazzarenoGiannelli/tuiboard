@@ -72,10 +72,13 @@ Starting fresh — no Obsidian, no special folders required:
    already contains `.md` files with `- [ ]` tasks — it auto-discovers them.
 4. **Run it:** `tuiboard` (or the short alias `tb`).
 
-**The Agent view needs zero setup.** tuiboard reads your local Claude Code
-sessions from `~/.claude/` automatically, so the live agent strip fills in as
-soon as you've used Claude Code — nothing to connect or configure. (Tools that
-don't write to `~/.claude`, like Codex, won't show up there.)
+**The Agent view needs zero setup.** tuiboard reads your local agent sessions
+automatically — Claude Code from `~/.claude/`, OpenCode from
+`~/.local/share/opencode/opencode.db` (respects `$XDG_DATA_HOME`, read-only) —
+so the live agent strip fills in as soon as you've used either one. Nothing to
+connect or configure. OpenCode keeps no record of running processes, so its
+sessions show as busy while a turn is in progress (stale if a turn stops
+updating for 30 minutes), never as idle-but-open.
 
 See [Configure](#configure) for assignees, the done/archive column names, and
 the optional custom "open session in your terminal" command.
@@ -188,7 +191,7 @@ Each zone takes one of:
 | Value | Behavior |
 |---|---|
 | `on` | Enabled and shown at launch (the default). |
-| `off` | **Disabled entirely** — never rendered, skipped by `Shift-Tab`, its F-key is inert, and its background work never starts (no calendar fetch, no `~/.claude` reads). |
+| `off` | **Disabled entirely** — never rendered, skipped by `Shift-Tab`, its F-key is inert, and its background work never starts (no calendar fetch, no agent session reads). |
 | `hidden` | Enabled but **collapsed at launch** — reveal it any time with its F-key. |
 
 `true`/`false` work as aliases for `on`/`off`. So a pure kanban is just

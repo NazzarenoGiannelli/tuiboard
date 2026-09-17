@@ -5,5 +5,9 @@
 
 import type { AgentAdapter } from "~/store/agents";
 import { claudeCodeAdapter } from "./claude-code";
+import { createOpenCodeAdapter } from "./opencode";
 
-export const AGENT_ADAPTERS: AgentAdapter[] = [claudeCodeAdapter];
+export const AGENT_ADAPTERS: AgentAdapter[] = [
+  claudeCodeAdapter,
+  createOpenCodeAdapter(),
+];

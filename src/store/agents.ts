@@ -1,11 +1,13 @@
 /**
  * Discovery + reactive store for local coding-agent sessions.
  *
- * Each agent CLI (Claude Code today) plugs in through an `AgentAdapter`
+ * Each agent CLI (Claude Code, OpenCode) plugs in through an `AgentAdapter`
  * that owns its own on-disk format, status semantics and resume command —
  * see `src/store/agent-adapters/`. This module only holds the shared shape
  * and merges every adapter's sessions into one sorted, watched list.
  */
+
+import { resolve, sep } from "node:path";
 
 import chokidar from "chokidar";
 import { createSignal } from "solid-js";
@@ -13,7 +15,7 @@ import { createSignal } from "solid-js";
 /** Threshold: session untouched longer than this is "archived" (won't show in compact list). */
 export const DORMANT_AFTER_MS = 7 * 86_400 * 1000;
 
-export type AgentProvider = "claude-code";
+export type AgentProvider = "claude-code" | "opencode";
 
 export type AgentStatus =
   | "live-busy"
@@ -96,36 +98,74 @@ export interface AgentsStore {
   dispose: () => Promise<void>;
 }
 
+const DEBOUNCE_MS = 200;
+/** Cap on debounce deferral, so a session streaming non-stop still refreshes. */
+const DEBOUNCE_MAX_WAIT_MS = 1000;
+
 /**
- * Reactive store of local agent sessions. Watches every adapter's paths
- * and refreshes on any change with a short debounce. Initial scan is eager.
+ * Reactive store of local agent sessions. Watches every adapter's paths and,
+ * on a change, re-scans only the adapter that owns the changed path (short
+ * debounce). Initial scan is eager.
  */
 export function createAgentsStore(adapters: AgentAdapter[]): AgentsStore {
   const [sessions, setSessions] = createSignal<AgentSession[]>([]);
+  const byAdapter = new Map<AgentAdapter, AgentSession[]>();
+
+  function scan(adapter: AgentAdapter, now: number): void {
+    try {
+      byAdapter.set(adapter, adapter.discover(now));
+    } catch {
+      // One broken adapter must not blank out the others; keep its last list.
+    }
+  }
+
+  function publish(): void {
+    setSessions(sortSessions([...byAdapter.values()].flat()));
+  }
 
   function refresh(): void {
     const now = Date.now();
-    const built: AgentSession[] = [];
-    for (const adapter of adapters) {
-      try {
-        built.push(...adapter.discover(now));
-      } catch {
-        // One broken adapter must not blank out the others.
-      }
-    }
-    setSessions(sortSessions(built));
+    for (const adapter of adapters) scan(adapter, now);
+    publish();
   }
 
   refresh();
 
+  const watched = adapters.flatMap((adapter) =>
+    adapter.watchPaths().map((p) => ({ root: resolve(p), adapter })),
+  );
+  const owners = (path: string) => {
+    const abs = resolve(path);
+    return new Set(
+      watched
+        .filter((w) => abs === w.root || abs.startsWith(w.root + sep))
+        .map((w) => w.adapter),
+    );
+  };
+
+  const pending = new Set<AgentAdapter>();
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-  const onChange = () => {
+  let firstPendingAt = 0;
+  const flush = () => {
+    debounceTimer = undefined;
+    const now = Date.now();
+    for (const adapter of pending) scan(adapter, now);
+    pending.clear();
+    publish();
+  };
+  const onChange = (path: string) => {
+    const hit = owners(path);
+    if (hit.size === 0) return;
+    for (const adapter of hit) pending.add(adapter);
+    const now = Date.now();
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(refresh, 200);
+    else firstPendingAt = now;
+    const wait = Math.min(DEBOUNCE_MS, firstPendingAt + DEBOUNCE_MAX_WAIT_MS - now);
+    debounceTimer = setTimeout(flush, Math.max(0, wait));
   };
 
   const watcher = chokidar.watch(
-    adapters.flatMap((a) => a.watchPaths()),
+    watched.map((w) => w.root),
     { ignoreInitial: true, depth: 3 },
   );
   watcher.on("add", onChange);

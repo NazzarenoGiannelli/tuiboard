@@ -27,6 +27,7 @@ const RAW = JSON.stringify({
   result: {
     snapshot: {
       protocol: 20,
+      focused_workspace_id: "w1",
       panes: [
         pane("w1:p1", {
           agent: "claude",
@@ -64,6 +65,7 @@ const session = (provider: AgentSession["provider"], sessionId: string, fields: 
   messageCount: 0,
   toolCount: 0,
   resumeCommand: `resume ${sessionId}`,
+  resumeArgv: ["resume", sessionId],
   ...fields,
 });
 

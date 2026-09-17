@@ -333,6 +333,7 @@ function buildSession(
     gitBranch: parsed.gitBranch,
     model: parsed.model,
     resumeCommand: `claude --resume ${jsonl.sessionId}`,
+    resumeArgv: ["claude", "--resume", jsonl.sessionId],
   };
 }
 

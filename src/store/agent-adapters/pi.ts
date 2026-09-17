@@ -238,6 +238,7 @@ export function createPiAdapter(sessionsDir = defaultPiSessionsDir()): AgentAdap
         lastAssistant: p.lastAssistant,
         model: p.model,
         resumeCommand: `pi --session ${sessionId}`,
+        resumeArgv: ["pi", "--session", sessionId],
       };
     });
     const live = new Set(files.map((f) => f.path));

@@ -94,7 +94,10 @@ and "idle" show up for every agent, and a long Claude turn no longer turns
 stale — and the zoomed cards say where each one lives (`herdr blits · tab 3`).
 herdr reports the exact session when its agent integration is installed
 (`herdr integration install claude|codex|opencode|pi`); otherwise tuiboard
-matches by agent and directory.
+matches by agent and directory. `H` jumps to a session in herdr — or resumes
+it there, in a new tab of the workspace that holds its project — and Enter on
+a session that's already open in herdr takes you to it instead of starting a
+second copy.
 
 Every session carries a colored two-letter harness badge — `cc` Claude Code,
 `cx` Codex, `oc` OpenCode, `pi` Pi — plus the model it ran on. The dashboard strip keeps
@@ -459,9 +462,10 @@ session (until the next terminal resize).
 | Key | Action |
 |---|---|
 | `j` / `k` | Move the cursor down / up the session list |
-| `Enter` | Open (resume) the selected session in a new tab/window of your terminal — tmux, herdr, WezTerm, Windows Terminal, Ghostty, or the OS default; falls back to copying the command (`resume_terminal` to force one) |
+| `Enter` | Go to the session if it's open in herdr; otherwise open (resume) it in a new tab/window of your terminal — tmux, herdr, WezTerm, Windows Terminal, Ghostty, or the OS default; falls back to copying the command (`resume_terminal` to force one) |
 | `c` | Copy a one-paste `cd … && <resume>` command (e.g. `claude --resume <id>`) for the selected session — drop it into any tab/pane to land in the right dir and resume (no WezTerm needed; format is `copy_resume_command`) |
 | `o` | Session detail (harness, model, cwd, branch, last prompts, resume command, result of the last `Enter`) |
+| `H` | herdr: go to the session's pane, or resume it in a new tab of its project's workspace (herdr must be running) |
 | `f` | Filter by harness: all → `cc` Claude Code → `cx` Codex → `oc` OpenCode → `pi` Pi (shown in the panel title; outside the Agents zone `f` is the board filter) |
 
 ### Task actions (work in board, planner, AND timeline zones)

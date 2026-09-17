@@ -28,8 +28,14 @@ export interface HerdrPane {
 
 export interface HerdrSnapshot {
   panes: HerdrPane[];
+  focusedWorkspaceId?: string;
   tabs: Map<string, { label: string; number: number }>;
   workspaces: Map<string, { label: string; number: number }>;
+}
+
+/** The `herdr` binary to drive: the one herdr itself advertises, else PATH. */
+export function herdrBin(env: Record<string, string | undefined> = process.env): string | undefined {
+  return env.HERDR_BIN_PATH || Bun.which("herdr") || undefined;
 }
 
 /** Where a session is open in herdr. */
@@ -45,6 +51,11 @@ export interface HerdrLink {
   matchedBy: "id" | "path" | "cwd";
   /** herdr's name for the agent (for `herdr integration install <name>`). */
   agent: string;
+}
+
+/** `herdr blits · tab 3` */
+export function herdrPlace(l: HerdrLink): string {
+  return `herdr ${l.workspaceLabel || l.workspaceId} · tab ${l.tabNumber || l.tabId}`;
 }
 
 /** herdr agent name ↔ tuiboard provider. */
@@ -95,6 +106,7 @@ export function parseHerdrSnapshot(raw: string): HerdrSnapshot | undefined {
     );
   return {
     panes,
+    focusedWorkspaceId: typeof snap.focused_workspace_id === "string" ? snap.focused_workspace_id : undefined,
     tabs: byId(snap.tabs, "tab_id"),
     workspaces: byId(snap.workspaces, "workspace_id"),
   };

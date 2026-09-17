@@ -389,6 +389,7 @@ export function createCodexAdapter(codexHome = defaultCodexHome()): AgentAdapter
         gitBranch: parsed.gitBranch ?? row?.git_branch ?? undefined,
         model: parsed.model ?? row?.model ?? undefined,
         resumeCommand: `codex resume ${f.threadId}`,
+        resumeArgv: ["codex", "resume", f.threadId],
       });
     }
     // Drop cache entries for files that disappeared (archived / deleted).

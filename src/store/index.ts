@@ -1821,7 +1821,7 @@ export type TuiStore = ReturnType<typeof createTuiStore>;
 /** Inert agents store for when the agents zone is disabled — no chokidar
  *  watcher, no `~/.claude` reads at all. */
 function noopAgentsStore(): AgentsStore {
-  return { sessions: () => [], refresh: () => {}, dispose: async () => {} };
+  return { sessions: () => [], herdr: () => undefined, refresh: () => {}, dispose: async () => {} };
 }
 
 /** Inert calendar store for when the agenda zone is disabled — no fetching. */

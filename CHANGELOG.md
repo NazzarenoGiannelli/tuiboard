@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `·` closed (tuiboard's `△` for stale) — are now the default for everyone,
   so both tools read the same; `status_indicators: dots` keeps colored dots.
 
+- **`H` opens sessions in herdr** (#38): focuses the pane a session is open
+  in, or resumes it in herdr — a new tab named after the session, in the
+  workspace that already holds that directory (else one named like the
+  folder, else the focused one), started with `herdr agent start` so herdr
+  tracks it from the start. **Enter** on a session already open in herdr
+  focuses it instead of starting a second copy.
+
 ### Changed
 - Launch steps for Enter run asynchronously: a slow start (cold PowerShell)
   no longer freezes the UI.

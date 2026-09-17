@@ -21,8 +21,8 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { createMemo } from "solid-js";
-import { render, useKeyboard } from "@opentui/solid";
+import { createEffect, createMemo } from "solid-js";
+import { render, useKeyboard, useTerminalDimensions } from "@opentui/solid";
 
 import { parseArgs, type ViewKind } from "~/cli/args";
 import { loadConfig } from "~/config/loader";
@@ -102,8 +102,7 @@ process.on("SIGTERM", () => {
 // This only reports what FITS. The store combines it with each zone's enabled
 // flag and the user's desired visibility, so F1/F2/F3 toggles persist across
 // resizes and a disabled/hidden zone is never force-shown.
-function applyResponsiveLayout(): void {
-  const width = process.stdout.columns ?? 200;
+function applyResponsiveLayout(width: number): void {
   // Report which zones FIT at this width. The store ANDs this with each zone's
   // enabled flag and the user's desired visibility, so a disabled or
   // intentionally-hidden zone is never force-shown just because there's room.
@@ -122,8 +121,11 @@ function applyResponsiveLayout(): void {
     { narrow: width < 100 },
   );
 }
-applyResponsiveLayout();
-process.stdout.on("resize", applyResponsiveLayout);
+// Initial guess before the renderer exists; from then on the layout follows
+// OpenTUI's own dimensions (see App). `process.stdout.columns` can lag behind
+// the real size — e.g. a Windows Terminal tab that starts at a provisional
+// size — which left zones overlapping until a manual resize.
+applyResponsiveLayout(process.stdout.columns ?? 200);
 
 // Land on the Today/Tomorrow panel by default — for a daily-planning tool the
 // first question is "what's on my plate today", and that panel answers it.
@@ -169,6 +171,13 @@ function App() {
   );
 
   useKeyboard((key) => handleKey(store, key, plannerItems().length));
+
+  // Same width the frame is drawn at, updated on the renderer's resize events.
+  const dims = useTerminalDimensions();
+  createEffect(() => {
+    const { width } = dims();
+    if (width > 0) applyResponsiveLayout(width);
+  });
 
   return (
     <box

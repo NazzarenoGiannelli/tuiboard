@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   focuses it instead of starting a second copy.
 
 ### Fixed
+- **Layout right from the first frame on Windows** (#45). Which zones fit (and
+  the narrow single-pane mode) now follow the renderer's own terminal size,
+  the one the frame is drawn at, instead of `process.stdout.columns`, which
+  could lag behind a Windows Terminal tab's real size and left zones
+  overlapping until a manual resize.
 - **`H` on Windows with Codex, OpenCode and Pi** (#41). herdr launches an
   agent's executable directly, and npm-installed CLIs on Windows are an
   extensionless sh shim next to `.cmd`/`.ps1` ("not a valid Win32

@@ -5,6 +5,18 @@ All notable changes to **tuiboard** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Agents zone: agent CLIs now plug in through a common adapter interface**
+  (#16), groundwork for Codex / OpenCode / Pi support (#12). Claude Code
+  sessions behave exactly as before. The `stale-pid` status is now `stale`
+  (same glyph and color), since not every agent writes PID records.
+- **New `{resume}` token** for `resume_command` and `copy_resume_command`: the
+  selected agent's own resume command. The `copy_resume_command` default is now
+  `cd "{cwd}" && {resume}`; custom templates using `claude --resume
+  {sessionId}` keep working unchanged.
+
 ## [0.11.0] - 2026-09-16
 
 ### Fixed

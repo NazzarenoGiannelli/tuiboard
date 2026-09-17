@@ -14,6 +14,7 @@
  */
 
 import { isHiddenColumn } from "~/config/loader";
+import type { AgentSession } from "~/store/agents";
 import { googleTokenCanWrite } from "~/store/calendar";
 import { isTask } from "~/parser/markdown";
 import {
@@ -485,7 +486,7 @@ function handleAgentsZone(store: TuiStore, key: KeyEvent): void {
   } else if (key.name === "enter" || key.name === "return") {
     // Open (resume) the selected session in a new WezTerm tab.
     const target = sessions[ui.row];
-    if (target) void openSessionInWezterm(store, target.cwd, target.sessionId);
+    if (target) void openSessionInWezterm(store, target);
   } else if (key.name === "c") {
     // Copy a one-paste "cd + resume" command for the selected session, so you
     // can drop it into any tab/pane anywhere and land in the right directory
@@ -494,7 +495,8 @@ function handleAgentsZone(store: TuiStore, key: KeyEvent): void {
     if (target) {
       const cmd = store.config.copyResumeCommand
         .replaceAll("{cwd}", target.cwd)
-        .replaceAll("{sessionId}", target.sessionId);
+        .replaceAll("{sessionId}", target.sessionId)
+        .replaceAll("{resume}", target.resumeCommand);
       copyToClipboard(cmd).then(
         () => store.flashBanner("info", `📋 Copied resume command (${target.sessionId.slice(0, 8)})`),
         (err) => store.flashBanner("error", `Copy failed: ${err}`),
@@ -867,33 +869,37 @@ function fmtHm(m: number): string {
 }
 
 /**
- * Open (resume) a Claude Code session in a new WezTerm tab.
+ * Open (resume) an agent session in a new WezTerm tab.
  *
  * Two steps:
  *   1. `wezterm cli spawn --cwd <cwd>` opens a new tab running your DEFAULT
  *      shell in the session's directory (prints the new pane id).
- *   2. `wezterm cli send-text` types `claude --resume <id>` + Enter into it.
+ *   2. `wezterm cli send-text` types the adapter's resume command (e.g.
+ *      `claude --resume <id>`) + Enter into it.
  *
  * Running it through the interactive shell (rather than `spawn -- claude …`
- * directly) means `claude` gets your full shell environment — PATH, env vars,
- * any wrapper — which is why the direct form exited 1. And if `claude` still
+ * directly) means the agent CLI gets your full shell environment — PATH, env
+ * vars, any wrapper — which is why the direct form exited 1. And if it still
  * errors, you're left at a live prompt that shows it instead of a vanishing
  * tab. Failures (not inside WezTerm, `wezterm` off PATH) surface as a banner.
  */
 async function openSessionInWezterm(
   store: TuiStore,
-  cwd: string,
-  sessionId: string,
+  session: AgentSession,
 ): Promise<void> {
   const { spawn, spawnSync } = await import("node:child_process");
+  const { cwd, sessionId } = session;
 
   // Custom override (config `resume_command`): an argv array with {cwd} /
-  // {sessionId} placeholders, spawned directly (no shell). Lets you launch a
+  // {sessionId} / {resume} placeholders, spawned directly (no shell). Lets you launch a
   // personal terminal layout without baking it into the distributed tool.
   const custom = store.config.resumeCommand;
   if (custom && custom.length > 0) {
     const argv = custom.map((arg) =>
-      arg.replaceAll("{cwd}", cwd).replaceAll("{sessionId}", sessionId),
+      arg
+        .replaceAll("{cwd}", cwd)
+        .replaceAll("{sessionId}", sessionId)
+        .replaceAll("{resume}", session.resumeCommand),
     );
     const [cmd, ...rest] = argv;
     try {
@@ -937,7 +943,7 @@ async function openSessionInWezterm(
     spawnSync(
       "wezterm",
       ["cli", "send-text", "--pane-id", paneId, "--no-paste"],
-      { input: `claude --resume ${sessionId}\r`, encoding: "utf8", windowsHide: true },
+      { input: `${session.resumeCommand}\r`, encoding: "utf8", windowsHide: true },
     );
     store.flashBanner("info", `↗ Opened session in WezTerm (${sessionId.slice(0, 8)})`);
   } catch (e) {

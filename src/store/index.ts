@@ -30,6 +30,7 @@ import {
   type BoardWatcher,
 } from "~/io/watcher";
 import { createAgentsStore, type AgentsStore } from "./agents";
+import { AGENT_ADAPTERS } from "./agent-adapters";
 import {
   createCalendarStore,
   createGoogleEvent,
@@ -362,12 +363,12 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     initialBoards.map((b) => b.board.filepath),
   );
 
-  // Agents store has its own lifecycle (chokidar watcher on ~/.claude).
-  // Shared dispose() boundary below so SIGINT cleans both. When the agents
-  // zone is disabled we skip the watcher entirely (no `~/.claude` reads at all)
-  // and hand back an inert stub.
+  // Agents store has its own lifecycle (chokidar watcher on each agent CLI's
+  // session dirs). Shared dispose() boundary below so SIGINT cleans both. When
+  // the agents zone is disabled we skip the watcher entirely (no session reads
+  // at all) and hand back an inert stub.
   const agentsStore: AgentsStore = enabledZones.agents
-    ? createAgentsStore()
+    ? createAgentsStore(AGENT_ADAPTERS)
     : noopAgentsStore();
   // Calendar feeds (read-only) merged into the Agenda zone. Skipped entirely
   // (no network) when the agenda zone is disabled.

@@ -983,7 +983,8 @@ function AgentDetailModal(props: { store: TuiStore; modal: Extract<NonNullable<T
               <span style={{ fg: T.scheduled }}>
                 {props.store.config.copyResumeCommand
                   .replaceAll("{cwd}", s().cwd)
-                  .replaceAll("{sessionId}", s().sessionId)}
+                  .replaceAll("{sessionId}", s().sessionId)
+                  .replaceAll("{resume}", s().resumeCommand)}
               </span>
             </text>
           </box>
@@ -1094,7 +1095,7 @@ const HELP_SECTIONS: HelpSection[] = [
     title: "Agents zone",
     rows: [
       ["Enter", "Open (resume) the selected session in a new WezTerm tab"],
-      ["c", "Copy a 'cd + claude --resume' command for the session"],
+      ["c", "Copy a 'cd + resume' command for the session"],
       ["o", "Session detail (cwd, branch, last prompts, resume cmd)"],
     ],
   },

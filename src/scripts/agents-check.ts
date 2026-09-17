@@ -5,9 +5,10 @@
  * Usage: bun run agents:check
  */
 
+import { AGENT_ADAPTERS } from "~/store/agent-adapters";
 import { createAgentsStore } from "~/store/agents";
 
-const store = createAgentsStore();
+const store = createAgentsStore(AGENT_ADAPTERS);
 const all = store.sessions();
 const live = all.filter(
   (s) => s.status === "live-busy" || s.status === "live-idle",
@@ -17,7 +18,7 @@ console.log(`Found ${all.length} sessions, ${live.length} live`);
 console.log("");
 for (const s of all.slice(0, 10)) {
   console.log(
-    `  ${s.status.padEnd(10)}  ${s.displayName.padEnd(40)}  ${s.cwdShort}`,
+    `  ${s.provider.padEnd(12)}  ${s.status.padEnd(10)}  ${s.displayName.padEnd(40)}  ${s.cwdShort}`,
   );
 }
 

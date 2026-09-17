@@ -38,20 +38,22 @@ export interface Config {
   archiveColumn: string;
   /**
    * Optional override for "open the selected agent session" (Enter in the
-   * agents zone). An argv array; the tokens `{cwd}` and `{sessionId}` are
-   * substituted, then it's spawned directly (no shell). Point it at your own
+   * agents zone). An argv array; the tokens `{cwd}`, `{sessionId}` and
+   * `{resume}` (the agent's own resume command, e.g. `claude --resume <id>`)
+   * are substituted, then it's spawned directly (no shell). Point it at your own
    * script to launch a custom terminal layout — e.g.
    *   ["pwsh", "-NoProfile", "-File", "C:/.../code-resume.ps1", "{cwd}", "{sessionId}"]
-   * When unset, tuiboard falls back to opening a tab + `claude --resume <id>`.
+   * When unset, tuiboard falls back to opening a tab + the agent's resume command.
    */
   resumeCommand?: string[];
   /**
    * Template for the shell command copied to the clipboard by `c` in the agents
    * zone — one paste that `cd`s into the session's directory and resumes it.
-   * The tokens `{cwd}` and `{sessionId}` are substituted. Default:
-   *   cd "{cwd}" && claude --resume {sessionId}
+   * The tokens `{cwd}`, `{sessionId}` and `{resume}` (the agent's own resume
+   * command, e.g. `claude --resume <id>`) are substituted. Default:
+   *   cd "{cwd}" && {resume}
    * `&&` works in bash/zsh/pwsh/cmd; Nushell users may prefer
-   *   cd "{cwd}"; claude --resume {sessionId}
+   *   cd "{cwd}"; {resume}
    */
   copyResumeCommand: string;
   /**
@@ -118,7 +120,7 @@ export interface CalendarsConfig {
  * paste. `&&` chains in bash/zsh/pwsh/cmd (Nushell users override with `;`).
  */
 export const DEFAULT_COPY_RESUME_COMMAND =
-  'cd "{cwd}" && claude --resume {sessionId}';
+  'cd "{cwd}" && {resume}';
 
 export const DEFAULT_CONFIG: Omit<Config, "root" | "loaded" | "boards"> = {
   assignees: [],

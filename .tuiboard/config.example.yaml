@@ -46,10 +46,11 @@ archive_column: Archive
 #   agents: on       # live Claude Code session view           (F3)
 
 # Optional: override what Enter does in the Agents zone ("open the selected
-# Claude Code session"). An argv array — the tokens {cwd} and {sessionId} are
+# agent session"). An argv array — the tokens {cwd}, {sessionId} and {resume}
+# (the agent's own resume command, e.g. `claude --resume <sessionId>`) are
 # substituted, then it's run directly (no shell). Point it at your own script
 # to spawn a custom terminal layout. When omitted, tuiboard just opens a new
-# WezTerm tab and runs `claude --resume <sessionId>`.
+# WezTerm tab and runs the agent's resume command.
 #
 # The first element must be a DIRECTLY EXECUTABLE program — a real binary on
 # PATH or an absolute path. It is NOT run through a shell, so shell builtins
@@ -65,11 +66,12 @@ archive_column: Archive
 # Optional: the command copied to your clipboard by `c` in the Agents zone — one
 # paste that cd's into the session's directory and resumes it, for when you want
 # to open the session yourself in a new tab/pane anywhere (no WezTerm needed).
-# The tokens {cwd} and {sessionId} are substituted. It's a plain string, so use
-# whatever chaining your shell wants. Default (works in bash/zsh/pwsh/cmd):
-#   copy_resume_command: 'cd "{cwd}" && claude --resume {sessionId}'
+# The tokens {cwd}, {sessionId} and {resume} (the agent's own resume command,
+# e.g. `claude --resume <sessionId>`) are substituted. It's a plain string, so
+# use whatever chaining your shell wants. Default (works in bash/zsh/pwsh/cmd):
+#   copy_resume_command: 'cd "{cwd}" && {resume}'
 # Nushell users typically want `;` instead of `&&`:
-# copy_resume_command: 'cd "{cwd}"; claude --resume {sessionId}'
+# copy_resume_command: 'cd "{cwd}"; {resume}'
 
 # Optional: overlay read-only calendar events on the Agenda (the 24h timeline).
 # Connect a provider with `tuiboard calendar-setup google` / `... microsoft`,

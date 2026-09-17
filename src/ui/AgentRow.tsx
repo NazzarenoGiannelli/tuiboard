@@ -13,7 +13,7 @@ import { formatAge, type AgentSession, type AgentStatus } from "~/store/agents";
 const STATUS_COLOR: Record<AgentStatus, string> = {
   "live-busy": T.today,     // bright accent for actively-running
   "live-idle": T.scheduled, // warm but quieter
-  "stale-pid": T.bannerWarn,
+  "stale":     T.bannerWarn,
   "dormant":   T.textDim,
   "archived":  T.textDone,
 };
@@ -21,7 +21,7 @@ const STATUS_COLOR: Record<AgentStatus, string> = {
 const STATUS_GLYPH: Record<AgentStatus, string> = {
   "live-busy": "●",
   "live-idle": "○",
-  "stale-pid": "△",
+  "stale":     "△",
   "dormant":   "·",
   "archived":  "·",
 };

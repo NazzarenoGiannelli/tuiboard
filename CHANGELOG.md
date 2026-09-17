@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pane's shell, which resolves it; Claude Code (a native .exe) was unaffected.
 
 ### Changed
+- **Agent sessions are sorted by most recent activity** (#43), newest first,
+  instead of by status first — a session used 40 seconds ago no longer sits
+  below ones idle in herdr for hours. Status only breaks ties; archived
+  sessions stay at the bottom.
 - Launch steps for Enter run asynchronously: a slow start (cold PowerShell)
   no longer freezes the UI.
 

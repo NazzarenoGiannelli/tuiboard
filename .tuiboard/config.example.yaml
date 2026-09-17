@@ -53,6 +53,16 @@ archive_column: Archive
 # guesses wrong (e.g. a multiplexer env var leaking into another terminal):
 # resume_terminal: auto   # tmux | herdr | wezterm | windows-terminal | ghostty
 #                         # | xdg-terminal-exec | windows-console | macos-terminal
+#
+# The session runs in your shell, which stays open when the agent exits.
+# `auto` = the shell you started tuiboard from: on Windows Git Bash, Nushell or
+# PowerShell (pwsh, else powershell); elsewhere your $SHELL. Force one with:
+# resume_shell: auto      # bash | zsh | fish | nu | pwsh | powershell | cmd
+#
+# Enter not doing what you expect? From the directory you run tuiboard in (in a
+# checkout of the repo): `bun run agents:open <session-id-prefix> --dry-run`
+# prints the detected terminal, shell and exact command; the `o` detail of a
+# session also shows the full result of its last Enter.
 
 # Optional: replace that with your own launcher script. An argv array — the tokens {cwd}, {sessionId} and {resume}
 # (the agent's own resume command, e.g. `claude --resume <sessionId>`) are

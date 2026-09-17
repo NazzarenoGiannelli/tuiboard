@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Resumed sessions run in your shell** (#31). On Windows, Enter used to open
+  PowerShell even when tuiboard ran in Git Bash; now `auto` follows the shell
+  you started tuiboard from (Git Bash via Git's `bin\bash.exe` — never WSL's —,
+  Nushell, else PowerShell), and the shell stays open after the agent exits.
+  New `resume_shell` option (`bash | zsh | fish | nu | pwsh | powershell |
+  cmd`) forces one on any OS.
+- **Enter diagnostics.** The `o` detail shows the full result of a session's
+  last Enter (the banner gets cut on narrow terminals), and
+  `bun run agents:open <session-id-prefix> [--dry-run]` prints the detected
+  terminal, shell and exact launch command.
 - **Enter opens agent sessions in any common terminal, not only WezTerm**
   (#25). tuiboard detects where it runs — tmux, herdr, WezTerm, Windows
   Terminal (new tab, `pwsh` or `powershell`), Ghostty (new window) — and
@@ -37,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stops updating for 30 minutes; an open-but-idle OpenCode TUI isn't detected.
 
 ### Fixed
+- **Windows session directories stored with `/`** (OpenCode) are handed to
+  Windows Terminal with `\`, and the PowerShell launcher waits up to 30 s on a
+  cold start instead of 10 s (#31).
 - **Enter opens sessions in Windows Terminal** (#29). `wt.exe` (and a
   Store-installed `pwsh`) are App Execution Aliases that Bun's spawn can't
   find, so launching failed with "not found in $PATH". Windows launches now go

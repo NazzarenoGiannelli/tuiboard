@@ -19,7 +19,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import * as YAML from "js-yaml";
 
 import { isBoardFile } from "~/boards/scan";
-import { LAUNCHERS, type Launcher } from "~/input/open-session";
+import { LAUNCHERS, SHELLS, type Launcher, type Shell } from "~/input/open-session";
 
 export interface BoardConfig {
   /** Path to the .md file, absolute or relative to the config directory. */
@@ -53,6 +53,12 @@ export interface Config {
    * guesses wrong. Ignored when `resumeCommand` is set.
    */
   resumeTerminal: "auto" | Launcher;
+  /**
+   * Shell the resumed session runs in (config `resume_shell`). `auto` = the
+   * shell tuiboard was started from (Git Bash / Nushell / PowerShell on
+   * Windows, `$SHELL` elsewhere). Ignored when `resumeCommand` is set.
+   */
+  resumeShell: "auto" | Shell;
   /**
    * Template for the shell command copied to the clipboard by `c` in the agents
    * zone — one paste that `cd`s into the session's directory and resumes it.
@@ -134,6 +140,7 @@ export const DEFAULT_CONFIG: Omit<Config, "root" | "loaded" | "boards"> = {
   doneColumn: "Done",
   archiveColumn: "Archive",
   resumeTerminal: "auto",
+  resumeShell: "auto",
   copyResumeCommand: DEFAULT_COPY_RESUME_COMMAND,
   zones: { planner: "on", agenda: "on", agents: "on" },
 };
@@ -208,6 +215,7 @@ interface RawConfig {
   archive_column: string;
   resume_command: string[];
   resume_terminal: string;
+  resume_shell: string;
   copy_resume_command: string;
   calendars: {
     google?: {
@@ -355,6 +363,9 @@ function normalize(raw: Partial<RawConfig>, root: string, loaded: boolean): Conf
         : undefined,
     resumeTerminal: (LAUNCHERS as readonly string[]).includes(raw.resume_terminal ?? "")
       ? (raw.resume_terminal as Launcher)
+      : "auto",
+    resumeShell: (SHELLS as readonly string[]).includes(raw.resume_shell ?? "")
+      ? (raw.resume_shell as Shell)
       : "auto",
     copyResumeCommand:
       typeof raw.copy_resume_command === "string" &&

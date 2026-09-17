@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-09-17
+
 ### Fixed
 - **Agents list stays in order when sessions move** (#52). A new session
   appearing on top could show twice, leave blank rows, or draw rows in the
@@ -485,6 +487,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.13.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.1
 [0.13.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.0
 [0.12.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.12.0
 [0.11.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.11.0

@@ -260,6 +260,22 @@ describe("runLaunchPlan", () => {
     ).rejects.toThrow("sh: nope");
   });
 
+  it.skipIf(process.platform === "win32")("rolls back earlier steps and unwraps JSON errors", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "tb-undo-"));
+    const marker = join(dir, "undone");
+    try {
+      await expect(
+        runLaunchPlan([
+          { cmd: "sh", args: ["-c", "echo tab-1"], captureId: (o) => o.trim(), undo: { cmd: "sh", args: ["-c", `echo "$1" > '${marker}'`, "_", "{id}"] } },
+          { cmd: "sh", args: ["-c", `echo '{"error":{"message":"agent name is invalid"}}' >&2; exit 1`] },
+        ]),
+      ).rejects.toThrow("sh: agent name is invalid");
+      expect(readFileSync(marker, "utf8").trim()).toBe("tab-1");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("fails when a command doesn't exist", async () => {
     await expect(
       runLaunchPlan([{ cmd: "tuiboard-no-such-terminal", args: [] }]),

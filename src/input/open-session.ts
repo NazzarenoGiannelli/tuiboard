@@ -179,6 +179,8 @@ export interface LaunchStep {
    * replaced with it.
    */
   captureId?: (stdout: string) => string | undefined;
+  /** Best-effort rollback (with `{id}`) if a later step fails, e.g. close the tab this step opened. */
+  undo?: LaunchStep;
 }
 
 export interface LaunchTarget {
@@ -370,54 +372,81 @@ export function describePlan(steps: LaunchStep[]): string {
  * new window.
  */
 export async function runLaunchPlan(steps: LaunchStep[]): Promise<void> {
-  const { spawn } = await import("node:child_process");
+  const undos: LaunchStep[] = [];
   let id: string | undefined;
-  for (const step of steps) {
-    const args = step.args.map((a) => (id !== undefined ? a.replaceAll("{id}", id) : a));
-    const exe = Bun.which(step.cmd) ?? step.cmd;
-    if (step.detached) {
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn(exe, args, { detached: true, stdio: "ignore", windowsHide: true });
-        child.once("error", (e) => reject(new Error(`${step.cmd}: ${e.message}`)));
-        child.once("spawn", () => {
-          child.unref();
-          resolve();
-        });
-      });
-      continue;
+  try {
+    for (const step of steps) {
+      id = await runStep(step, id);
+      if (step.undo) undos.unshift(step.undo);
     }
-    const { status, stdout, stderr } = await new Promise<{
-      status: number | null;
-      stdout: string;
-      stderr: string;
-    }>((resolve, reject) => {
-      const child = spawn(exe, args, { windowsHide: true });
-      let out = "";
-      let err = "";
-      child.stdout?.on("data", (d) => (out += d));
-      child.stderr?.on("data", (d) => (err += d));
-      const timeoutMs = step.timeoutMs ?? 10_000;
-      const timer = setTimeout(() => {
-        child.kill();
-        reject(new Error(`${step.cmd}: timed out after ${Math.round(timeoutMs / 1000)}s`));
-      }, timeoutMs);
-      child.once("error", (e) => {
-        clearTimeout(timer);
-        reject(new Error(`${step.cmd}: ${e.message}`));
-      });
-      child.once("close", (code) => {
-        clearTimeout(timer);
-        resolve({ status: code, stdout: out, stderr: err });
-      });
-      if (step.input !== undefined) child.stdin?.end(step.input);
-      else child.stdin?.end();
-    });
-    if (status !== 0) {
-      throw new Error(`${step.cmd}: ${stderr.trim() || `exit ${status}`}`);
+  } catch (e) {
+    for (const undo of undos) {
+      await runStep(undo, id).catch(() => undefined);
     }
-    if (step.captureId) {
-      id = step.captureId(stdout);
-      if (!id) throw new Error(`${step.cmd}: unexpected output`);
-    }
+    throw e;
   }
+}
+
+/** CLI error text, unwrapping JSON errors like herdr's `{"error":{"message":…}}`. */
+function errorText(out: string): string {
+  const text = out.trim();
+  try {
+    const msg = JSON.parse(text)?.error?.message;
+    if (typeof msg === "string") return msg;
+  } catch {
+    // not JSON
+  }
+  return text;
+}
+
+async function runStep(step: LaunchStep, id: string | undefined): Promise<string | undefined> {
+  const { spawn } = await import("node:child_process");
+  const args = step.args.map((a) => (id !== undefined ? a.replaceAll("{id}", id) : a));
+  const exe = Bun.which(step.cmd) ?? step.cmd;
+  if (step.detached) {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(exe, args, { detached: true, stdio: "ignore", windowsHide: true });
+      child.once("error", (e) => reject(new Error(`${step.cmd}: ${e.message}`)));
+      child.once("spawn", () => {
+        child.unref();
+        resolve();
+      });
+    });
+    return id;
+  }
+  const { status, stdout, stderr } = await new Promise<{
+    status: number | null;
+    stdout: string;
+    stderr: string;
+  }>((resolve, reject) => {
+    const child = spawn(exe, args, { windowsHide: true });
+    let out = "";
+    let err = "";
+    child.stdout?.on("data", (d) => (out += d));
+    child.stderr?.on("data", (d) => (err += d));
+    const timeoutMs = step.timeoutMs ?? 10_000;
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`${step.cmd}: timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+    child.once("error", (e) => {
+      clearTimeout(timer);
+      reject(new Error(`${step.cmd}: ${e.message}`));
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      resolve({ status: code, stdout: out, stderr: err });
+    });
+    if (step.input !== undefined) child.stdin?.end(step.input);
+    else child.stdin?.end();
+  });
+  if (status !== 0) {
+    throw new Error(`${step.cmd}: ${errorText(stderr) || errorText(stdout) || `exit ${status}`}`);
+  }
+  if (step.captureId) {
+    const captured = step.captureId(stdout);
+    if (!captured) throw new Error(`${step.cmd}: unexpected output`);
+    return captured;
+  }
+  return id;
 }

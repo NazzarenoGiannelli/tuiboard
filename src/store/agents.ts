@@ -13,7 +13,12 @@ import { resolve, sep } from "node:path";
 import chokidar from "chokidar";
 import { createSignal } from "solid-js";
 
-import { linkHerdrSessions, type HerdrLink, type HerdrSource } from "~/store/herdr";
+import {
+  linkHerdrSessions,
+  type HerdrLink,
+  type HerdrSnapshot,
+  type HerdrSource,
+} from "~/store/herdr";
 
 /** Threshold: session untouched longer than this is "archived" (won't show in compact list). */
 export const DORMANT_AFTER_MS = 7 * 86_400 * 1000;
@@ -64,6 +69,8 @@ export interface AgentSession {
   model?: string;
   /** Shell command that resumes this session when run from `cwd`. */
   resumeCommand: string;
+  /** Same, as argv (`[binary, ...args]`) — for launchers that start the agent directly. */
+  resumeArgv: string[];
   /** Set when the session is open in a herdr pane. */
   herdr?: HerdrLink;
 }
@@ -143,6 +150,8 @@ export function sortSessions(arr: AgentSession[]): AgentSession[] {
 
 export interface AgentsStore {
   sessions: () => AgentSession[];
+  /** Latest herdr snapshot (undefined without herdr). */
+  herdr: () => HerdrSnapshot | undefined;
   refresh: () => void;
   dispose: () => Promise<void>;
 }
@@ -255,5 +264,5 @@ export function createAgentsStore(
     await watcher.close();
   }
 
-  return { sessions, refresh, dispose };
+  return { sessions, herdr: () => herdr?.snapshot(), refresh, dispose };
 }

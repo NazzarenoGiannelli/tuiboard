@@ -22,7 +22,9 @@ import {
   runLaunchPlan,
   systemLaunchEnv,
 } from "~/input/open-session";
+import { planHerdrFocus, planHerdrResume } from "~/input/herdr-open";
 import { HARNESS, type AgentSession } from "~/store/agents";
+import { herdrBin, herdrPlace } from "~/store/herdr";
 import { googleTokenCanWrite } from "~/store/calendar";
 import { isTask } from "~/parser/markdown";
 import {
@@ -498,10 +500,16 @@ function handleAgentsZone(store: TuiStore, key: KeyEvent): void {
     store.setCursor(0, Math.min(sessions.length - 1, ui.row + 1));
   } else if (key.name === "k" || key.name === "up") {
     store.setCursor(0, Math.max(0, ui.row - 1));
-  } else if (key.name === "enter" || key.name === "return") {
-    // Open (resume) the selected session in a new terminal tab/window.
+  } else if (key.name === "H" || (key.name === "h" && key.shift)) {
+    // Jump to the session in herdr, or resume it there.
     const target = sessions[ui.row];
-    if (target) void openSession(store, target);
+    if (target) void openInHerdr(store, target);
+  } else if (key.name === "enter" || key.name === "return") {
+    // Open (resume) the selected session in a new terminal tab/window —
+    // or, when it's already open in herdr, go there instead of a second copy.
+    const target = sessions[ui.row];
+    if (target?.herdr) void openInHerdr(store, target);
+    else if (target) void openSession(store, target);
   } else if (key.name === "c") {
     // Copy a one-paste "cd + resume" command for the selected session, so you
     // can drop it into any tab/pane anywhere and land in the right directory
@@ -956,6 +964,46 @@ async function openSession(store: TuiStore, session: AgentSession): Promise<void
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await fail(`${LAUNCHER_NAME[launcher]} launch failed: ${msg}`);
+  }
+}
+
+/**
+ * `H` in the Agents zone: focus the herdr pane the session is open in, or
+ * resume it in herdr — a new tab in the workspace that holds its project,
+ * started with `herdr agent start` (see herdr-open.ts).
+ */
+async function openInHerdr(store: TuiStore, session: AgentSession): Promise<void> {
+  const bin = herdrBin();
+  const snap = store.agents.herdr();
+  const { sessionId } = session;
+  if (!bin || !snap) {
+    const text = bin ? "herdr isn't running" : "herdr isn't installed (https://herdr.dev)";
+    store.setLastLaunch(sessionId, false, text);
+    store.flashBanner("warn", text);
+    return;
+  }
+  let steps;
+  let done: string;
+  if (session.herdr) {
+    steps = planHerdrFocus(bin, session);
+    done = `↗ ${herdrPlace(session.herdr)}`;
+  } else {
+    const plan = planHerdrResume(bin, session, snap);
+    steps = plan.steps;
+    done =
+      plan.where.kind === "new"
+        ? `↗ Resumed in a new herdr workspace "${plan.where.label}"`
+        : `↗ Resumed in herdr ${plan.where.label}`;
+    store.flashBanner("info", `Starting ${HARNESS[session.provider].name} in herdr…`);
+  }
+  try {
+    await runLaunchPlan(steps);
+    store.setLastLaunch(sessionId, true, `${done}\n${describePlan(steps)}`);
+    store.flashBanner("info", `${done} (${sessionId.slice(0, 8)})`);
+  } catch (e) {
+    const text = `herdr: ${e instanceof Error ? e.message : String(e)}`;
+    store.setLastLaunch(sessionId, false, text);
+    store.flashBanner("error", text);
   }
 }
 

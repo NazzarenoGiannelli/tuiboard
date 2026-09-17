@@ -16,7 +16,7 @@ import { homedir } from "node:os";
 
 import { layoutCardDetails, layoutCardName, layoutLine } from "~/ui/agent-line";
 import { T } from "~/ui/glyphs";
-import type { HerdrLink, IndicatorStyle } from "~/store/herdr";
+import { herdrPlace, type IndicatorStyle } from "~/store/herdr";
 import {
   HARNESS,
   cwdShort,
@@ -62,10 +62,7 @@ const STATUS_GLYPH: Record<IndicatorStyle, Record<AgentStatus, string>> = {
   },
 };
 
-/** `herdr blits · tab 3` */
-export function herdrPlace(l: HerdrLink): string {
-  return `herdr ${l.workspaceLabel || l.workspaceId} · tab ${l.tabNumber || l.tabId}`;
-}
+
 
 /** One hue per harness so the badge reads before the letters do. */
 export const HARNESS_COLOR: Record<AgentProvider, string> = {

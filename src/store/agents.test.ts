@@ -28,6 +28,7 @@ function fakeSession(sessionId: string, status: AgentStatus, lastActivityMs: num
     messageCount: 0,
     toolCount: 0,
     resumeCommand: `resume ${sessionId}`,
+    resumeArgv: ["resume", sessionId],
   };
 }
 

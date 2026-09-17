@@ -178,6 +178,7 @@ export function readOpenCodeSessions(dbPath: string, now: number): AgentSession[
         // Assistant messages carry `modelID`; user messages `model.modelID`.
         model: lastData?.modelID ?? lastData?.model?.modelID,
         resumeCommand: `opencode --session ${s.id}`,
+        resumeArgv: ["opencode", "--session", s.id],
       } satisfies AgentSession;
     });
   } finally {

@@ -23,7 +23,8 @@ import { ATTR, T, cellWidth } from "~/ui/glyphs";
 import { AGENDA_WIDTH } from "~/ui/layout";
 import { formatHm } from "~/store/timeline";
 import { HARNESS } from "~/store/agents";
-import { HARNESS_COLOR, herdrPlace } from "~/ui/AgentRow";
+import { HARNESS_COLOR } from "~/ui/AgentRow";
+import { herdrPlace } from "~/store/herdr";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
 
@@ -1147,7 +1148,8 @@ const HELP_SECTIONS: HelpSection[] = [
     emoji: "🤖",
     title: "Agents zone",
     rows: [
-      ["Enter", "Open (resume) the selected session in a new terminal tab/window"],
+      ["Enter", "Open (resume) the selected session in a new terminal tab/window — or go to it if it's open in herdr"],
+      ["H", "herdr: go to the session, or resume it in a new tab of its project's workspace"],
       ["c", "Copy a 'cd + resume' command for the session"],
       ["o", "Session detail (harness, model, cwd, branch, last prompts, resume cmd)"],
       ["f", "Filter by harness: all → cc Claude Code → cx Codex → oc OpenCode → pi Pi"],

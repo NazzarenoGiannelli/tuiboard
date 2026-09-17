@@ -22,7 +22,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { createEffect, createMemo } from "solid-js";
+import { createCliRenderer } from "@opentui/core";
 import { render, useKeyboard, useTerminalDimensions } from "@opentui/solid";
+
+import { quitApp, registerRenderer } from "~/app-exit";
 
 import { parseArgs, type ViewKind } from "~/cli/args";
 import { loadConfig } from "~/config/loader";
@@ -84,12 +87,8 @@ if (needsOnboarding) {
   store.openBoardNew(true);
 }
 
-process.on("SIGINT", () => {
-  store.dispose().finally(() => process.exit(0));
-});
-process.on("SIGTERM", () => {
-  store.dispose().finally(() => process.exit(0));
-});
+process.on("SIGINT", () => void quitApp(() => store.dispose()));
+process.on("SIGTERM", () => void quitApp(() => store.dispose()));
 
 // ─── Responsive layout ──────────────────────────────────────────────────────
 // Auto-hide optional zones when the terminal isn't wide enough to host them
@@ -235,4 +234,6 @@ if (process.env.TUIBOARD_READY_FLAG) {
   }
 }
 
-await render(() => <App />, { useMouse: true });
+const renderer = await createCliRenderer({ useMouse: true });
+registerRenderer(renderer);
+await render(() => <App />, renderer);

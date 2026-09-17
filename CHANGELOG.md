@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   focuses it instead of starting a second copy.
 
 ### Fixed
+- **Quitting gives the terminal back** (#47). `q`, Ctrl+C and termination
+  signals exited without tearing down the renderer, leaving mouse tracking
+  and the alternate screen on — moving the mouse at the shell then printed
+  `51;7;45M…`. tuiboard now restores the terminal before exiting, and the
+  `tuiboard` launcher resets mouse/paste/focus reporting and the cursor after
+  the app ends, whatever way it ended.
 - **Layout right from the first frame on Windows** (#45). Which zones fit (and
   the narrow single-pane mode) now follow the renderer's own terminal size,
   the one the frame is drawn at, instead of `process.stdout.columns`, which

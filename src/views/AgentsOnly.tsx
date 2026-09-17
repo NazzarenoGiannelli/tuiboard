@@ -5,9 +5,10 @@
  * scrollChildIntoView (same trick used in BoardView for active columns).
  */
 
-import { For, Show, createEffect, createMemo } from "solid-js";
+import { Index, Show, createEffect, createMemo } from "solid-js";
 
 import { AgentRow } from "~/ui/AgentRow";
+import { useStickyAgentCursor } from "~/ui/agent-cursor";
 import { T } from "~/ui/glyphs";
 import { HARNESS } from "~/store/agents";
 import type { TuiStore } from "~/store/index";
@@ -16,10 +17,9 @@ interface ScrollBoxLike {
   scrollChildIntoView(id: string): void;
 }
 
-function rowId(sessionId: string): string {
-  // Sanitize sessionId for use as an OpenTUI box id. UUIDs are already safe
-  // (alphanumeric + dashes), but defensive belt-and-braces doesn't hurt.
-  return `tuiboard-agent-${sessionId.replace(/[^a-zA-Z0-9]/g, "_")}`;
+/** Rows are keyed by position (see the <Index> below), and so are their ids. */
+function rowId(index: number): string {
+  return `tuiboard-agent-card-${index}`;
 }
 
 export function AgentsOnly(props: { store: TuiStore }) {
@@ -29,17 +29,17 @@ export function AgentsOnly(props: { store: TuiStore }) {
   const filter = () => props.store.state.ui.agentsFilter;
   const filterTag = () => (filter() === "all" ? "" : ` · ${HARNESS[filter() as keyof typeof HARNESS].code}`);
   let scrollBoxRef: ScrollBoxLike | undefined;
+  useStickyAgentCursor(props.store, sessions);
 
   // Auto-scroll the list so the active row is visible. setTimeout(0) waits
   // for OpenTUI to finish layout before requesting scroll.
   createEffect(() => {
     const row = agentRow();
     if (!isActive() || !scrollBoxRef) return;
-    const target = sessions()[row];
-    if (!target) return;
+    if (row >= sessions().length) return;
     setTimeout(() => {
       try {
-        scrollBoxRef?.scrollChildIntoView(rowId(target.sessionId));
+        scrollBoxRef?.scrollChildIntoView(rowId(row));
       } catch {
         // Child not mounted yet — harmless.
       }
@@ -85,23 +85,29 @@ export function AgentsOnly(props: { store: TuiStore }) {
               scrollbarOptions: { visible: false },
             }}
           >
-            <For each={sessions()}>
+            {/*
+              <Index>, not <For>: one stable row per position whose data
+              updates in place. Sessions are re-created on every refresh and
+              reorder by recency, and moving children inside OpenTUI's
+              scrollbox left stale/duplicate rows on screen (#52).
+            */}
+            <Index each={sessions()}>
               {(session, i) => (
-                <box id={rowId(session.sessionId)}>
+                <box id={rowId(i)}>
                   <AgentRow
-                    session={session}
-                    cursor={isActive() && i() === agentRow()}
+                    session={session()}
+                    cursor={isActive() && i === agentRow()}
                     nameMaxChars={120}
                     variant="card"
                     indicators={props.store.agentIndicators}
                     onClick={() => {
                       props.store.setActiveZone("agents");
-                      props.store.setCursor(0, i());
+                      props.store.setCursor(0, i);
                     }}
                   />
                 </box>
               )}
-            </For>
+            </Index>
           </scrollbox>
         </Show>
       </box>

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Agents list stays in order when sessions move** (#52). A new session
+  appearing on top could show twice, leave blank rows, or draw rows in the
+  wrong order past the panel border; the lists now keep one stable row per
+  position. The cursor also stays on the session you selected while the list
+  reorders, instead of silently landing on another one (so Enter, `H` and `c`
+  act on the session you picked).
+
 ## [0.13.0] - 2026-09-17
 
 tuiboard and [herdr](https://herdr.dev) now work as one: the Agents zone shows

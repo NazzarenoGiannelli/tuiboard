@@ -93,6 +93,7 @@ export function AgentsOnly(props: { store: TuiStore }) {
                     cursor={isActive() && i() === agentRow()}
                     nameMaxChars={120}
                     variant="card"
+                    indicators={props.store.agentIndicators}
                     onClick={() => {
                       props.store.setActiveZone("agents");
                       props.store.setCursor(0, i());

@@ -23,7 +23,7 @@ import { ATTR, T, cellWidth } from "~/ui/glyphs";
 import { AGENDA_WIDTH } from "~/ui/layout";
 import { formatHm } from "~/store/timeline";
 import { HARNESS } from "~/store/agents";
-import { HARNESS_COLOR } from "~/ui/AgentRow";
+import { HARNESS_COLOR, herdrPlace } from "~/ui/AgentRow";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
 
@@ -936,6 +936,27 @@ function AgentDetailModal(props: { store: TuiStore; modal: Extract<NonNullable<T
               <span style={{ fg: T.textDim }}>status    </span>
               <span style={{ fg: T.text }}>{s().status}</span>
             </text>
+            <Show when={s().herdr}>
+              {(h: () => NonNullable<ReturnType<typeof s>["herdr"]>) => (
+                <>
+                  <text>
+                    <span style={{ fg: T.textDim }}>herdr     </span>
+                    <span style={{ fg: T.accent }}>{herdrPlace(h())}</span>
+                    <span style={{ fg: T.textDim }}>
+                      {"  "}pane {h().paneId} · {h().status} · matched by {h().matchedBy}
+                    </span>
+                  </text>
+                  <Show when={h().matchedBy === "cwd"}>
+                    <text wrapMode="word">
+                      <span style={{ fg: T.textDim }}>
+                        {"          "}herdr doesn't report which {h().agent} session this pane is on — run
+                        `herdr integration install {h().agent}` for an exact match.
+                      </span>
+                    </text>
+                  </Show>
+                </>
+              )}
+            </Show>
             <text>
               <span style={{ fg: T.textDim }}>cwd       </span>
               <span style={{ fg: T.text }}>{s().cwd}</span>

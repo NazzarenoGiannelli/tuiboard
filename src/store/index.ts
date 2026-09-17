@@ -38,6 +38,7 @@ import {
   type AgentsStore,
 } from "./agents";
 import { AGENT_ADAPTERS } from "./agent-adapters";
+import { createHerdrSource } from "./herdr";
 import {
   createCalendarStore,
   createGoogleEvent,
@@ -380,7 +381,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   // the agents zone is disabled we skip the watcher entirely (no session reads
   // at all) and hand back an inert stub.
   const agentsStore: AgentsStore = enabledZones.agents
-    ? createAgentsStore(AGENT_ADAPTERS)
+    ? createAgentsStore(AGENT_ADAPTERS, { herdr: createHerdrSource() })
     : noopAgentsStore();
   // Calendar feeds (read-only) merged into the Agenda zone. Skipped entirely
   // (no network) when the agenda zone is disabled.
@@ -1732,6 +1733,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     activeBoard,
     agents: agentsStore,
     agentSessions,
+    agentIndicators: config.statusIndicators,
     cycleAgentsFilter,
     setLastLaunch,
     calendar: calendarStore,

@@ -100,6 +100,7 @@ export function AgentsBar(props: AgentsBarProps) {
             {(session, i) => (
               <box id={agentRowId(i())}>
                 <AgentRow
+                  indicators={props.store.agentIndicators}
                   session={session}
                   cursor={isActive() && i() === agentRow()}
                   nameMaxChars={48}

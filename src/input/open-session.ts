@@ -365,11 +365,12 @@ export function describePlan(steps: LaunchStep[]): string {
 
 /**
  * Run a plan. Throws with a readable message on the first failing step.
- * Short IPC steps run synchronously (their output feeds the next step);
- * GUI launches are detached so tuiboard doesn't wait on the new window.
+ * Short IPC steps are awaited (their output feeds the next step) without
+ * blocking the UI; GUI launches are detached so tuiboard doesn't wait on the
+ * new window.
  */
 export async function runLaunchPlan(steps: LaunchStep[]): Promise<void> {
-  const { spawn, spawnSync } = await import("node:child_process");
+  const { spawn } = await import("node:child_process");
   let id: string | undefined;
   for (const step of steps) {
     const args = step.args.map((a) => (id !== undefined ? a.replaceAll("{id}", id) : a));
@@ -385,18 +386,37 @@ export async function runLaunchPlan(steps: LaunchStep[]): Promise<void> {
       });
       continue;
     }
-    const res = spawnSync(exe, args, {
-      input: step.input,
-      encoding: "utf8",
-      windowsHide: true,
-      timeout: step.timeoutMs ?? 10_000,
+    const { status, stdout, stderr } = await new Promise<{
+      status: number | null;
+      stdout: string;
+      stderr: string;
+    }>((resolve, reject) => {
+      const child = spawn(exe, args, { windowsHide: true });
+      let out = "";
+      let err = "";
+      child.stdout?.on("data", (d) => (out += d));
+      child.stderr?.on("data", (d) => (err += d));
+      const timeoutMs = step.timeoutMs ?? 10_000;
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(new Error(`${step.cmd}: timed out after ${Math.round(timeoutMs / 1000)}s`));
+      }, timeoutMs);
+      child.once("error", (e) => {
+        clearTimeout(timer);
+        reject(new Error(`${step.cmd}: ${e.message}`));
+      });
+      child.once("close", (code) => {
+        clearTimeout(timer);
+        resolve({ status: code, stdout: out, stderr: err });
+      });
+      if (step.input !== undefined) child.stdin?.end(step.input);
+      else child.stdin?.end();
     });
-    if (res.error) throw new Error(`${step.cmd}: ${res.error.message}`);
-    if (res.status !== 0) {
-      throw new Error(`${step.cmd}: ${(res.stderr || "").trim() || `exit ${res.status}`}`);
+    if (status !== 0) {
+      throw new Error(`${step.cmd}: ${stderr.trim() || `exit ${status}`}`);
     }
     if (step.captureId) {
-      id = step.captureId(res.stdout ?? "");
+      id = step.captureId(stdout);
       if (!id) throw new Error(`${step.cmd}: unexpected output`);
     }
   }

@@ -13,6 +13,8 @@ import { resolve, sep } from "node:path";
 import chokidar from "chokidar";
 import { createSignal } from "solid-js";
 
+import { linkHerdrSessions, type HerdrLink, type HerdrSource } from "~/store/herdr";
+
 /** Threshold: session untouched longer than this is "archived" (won't show in compact list). */
 export const DORMANT_AFTER_MS = 7 * 86_400 * 1000;
 
@@ -30,7 +32,11 @@ export const HARNESS: Record<AgentProvider, { code: string; name: string }> = {
 export type AgentsFilter = "all" | AgentProvider;
 
 export type AgentStatus =
+  /** Waiting for you (permission/question) — known only via herdr. */
+  | "live-blocked"
   | "live-busy"
+  /** Finished its turn, not looked at yet — known only via herdr. */
+  | "live-done"
   | "live-idle"
   /** Looks busy, but stopped updating — the process likely crashed. */
   | "stale"
@@ -58,6 +64,8 @@ export interface AgentSession {
   model?: string;
   /** Shell command that resumes this session when run from `cwd`. */
   resumeCommand: string;
+  /** Set when the session is open in a herdr pane. */
+  herdr?: HerdrLink;
 }
 
 /** One agent CLI's session source. */
@@ -109,12 +117,19 @@ export function formatAge(ts: number, now: number): string {
 }
 
 const STATUS_RANK: Record<AgentStatus, number> = {
-  "live-busy": 0,
-  "live-idle": 1,
-  "stale": 2,
-  "dormant": 3,
-  "archived": 4,
+  "live-blocked": 0,
+  "live-busy": 1,
+  "live-done": 2,
+  "live-idle": 3,
+  "stale": 4,
+  "dormant": 5,
+  "archived": 6,
 };
+
+/** Is the agent process running (as far as we can tell)? */
+export function isLive(status: AgentStatus): boolean {
+  return status.startsWith("live-");
+}
 
 export function sortSessions(arr: AgentSession[]): AgentSession[] {
   return arr.slice().sort((a, b) => {
@@ -148,7 +163,10 @@ const MISSING_PATH_POLL_MS = 5000;
  */
 export function createAgentsStore(
   adapters: AgentAdapter[],
-  { missingPathPollMs = MISSING_PATH_POLL_MS } = {},
+  {
+    missingPathPollMs = MISSING_PATH_POLL_MS,
+    herdr,
+  }: { missingPathPollMs?: number; herdr?: HerdrSource } = {},
 ): AgentsStore {
   const [sessions, setSessions] = createSignal<AgentSession[]>([]);
   const byAdapter = new Map<AgentAdapter, AgentSession[]>();
@@ -162,8 +180,10 @@ export function createAgentsStore(
   }
 
   function publish(): void {
-    setSessions(sortSessions([...byAdapter.values()].flat()));
+    const all = [...byAdapter.values()].flat();
+    setSessions(sortSessions(linkHerdrSessions(all, herdr?.snapshot())));
   }
+  herdr?.onChange(publish);
 
   function refresh(): void {
     const now = Date.now();
@@ -231,6 +251,7 @@ export function createAgentsStore(
   async function dispose() {
     if (debounceTimer) clearTimeout(debounceTimer);
     clearInterval(missingPoll);
+    herdr?.dispose();
     await watcher.close();
   }
 

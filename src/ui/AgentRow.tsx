@@ -16,6 +16,7 @@ import { homedir } from "node:os";
 
 import { layoutCardDetails, layoutCardName, layoutLine } from "~/ui/agent-line";
 import { T } from "~/ui/glyphs";
+import type { HerdrLink, IndicatorStyle } from "~/store/herdr";
 import {
   HARNESS,
   cwdShort,
@@ -27,20 +28,44 @@ import {
 } from "~/store/agents";
 
 const STATUS_COLOR: Record<AgentStatus, string> = {
-  "live-busy": T.today,     // bright accent for actively-running
-  "live-idle": T.scheduled, // warm but quieter
-  "stale":     T.bannerWarn,
-  "dormant":   T.textDim,
-  "archived":  T.textDone,
+  "live-blocked": T.overdue,  // needs you
+  "live-busy":    T.today,    // bright accent for actively-running
+  "live-done":    T.done,     // finished, not looked at yet
+  "live-idle":    T.scheduled, // warm but quieter
+  "stale":        T.bannerWarn,
+  "dormant":      T.textDim,
+  "archived":     T.textDone,
 };
 
-const STATUS_GLYPH: Record<AgentStatus, string> = {
-  "live-busy": "●",
-  "live-idle": "○",
-  "stale":     "△",
-  "dormant":   "·",
-  "archived":  "·",
+/**
+ * herdr's two `status_indicators` styles, copied as-is so the same state reads
+ * the same in both tools. `stale` is tuiboard's own (no herdr equivalent).
+ */
+const STATUS_GLYPH: Record<IndicatorStyle, Record<AgentStatus, string>> = {
+  dots: {
+    "live-blocked": "●",
+    "live-busy":    "●",
+    "live-done":    "●",
+    "live-idle":    "○",
+    "stale":        "△",
+    "dormant":      "·",
+    "archived":     "·",
+  },
+  symbols: {
+    "live-blocked": "×",
+    "live-busy":    "◐",
+    "live-done":    "✓",
+    "live-idle":    "○",
+    "stale":        "△",
+    "dormant":      "·",
+    "archived":     "·",
+  },
 };
+
+/** `herdr blits · tab 3` */
+export function herdrPlace(l: HerdrLink): string {
+  return `herdr ${l.workspaceLabel || l.workspaceId} · tab ${l.tabNumber || l.tabId}`;
+}
 
 /** One hue per harness so the badge reads before the letters do. */
 export const HARNESS_COLOR: Record<AgentProvider, string> = {
@@ -66,6 +91,8 @@ interface AgentRowProps {
   nameMaxChars?: number;
   /** `line` (default) for the dashboard strip, `card` for the fullscreen view. */
   variant?: "line" | "card";
+  /** Status glyph style (default symbols, as in herdr). */
+  indicators?: IndicatorStyle;
   onClick?: () => void;
 }
 
@@ -106,7 +133,15 @@ export function AgentRow(props: AgentRowProps) {
   );
   const cardName = createMemo(() => layoutCardName(displayName(), width()));
   const details = createMemo(() =>
-    layoutCardDetails([model(), props.session.gitBranch, cardCwd(props.session.cwd)], width()),
+    layoutCardDetails(
+      [
+        model(),
+        props.session.herdr && herdrPlace(props.session.herdr),
+        props.session.gitBranch,
+        cardCwd(props.session.cwd),
+      ],
+      width(),
+    ),
   );
 
   // cursor · status glyph · harness badge — shared by both variants.
@@ -115,7 +150,7 @@ export function AgentRow(props: AgentRowProps) {
       {props.cursor ? "▶ " : "  "}
     </span>,
     <span style={{ fg: STATUS_COLOR[props.session.status] }}>
-      {STATUS_GLYPH[props.session.status]}{" "}
+      {STATUS_GLYPH[props.indicators ?? "symbols"][props.session.status]}{" "}
     </span>,
     <span style={{ fg: HARNESS_COLOR[props.session.provider] }}>
       {HARNESS[props.session.provider].code}{" "}

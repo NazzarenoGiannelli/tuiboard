@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tracks it from the start. **Enter** on a session already open in herdr
   focuses it instead of starting a second copy.
 
+### Fixed
+- **`H` on Windows with Codex, OpenCode and Pi** (#41). herdr launches an
+  agent's executable directly, and npm-installed CLIs on Windows are an
+  extensionless sh shim next to `.cmd`/`.ps1` ("not a valid Win32
+  application"). On Windows the resume command is now typed into the new
+  pane's shell, which resolves it; Claude Code (a native .exe) was unaffected.
+
 ### Changed
 - Launch steps for Enter run asynchronously: a slow start (cold PowerShell)
   no longer freezes the UI.

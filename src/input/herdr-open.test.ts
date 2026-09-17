@@ -91,8 +91,16 @@ describe("planHerdrFocus", () => {
 });
 
 describe("planHerdrResume", () => {
+  it("on Windows types the resume command into the new pane's shell (npm shims can't be exec'd)", () => {
+    const { steps } = planHerdrResume("C:\\herdr.exe", session({ cwd: "C:\\Users\\n\\blits" }), snap(), "win32");
+    expect(steps).toHaveLength(2);
+    expect(steps[0]!.args.slice(0, 2)).toEqual(["tab", "create"]);
+    expect(steps[0]!.undo).toBeDefined();
+    expect(steps[1]).toEqual({ cmd: "C:\\herdr.exe", args: ["pane", "run", "{id}", "codex resume 0199-abc"] });
+  });
+
   it("opens a labelled tab in the project's workspace and starts the agent there", () => {
-    const { steps, where } = planHerdrResume("/bin/herdr", session(), snap());
+    const { steps, where } = planHerdrResume("/bin/herdr", session(), snap(), "linux");
     expect(where).toMatchObject({ workspaceId: "w2", why: "cwd" });
     expect(steps[0]!.args).toEqual([
       "tab", "create", "--workspace", "w2", "--cwd", "/home/u/blits/monorepo", "--label", "Fix the flaky test", "--focus",
@@ -108,7 +116,7 @@ describe("planHerdrResume", () => {
 
   it("uses herdr's agent names and each agent's own resume args", () => {
     const cc = session({ provider: "claude-code", resumeArgv: ["claude", "--resume", "u"] });
-    expect(planHerdrResume("h", cc, snap()).steps[1]!.args).toEqual(
+    expect(planHerdrResume("h", cc, snap(), "darwin").steps[1]!.args).toEqual(
       expect.arrayContaining(["--kind", "claude", "--", "--resume", "u"]),
     );
   });
@@ -118,6 +126,7 @@ describe("planHerdrResume", () => {
       "h",
       session({ displayName: "A very long session title that keeps going and going", cwd: "/home/u/app" }),
       snap({ panes: [], workspaces: new Map(), focusedWorkspaceId: undefined }),
+      "linux",
     );
     expect(steps[0]!.args).toEqual(["workspace", "create", "--cwd", "/home/u/app", "--label", "app", "--focus"]);
     expect(steps[1]!.args[2]).toBe("a-very-long-session-title-199abc");

@@ -73,12 +73,14 @@ Starting fresh — no Obsidian, no special folders required:
 4. **Run it:** `tuiboard` (or the short alias `tb`).
 
 **The Agent view needs zero setup.** tuiboard reads your local agent sessions
-automatically — Claude Code from `~/.claude/`, OpenCode from
-`~/.local/share/opencode/opencode.db` (respects `$XDG_DATA_HOME`, read-only) —
-so the live agent strip fills in as soon as you've used either one. Nothing to
-connect or configure. OpenCode keeps no record of running processes, so its
-sessions show as busy while a turn is in progress (stale if a turn stops
-updating for 30 minutes), never as idle-but-open.
+automatically, read-only — Claude Code from `~/.claude/`, Codex from
+`~/.codex/` (respects `$CODEX_HOME`), OpenCode from
+`~/.local/share/opencode/opencode.db` (respects `$XDG_DATA_HOME`) — so the
+live agent strip fills in as soon as you've used any of them, even if you start
+the agent after tuiboard. Nothing to connect or configure. Codex and OpenCode
+keep no record of running processes, so their sessions show as busy while a
+turn is in progress (stale if a turn stops updating for 30 minutes), never as
+idle-but-open.
 
 See [Configure](#configure) for assignees, the done/archive column names, and
 the optional custom "open session in your terminal" command.
@@ -183,7 +185,7 @@ three are yours to configure:
 zones:
   planner: on      # Today/Tomorrow panel          (toggle at runtime with F1)
   agenda: on       # 24h agenda + calendars        (F2)
-  agents: off      # live Claude Code view         (F3)
+  agents: off      # live agent sessions view      (F3)
 ```
 
 Each zone takes one of:

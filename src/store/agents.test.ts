@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -136,6 +136,26 @@ describe("createAgentsStore watching", () => {
       writeFileSync(bFile, "changed");
       await waitFor(() => scans.b === 2);
       expect(scans.a).toBe(1);
+    } finally {
+      await store.dispose();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("starts watching a path created after launch", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "tuiboard-agents-"));
+    const late = join(dir, "sessions");
+    let scans = 0;
+    const store = createAgentsStore([fakeAdapter(() => (scans++, []), [late])], {
+      missingPathPollMs: 50,
+    });
+    try {
+      mkdirSync(late);
+      await waitFor(() => scans >= 2); // picked up by the poll
+      const before = scans;
+      await new Promise((r) => setTimeout(r, 300)); // let the watcher arm
+      writeFileSync(join(late, "s.jsonl"), "{}");
+      await waitFor(() => scans > before);
     } finally {
       await store.dispose();
       rmSync(dir, { recursive: true, force: true });

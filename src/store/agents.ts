@@ -1,12 +1,13 @@
 /**
  * Discovery + reactive store for local coding-agent sessions.
  *
- * Each agent CLI (Claude Code, OpenCode) plugs in through an `AgentAdapter`
+ * Each agent CLI (Claude Code, Codex, OpenCode) plugs in through an `AgentAdapter`
  * that owns its own on-disk format, status semantics and resume command —
  * see `src/store/agent-adapters/`. This module only holds the shared shape
  * and merges every adapter's sessions into one sorted, watched list.
  */
 
+import { existsSync } from "node:fs";
 import { resolve, sep } from "node:path";
 
 import chokidar from "chokidar";
@@ -15,7 +16,7 @@ import { createSignal } from "solid-js";
 /** Threshold: session untouched longer than this is "archived" (won't show in compact list). */
 export const DORMANT_AFTER_MS = 7 * 86_400 * 1000;
 
-export type AgentProvider = "claude-code" | "opencode";
+export type AgentProvider = "claude-code" | "codex" | "opencode";
 
 export type AgentStatus =
   | "live-busy"
@@ -101,13 +102,21 @@ export interface AgentsStore {
 const DEBOUNCE_MS = 200;
 /** Cap on debounce deferral, so a session streaming non-stop still refreshes. */
 const DEBOUNCE_MAX_WAIT_MS = 1000;
+/**
+ * The watcher ignores paths that don't exist yet (agent installed, or first
+ * session started, after tuiboard launched) — poll for them this often.
+ */
+const MISSING_PATH_POLL_MS = 5000;
 
 /**
  * Reactive store of local agent sessions. Watches every adapter's paths and,
  * on a change, re-scans only the adapter that owns the changed path (short
  * debounce). Initial scan is eager.
  */
-export function createAgentsStore(adapters: AgentAdapter[]): AgentsStore {
+export function createAgentsStore(
+  adapters: AgentAdapter[],
+  { missingPathPollMs = MISSING_PATH_POLL_MS } = {},
+): AgentsStore {
   const [sessions, setSessions] = createSignal<AgentSession[]>([]);
   const byAdapter = new Map<AgentAdapter, AgentSession[]>();
 
@@ -164,16 +173,31 @@ export function createAgentsStore(adapters: AgentAdapter[]): AgentsStore {
     debounceTimer = setTimeout(flush, Math.max(0, wait));
   };
 
+  const roots = [...new Set(watched.map((w) => w.root))];
   const watcher = chokidar.watch(
-    watched.map((w) => w.root),
+    roots.filter((r) => existsSync(r)),
     { ignoreInitial: true, depth: 3 },
   );
   watcher.on("add", onChange);
+  watcher.on("addDir", onChange);
   watcher.on("change", onChange);
   watcher.on("unlink", onChange);
 
+  let missing = roots.filter((r) => !existsSync(r));
+  const missingPoll = setInterval(() => {
+    const appeared = missing.filter((r) => existsSync(r));
+    if (appeared.length === 0) return;
+    missing = missing.filter((r) => !appeared.includes(r));
+    watcher.add(appeared);
+    for (const root of appeared) onChange(root);
+    if (missing.length === 0) clearInterval(missingPoll);
+  }, missingPathPollMs);
+  missingPoll.unref?.();
+  if (missing.length === 0) clearInterval(missingPoll);
+
   async function dispose() {
     if (debounceTimer) clearTimeout(debounceTimer);
+    clearInterval(missingPoll);
     await watcher.close();
   }
 

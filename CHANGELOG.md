@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A calmer Agents list while agents work** (#58).
+  - A failed herdr poll no longer drops every link at once (states briefly
+    reverting, rows jumping); herdr only counts as gone after a few misses.
+  - A Claude Code PID file read mid-write reuses its last good read instead of
+    making the session's state flicker.
+  - Live sessions are ordered by their activity at their last state change,
+    so a working agent moves once when it starts or finishes, not on every
+    write; closed sessions still sort by last activity.
+  - Ages tick on one shared clock and read `now` under a minute instead of
+    jumping through seconds.
+
 ## [0.13.1] - 2026-09-17
 
 ### Fixed

@@ -73,6 +73,11 @@ export interface AgentSession {
   resumeArgv: string[];
   /** Set when the session is open in a herdr pane. */
   herdr?: HerdrLink;
+  /**
+   * Position in the list (newest first). Set by the store: last activity for
+   * closed sessions, last state change for live ones — see withSortKeys.
+   */
+  sortKeyMs?: number;
 }
 
 /** One agent CLI's session source. */
@@ -113,11 +118,11 @@ export function filterSessions(arr: AgentSession[], filter: AgentsFilter): Agent
   return filter === "all" ? arr : arr.filter((s) => s.provider === filter);
 }
 
-/** Compact human-readable age. Mirrors av.py `_fmt_age`. */
+/** Compact human-readable age; under a minute reads `now` (no ticking seconds). */
 export function formatAge(ts: number, now: number): string {
   if (!ts) return "—";
   const delta = (now - ts) / 1000;
-  if (delta < 60) return `${Math.floor(delta)}s`;
+  if (delta < 60) return "now";
   if (delta < 3600) return `${Math.floor(delta / 60)}m`;
   if (delta < 86_400) return `${Math.floor(delta / 3600)}h`;
   return `${Math.floor(delta / 86_400)}d`;
@@ -144,13 +149,46 @@ export function isLive(status: AgentStatus): boolean {
  * cursor indices aligned with the full list.
  */
 export function sortSessions(arr: AgentSession[]): AgentSession[] {
+  const key = (s: AgentSession) => s.sortKeyMs ?? s.lastActivityMs;
   return arr.slice().sort((a, b) => {
     const archived = Number(a.status === "archived") - Number(b.status === "archived");
     if (archived !== 0) return archived;
-    const recency = b.lastActivityMs - a.lastActivityMs;
+    const recency = key(b) - key(a);
     if (recency !== 0) return recency;
     return STATUS_RANK[a.status] - STATUS_RANK[b.status];
   });
+}
+
+export interface StateMemory {
+  status: AgentStatus;
+  since: number;
+}
+
+/**
+ * Sort keys that don't churn. A working agent writes its session file all
+ * the time; sorting by that made rows swap on every write. Live sessions are
+ * keyed by their last activity *as of their last state change* — they move
+ * once when they start or finish (both write), not on every write — and
+ * closed ones by their last activity. Using activity rather than the wall
+ * clock means a "change" that is only new information (herdr answering after
+ * the first scan) doesn't reshuffle the list.
+ * `memory` carries state across refreshes (keyed by provider + session id).
+ */
+export function withSortKeys(
+  sessions: AgentSession[],
+  memory: Map<string, StateMemory>,
+): AgentSession[] {
+  const seen = new Set<string>();
+  const out = sessions.map((s) => {
+    const id = `${s.provider}:${s.sessionId}`;
+    seen.add(id);
+    const prev = memory.get(id);
+    const since = prev && prev.status === s.status ? prev.since : s.lastActivityMs;
+    memory.set(id, { status: s.status, since });
+    return { ...s, sortKeyMs: isLive(s.status) ? since : s.lastActivityMs };
+  });
+  for (const id of memory.keys()) if (!seen.has(id)) memory.delete(id);
+  return out;
 }
 
 // ─── Reactive store ─────────────────────────────────────────────────────────
@@ -195,9 +233,11 @@ export function createAgentsStore(
     }
   }
 
+  const stateMemory = new Map<string, StateMemory>();
   function publish(): void {
     const all = [...byAdapter.values()].flat();
-    setSessions(sortSessions(linkHerdrSessions(all, herdr?.snapshot())));
+    const linked = linkHerdrSessions(all, herdr?.snapshot());
+    setSessions(sortSessions(withSortKeys(linked, stateMemory)));
   }
   herdr?.onChange(publish);
 

@@ -167,6 +167,61 @@ describe("linkHerdrSessions", () => {
 });
 
 describe("createHerdrSource", () => {
+  it.skipIf(process.platform === "win32")("rides out a failed poll instead of dropping every link", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "tb-herdr-flaky-"));
+    const fake = join(dir, "herdr");
+    const counter = join(dir, "n");
+    try {
+      // Succeeds on the 1st call, fails on the 2nd and 3rd, succeeds afterwards.
+      writeFileSync(
+        fake,
+        `#!/bin/sh\nn=$(cat '${counter}' 2>/dev/null || echo 0); n=$((n+1)); echo $n > '${counter}'\n` +
+          `if [ $n -eq 2 ] || [ $n -eq 3 ]; then exit 1; fi\ncat <<'EOF'\n${RAW}\nEOF\n`,
+        { mode: 0o755 },
+      );
+      const src = createHerdrSource({ bin: fake, pollMs: 40, missesBeforeClear: 3 });
+      const seen: boolean[] = [];
+      const start = Date.now();
+      while (Date.now() - start < 1500) {
+        seen.push(src.snapshot() !== undefined);
+        await Bun.sleep(10);
+      }
+      src.dispose();
+      const firstOk = seen.indexOf(true);
+      expect(firstOk).toBeGreaterThanOrEqual(0);
+      expect(seen.slice(firstOk).every(Boolean)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform === "win32")("clears the snapshot once herdr keeps failing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "tb-herdr-gone-"));
+    const fake = join(dir, "herdr");
+    const counter = join(dir, "n");
+    try {
+      writeFileSync(
+        fake,
+        `#!/bin/sh\nn=$(cat '${counter}' 2>/dev/null || echo 0); n=$((n+1)); echo $n > '${counter}'\n` +
+          `if [ $n -gt 1 ]; then exit 1; fi\ncat <<'EOF'\n${RAW}\nEOF\n`,
+        { mode: 0o755 },
+      );
+      const src = createHerdrSource({ bin: fake, pollMs: 40, missesBeforeClear: 3 });
+      let everOk = false;
+      const start = Date.now();
+      while (Date.now() - start < 3000) {
+        if (src.snapshot()) everOk = true;
+        else if (everOk) break;
+        await Bun.sleep(10);
+      }
+      src.dispose();
+      expect(everOk).toBe(true);
+      expect(src.snapshot()).toBeUndefined();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("is inert when herdr isn't installed", () => {
     const src = createHerdrSource({ bin: null });
     expect(src.snapshot()).toBeUndefined();

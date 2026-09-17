@@ -17,6 +17,7 @@ import { isHiddenColumn } from "~/config/loader";
 import {
   LAUNCHER_NAME,
   detectLauncher,
+  hasCommand,
   planLaunch,
   runLaunchPlan,
   type LaunchEnv,
@@ -927,7 +928,7 @@ async function openSession(store: TuiStore, session: AgentSession): Promise<void
   const launchEnv: LaunchEnv = {
     env: process.env,
     platform: process.platform,
-    has: (c) => Bun.which(c) !== null,
+    has: hasCommand,
   };
   const forced = store.config.resumeTerminal;
   const launcher = forced === "auto" ? detectLauncher(launchEnv) : forced;

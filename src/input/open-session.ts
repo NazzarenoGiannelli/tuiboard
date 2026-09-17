@@ -7,6 +7,9 @@
  * tested anywhere; `runLaunchPlan` does the spawning.
  */
 
+import { lstatSync } from "node:fs";
+import { join } from "node:path";
+
 export const LAUNCHERS = [
   "tmux",
   "herdr",
@@ -54,6 +57,22 @@ export function detectLauncher({ env, platform, has }: LaunchEnv): Launcher | un
   return undefined;
 }
 
+/**
+ * Is `cmd` launchable? `Bun.which` skips Windows App Execution Aliases
+ * (`wt.exe`, Store `pwsh.exe`: zero-byte reparse points in
+ * %LOCALAPPDATA%\Microsoft\WindowsApps), so look for those explicitly.
+ */
+export function hasCommand(cmd: string): boolean {
+  if (Bun.which(cmd) !== null) return true;
+  if (process.platform !== "win32" || !process.env.LOCALAPPDATA) return false;
+  try {
+    lstatSync(join(process.env.LOCALAPPDATA, "Microsoft", "WindowsApps", `${cmd}.exe`));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface LaunchStep {
   cmd: string;
   args: string[];
@@ -61,8 +80,6 @@ export interface LaunchStep {
   input?: string;
   /** Long-lived GUI process: spawn detached and don't wait for it. */
   detached?: boolean;
-  /** Windows: this step IS the new window (a console app), so don't hide it. */
-  showConsole?: boolean;
   /**
    * Extracts an id from this step's stdout; later steps' `{id}` args are
    * replaced with it.
@@ -83,6 +100,47 @@ function posixKeepOpen(resume: string): string[] {
 
 function windowsShell(has: LaunchEnv["has"]): string {
   return has("pwsh") ? "pwsh" : "powershell";
+}
+
+/** Quote one argument by the Windows command-line (CommandLineToArgvW) rules. */
+export function winQuoteArg(a: string): string {
+  if (a !== "" && !/[\s"]/.test(a)) return a;
+  const escaped = a.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, "$1$1");
+  return `"${escaped}"`;
+}
+
+/**
+ * Windows: start `file` the way Run / Explorer would — via PowerShell's
+ * Start-Process (ShellExecute), which resolves App Execution Aliases that
+ * Bun's own spawn can't find. `powershell.exe` itself is a real System32
+ * binary. The script travels as -EncodedCommand so no argument is re-parsed
+ * by a shell on the way.
+ */
+export function windowsStart(
+  file: string,
+  args: string[],
+  env: LaunchEnv["env"],
+  workingDirectory?: string,
+): LaunchStep {
+  const lit = (s: string) => `'${s.replaceAll("'", "''")}'`;
+  const start = [
+    "Start-Process",
+    `-FilePath ${lit(file)}`,
+    `-ArgumentList ${lit(args.map(winQuoteArg).join(" "))}`,
+    workingDirectory ? `-WorkingDirectory ${lit(workingDirectory)}` : "",
+    "-ErrorAction Stop",
+  ].filter(Boolean).join(" ");
+  const script = `try { ${start} } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }`;
+  const systemRoot = env.SystemRoot || env.SYSTEMROOT || "C:\\Windows";
+  return {
+    cmd: `${systemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`,
+    args: [
+      "-NoProfile",
+      "-NonInteractive",
+      "-EncodedCommand",
+      Buffer.from(script, "utf16le").toString("base64"),
+    ],
+  };
 }
 
 function shQuote(s: string): string {
@@ -145,28 +203,18 @@ export function planLaunch(
         },
       ];
     case "windows-terminal":
+      // `-w 0` = the current window. wt treats `;` as its own command
+      // separator, so escape any in the resume command.
       return [
-        {
-          // `-w 0` = the current window. wt treats `;` as its own command
-          // separator, so escape any in the resume command.
-          cmd: "wt",
-          args: [
-            "-w", "0", "new-tab", "-d", cwd,
-            windowsShell(has), "-NoExit", "-Command", resume.replaceAll(";", "\\;"),
-          ],
-          detached: true,
-        },
+        windowsStart(
+          "wt.exe",
+          ["-w", "0", "new-tab", "-d", cwd, windowsShell(has), "-NoExit", "-Command", resume.replaceAll(";", "\\;")],
+          env,
+        ),
       ];
     case "windows-console":
-      // A detached console process gets its own new console window.
-      return [
-        {
-          cmd: windowsShell(has),
-          args: ["-NoExit", "-Command", `Set-Location -LiteralPath '${cwd.replaceAll("'", "''")}'; ${resume}`],
-          detached: true,
-          showConsole: true,
-        },
-      ];
+      // Start-Process gives a console program its own new window.
+      return [windowsStart(windowsShell(has), ["-NoExit", "-Command", resume], env, cwd)];
     case "ghostty":
       // Ghostty has no "new tab" CLI: open a new window in the session dir.
       return platform === "darwin"
@@ -217,16 +265,10 @@ export async function runLaunchPlan(steps: LaunchStep[]): Promise<void> {
   let id: string | undefined;
   for (const step of steps) {
     const args = step.args.map((a) => (id !== undefined ? a.replaceAll("{id}", id) : a));
-    // Absolute path: Windows App Execution Aliases (wt, Store pwsh) only
-    // launch reliably when spawned by their resolved path.
     const exe = Bun.which(step.cmd) ?? step.cmd;
     if (step.detached) {
       await new Promise<void>((resolve, reject) => {
-        const child = spawn(exe, args, {
-          detached: true,
-          stdio: "ignore",
-          windowsHide: !step.showConsole,
-        });
+        const child = spawn(exe, args, { detached: true, stdio: "ignore", windowsHide: true });
         child.once("error", (e) => reject(new Error(`${step.cmd}: ${e.message}`)));
         child.once("spawn", () => {
           child.unref();

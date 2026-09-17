@@ -1,11 +1,21 @@
 import { describe, expect, it } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   detectLauncher,
   planLaunch,
   runLaunchPlan,
+  winQuoteArg,
+  windowsStart,
   type LaunchEnv,
+  type LaunchStep,
 } from "./open-session";
+
+/** The PowerShell script inside a windowsStart step. */
+const decoded = (step: LaunchStep) =>
+  Buffer.from(step.args[step.args.indexOf("-EncodedCommand") + 1]!, "base64").toString("utf16le");
 
 const env = (
   vars: Record<string, string>,
@@ -65,26 +75,29 @@ describe("planLaunch", () => {
     });
   });
 
-  it("windows terminal: new tab in the current window, pwsh when available", () => {
+  it("windows terminal: new tab in the current window via Start-Process, pwsh when available", () => {
     const w = { cwd: "C:\\Users\\n\\my app", resume: "claude --resume a;b" };
-    const [step] = planLaunch("windows-terminal", w, env({ WT_SESSION: "g" }, "win32", ["pwsh"]));
-    expect(step).toMatchObject({
-      cmd: "wt",
-      args: ["-w", "0", "new-tab", "-d", "C:\\Users\\n\\my app", "pwsh", "-NoExit", "-Command", "claude --resume a\\;b"],
-      detached: true,
-    });
-    const [ps] = planLaunch("windows-terminal", w, env({ WT_SESSION: "g" }, "win32"));
-    expect(ps!.args[5]).toBe("powershell");
+    const winEnv = { WT_SESSION: "g", SystemRoot: "D:\\Win" };
+    const [step] = planLaunch("windows-terminal", w, env(winEnv, "win32", ["pwsh"]));
+    expect(step!.cmd).toBe("D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+    expect(step!.args.slice(0, 3)).toEqual(["-NoProfile", "-NonInteractive", "-EncodedCommand"]);
+    expect(decoded(step!)).toBe(
+      "try { Start-Process -FilePath 'wt.exe' " +
+        `-ArgumentList '-w 0 new-tab -d "C:\\Users\\n\\my app" pwsh -NoExit -Command "claude --resume a\\;b"' ` +
+        "-ErrorAction Stop } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }",
+    );
+    const [ps] = planLaunch("windows-terminal", w, env(winEnv, "win32"));
+    expect(decoded(ps!)).toContain(" powershell -NoExit ");
   });
 
-  it("windows console: visible PowerShell window that cds first", () => {
+  it("windows console: new PowerShell window started in the session dir", () => {
     const [step] = planLaunch("windows-console", { cwd: "C:\\it's", resume: "opencode --session s" }, env({}, "win32"));
-    expect(step).toMatchObject({
-      cmd: "powershell",
-      args: ["-NoExit", "-Command", "Set-Location -LiteralPath 'C:\\it''s'; opencode --session s"],
-      detached: true,
-      showConsole: true,
-    });
+    expect(step!.cmd).toBe("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+    expect(decoded(step!)).toBe(
+      "try { Start-Process -FilePath 'powershell' " +
+        `-ArgumentList '-NoExit -Command "opencode --session s"' -WorkingDirectory 'C:\\it''s' ` +
+        "-ErrorAction Stop } catch { [Console]::Error.WriteLine($_.Exception.Message); exit 1 }",
+    );
   });
 
   it("ghostty: new window running the agent, then the user's shell", () => {
@@ -111,6 +124,46 @@ describe("planLaunch", () => {
       `tell application "Terminal" to do script "cd '/Users/u/it'\\\\''s \\"x\\"' && claude --resume 1"`,
     );
   });
+});
+
+describe("winQuoteArg", () => {
+  it("follows CommandLineToArgvW quoting", () => {
+    expect(winQuoteArg("plain")).toBe("plain");
+    expect(winQuoteArg("")).toBe('""');
+    expect(winQuoteArg("my app")).toBe('"my app"');
+    expect(winQuoteArg('say "hi"')).toBe('"say \\"hi\\""');
+    expect(winQuoteArg("C:\\dir with space\\")).toBe('"C:\\dir with space\\\\"');
+  });
+});
+
+describe("windowsStart (real Start-Process)", () => {
+  it.skipIf(process.platform !== "win32")(
+    "launches a program with spaces and quotes in its arguments",
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), "tb start it's "));
+      const out = join(dir, "out file.txt");
+      try {
+        // The script has spaces, single quotes (doubled for PowerShell) and
+        // double quotes (escaped for the command line) — all must survive.
+        const script = `Set-Content -LiteralPath '${out.replaceAll("'", "''")}' -Value "ok"`;
+        await runLaunchPlan([
+          windowsStart("powershell.exe", ["-NoProfile", "-Command", script], process.env),
+        ]);
+        const start = Date.now();
+        while (!existsSync(out) && Date.now() - start < 20_000) await Bun.sleep(200);
+        expect(readFileSync(out, "utf8").trim()).toBe("ok");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
+
+  it.skipIf(process.platform !== "win32")("reports a program that doesn't exist", async () => {
+    await expect(
+      runLaunchPlan([windowsStart("tuiboard-no-such-program.exe", [], process.env)]),
+    ).rejects.toThrow();
+  }, 30_000);
 });
 
 describe("runLaunchPlan", () => {

@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stops updating for 30 minutes; an open-but-idle OpenCode TUI isn't detected.
 
 ### Fixed
+- **Enter opens sessions in Windows Terminal** (#29). `wt.exe` (and a
+  Store-installed `pwsh`) are App Execution Aliases that Bun's spawn can't
+  find, so launching failed with "not found in $PATH". Windows launches now go
+  through PowerShell's `Start-Process`, which resolves them.
 - **Agent directories keep `/` on macOS/Linux** — the shortened path was always
   joined with `\`.
 

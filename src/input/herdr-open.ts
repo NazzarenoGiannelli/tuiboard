@@ -77,12 +77,21 @@ export function herdrAgentName(title: string, sessionId: string, fallback: strin
 
 /**
  * Resume a session in herdr: new tab (or workspace) in the session's
- * directory, then `herdr agent start --kind <agent> -- <resume args>`.
+ * directory, then start the agent there.
+ *
+ * POSIX: `herdr agent start --kind <agent> -- <resume args>`, so herdr tracks
+ * it from the first second. Windows: herdr launches the agent's executable
+ * directly, which fails for npm-installed CLIs (codex, opencode, pi are an
+ * extensionless sh shim next to `.cmd`/`.ps1` — "not a valid Win32
+ * application"), so the resume command is typed into the pane's shell
+ * instead (`herdr pane run`), which resolves it through PATHEXT; herdr still
+ * detects the agent from the running process.
  */
 export function planHerdrResume(
   bin: string,
   session: AgentSession,
   snap: HerdrSnapshot,
+  platform: NodeJS.Platform = process.platform,
 ): { steps: LaunchStep[]; where: WorkspaceChoice } {
   const where = chooseWorkspace(snap, session.cwd);
   const label = tabLabel(session.displayName);
@@ -100,6 +109,12 @@ export function planHerdrResume(
           captureId: rootPaneId,
           undo: { cmd: bin, args: ["pane", "close", "{id}"] },
         };
+  if (platform === "win32") {
+    return {
+      steps: [create, { cmd: bin, args: ["pane", "run", "{id}", session.resumeCommand] }],
+      where,
+    };
+  }
   const [, ...agentArgs] = session.resumeArgv;
   const start: LaunchStep = {
     cmd: bin,

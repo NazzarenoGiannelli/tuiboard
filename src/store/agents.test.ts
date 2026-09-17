@@ -1,4 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import {
   createAgentsStore,
   cwdShort,
@@ -25,9 +29,20 @@ function fakeSession(sessionId: string, status: AgentStatus, lastActivityMs: num
   };
 }
 
-function fakeAdapter(discover: () => AgentSession[]): AgentAdapter {
-  return { provider: "claude-code", watchPaths: () => [], discover };
+function fakeAdapter(
+  discover: () => AgentSession[],
+  watchPaths: string[] = [],
+): AgentAdapter {
+  return { provider: "claude-code", watchPaths: () => watchPaths, discover };
 }
+
+const waitFor = async (cond: () => boolean, timeoutMs = 5000) => {
+  const start = Date.now();
+  while (!cond()) {
+    if (Date.now() - start > timeoutMs) throw new Error("timed out");
+    await new Promise((r) => setTimeout(r, 25));
+  }
+};
 
 describe("cwdShort", () => {
   it("returns the last 3 parts prefixed with ellipsis when path is long", () => {
@@ -101,5 +116,29 @@ describe("createAgentsStore", () => {
     ]);
     expect(store.sessions().map((s) => s.sessionId)).toEqual(["ok"]);
     await store.dispose();
+  });
+});
+
+describe("createAgentsStore watching", () => {
+  it("re-scans only the adapter whose path changed", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "tuiboard-agents-"));
+    const aDir = join(dir, "a");
+    const bFile = join(dir, "b.db");
+    writeFileSync(bFile, "");
+    const scans = { a: 0, b: 0 };
+    const store = createAgentsStore([
+      fakeAdapter(() => (scans.a++, []), [aDir]),
+      fakeAdapter(() => (scans.b++, []), [bFile]),
+    ]);
+    try {
+      expect(scans).toEqual({ a: 1, b: 1 });
+      await new Promise((r) => setTimeout(r, 300)); // let the watcher arm
+      writeFileSync(bFile, "changed");
+      await waitFor(() => scans.b === 2);
+      expect(scans.a).toBe(1);
+    } finally {
+      await store.dispose();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

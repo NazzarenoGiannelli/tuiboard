@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **OpenCode sessions in the Agents zone** (#17). Read-only from OpenCode's
+  SQLite store (`$XDG_DATA_HOME/opencode/opencode.db`); Enter / `c` resume with
+  `opencode --session <id>`. OpenCode has no running-process registry, so a
+  session is busy while its last turn is unfinished and stale once that turn
+  stops updating for 30 minutes; an open-but-idle OpenCode TUI isn't detected.
+
 ### Changed
+- **Agents zone refreshes per agent.** A change under one agent's session
+  store re-scans only that agent, and a session writing non-stop still
+  refreshes at least once a second.
 - **Agents zone: agent CLIs now plug in through a common adapter interface**
   (#16), groundwork for Codex / OpenCode / Pi support (#12). Claude Code
   sessions behave exactly as before. The `stale-pid` status is now `stale`

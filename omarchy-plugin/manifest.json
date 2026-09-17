@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "id": "nazz.tuiboard",
+  "name": "tuiboard",
+  "version": "0.1.0",
+  "author": "Nazzareno Giannelli",
+  "license": "MIT",
+  "description": "Today/Tomorrow agenda from tuiboard in the Omarchy bar: what is overdue, due today and due tomorrow, read from the vault's markdown boards.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "TuiboardWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "tuiboard",
+    "description": "Overdue indicator in the bar; panel with the Today/Tomorrow agenda, click a task to complete it or \u2192 to push it to tomorrow.",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalSec": 120,
+      "command": "tuiboard summary",
+      "openCommand": "omarchy-launch-tui --app-id=org.omarchy.tuiboard tuiboard",
+      "taskCommand": "tuiboard task",
+      "doneSound": "/usr/share/sounds/freedesktop/stereo/complete.oga"
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 15,
+        "max": 3600,
+        "step": 15,
+        "defaultValue": 120
+      },
+      {
+        "key": "command",
+        "type": "string",
+        "label": "Command producing the JSON",
+        "defaultValue": "tuiboard summary",
+        "description": "Must print the output of 'tuiboard summary' to stdout."
+      },
+      {
+        "key": "openCommand",
+        "type": "string",
+        "label": "Command to open tuiboard",
+        "defaultValue": "omarchy-launch-tui --app-id=org.omarchy.tuiboard tuiboard"
+      },
+      {
+        "key": "taskCommand",
+        "type": "string",
+        "label": "Command to modify tasks",
+        "defaultValue": "tuiboard task",
+        "description": "Receives: done --board <b> --column <c> --match <text>"
+      },
+      {
+        "key": "doneSound",
+        "type": "string",
+        "label": "Sound played when a task is completed",
+        "defaultValue": "/usr/share/sounds/freedesktop/stereo/complete.oga",
+        "description": "Path to an audio file. Leave empty for no sound."
+      }
+    ]
+  }
+}

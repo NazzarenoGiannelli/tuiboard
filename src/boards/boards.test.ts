@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 
 import { loadConfig } from "~/config/loader";
 import { parseBoard } from "~/parser/markdown";
@@ -236,16 +236,22 @@ describe("addBoardToConfig", () => {
   it("stores an absolute path even when handed a relative one", () => {
     useConfig("boards: []\n");
     addHere({ path: "relative/A.md", name: "A" });
-    expect(loadConfig().boards[0]!.path.startsWith("/")).toBe(true);
+    // `startsWith("/")` only holds on POSIX — `isAbsolute` is what the app
+    // itself relies on, and what actually means "absolute" on Windows too.
+    expect(isAbsolute(loadConfig().boards[0]!.path)).toBe(true);
   });
 });
 
 describe("suggestBoardsDir", () => {
   it("proposes the directory the existing boards share", () => {
+    // Built with `resolve`/`join` rather than hardcoded POSIX strings, so the
+    // expectation matches whatever `suggestBoardsDir`'s own `resolve()` call
+    // produces on this OS (e.g. `D:\vault` on Windows, not `/vault`).
+    const dir = resolve("/vault");
     const cfg = {
-      boards: [{ path: "/vault/A.md" }, { path: "/vault/B.md" }],
+      boards: [{ path: join(dir, "A.md") }, { path: join(dir, "B.md") }],
     } as ReturnType<typeof loadConfig>;
-    expect(suggestBoardsDir(cfg)).toBe("/vault");
+    expect(suggestBoardsDir(cfg)).toBe(dir);
   });
 
   it("falls back to the app directory when the boards are scattered", () => {

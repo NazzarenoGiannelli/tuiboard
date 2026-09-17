@@ -1,7 +1,7 @@
 /**
  * Discovery + reactive store for local coding-agent sessions.
  *
- * Each agent CLI (Claude Code, Codex, OpenCode) plugs in through an `AgentAdapter`
+ * Each agent CLI (Claude Code, Codex, OpenCode, Pi) plugs in through an `AgentAdapter`
  * that owns its own on-disk format, status semantics and resume command —
  * see `src/store/agent-adapters/`. This module only holds the shared shape
  * and merges every adapter's sessions into one sorted, watched list.
@@ -16,13 +16,14 @@ import { createSignal } from "solid-js";
 /** Threshold: session untouched longer than this is "archived" (won't show in compact list). */
 export const DORMANT_AFTER_MS = 7 * 86_400 * 1000;
 
-export type AgentProvider = "claude-code" | "codex" | "opencode";
+export type AgentProvider = "claude-code" | "codex" | "opencode" | "pi";
 
-/** Two-letter harness badge + display name, per provider. (`pi` = Pi, once its adapter lands.) */
+/** Two-letter harness badge + display name, per provider. */
 export const HARNESS: Record<AgentProvider, { code: string; name: string }> = {
   "claude-code": { code: "cc", name: "Claude Code" },
   codex: { code: "cx", name: "Codex" },
   opencode: { code: "oc", name: "OpenCode" },
+  pi: { code: "pi", name: "Pi" },
 };
 
 /** Agents-zone filter: every harness, or just one. */

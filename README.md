@@ -75,15 +75,17 @@ Starting fresh — no Obsidian, no special folders required:
 **The Agent view needs zero setup.** tuiboard reads your local agent sessions
 automatically, read-only — Claude Code from `~/.claude/`, Codex from
 `~/.codex/` (respects `$CODEX_HOME`), OpenCode from
-`~/.local/share/opencode/opencode.db` (respects `$XDG_DATA_HOME`) — so the
-live agent strip fills in as soon as you've used any of them, even if you start
-the agent after tuiboard. Nothing to connect or configure. Codex and OpenCode
-keep no record of running processes, so their sessions show as busy while a
-turn is in progress (stale if a turn stops updating for 30 minutes), never as
+`~/.local/share/opencode/opencode.db` (respects `$XDG_DATA_HOME`), Pi from
+`~/.pi/agent/sessions/` (respects `$PI_CODING_AGENT_DIR`,
+`$PI_CODING_AGENT_SESSION_DIR` and `sessionDir`) — so the live agent strip
+fills in as soon as you've used any of them, even if you start the agent after
+tuiboard. Nothing to connect or configure. Codex, OpenCode and Pi keep no
+record of running processes, so their sessions show as busy while a turn is in
+progress (stale if a turn stops updating for 30 minutes), never as
 idle-but-open.
 
 Every session carries a colored two-letter harness badge — `cc` Claude Code,
-`cx` Codex, `oc` OpenCode — plus the model it ran on. The dashboard strip keeps
+`cx` Codex, `oc` OpenCode, `pi` Pi — plus the model it ran on. The dashboard strip keeps
 one line per session (on a narrow row the model gives way first, then the
 branch, then the directory); zoom the Agents zone (`z`) or run
 `tuiboard --view=agents` for two-line cards with the model, branch and full
@@ -448,7 +450,7 @@ session (until the next terminal resize).
 | `Enter` | Open (resume) the selected session in a new tab/window of your terminal — tmux, herdr, WezTerm, Windows Terminal, Ghostty, or the OS default; falls back to copying the command (`resume_terminal` to force one) |
 | `c` | Copy a one-paste `cd … && <resume>` command (e.g. `claude --resume <id>`) for the selected session — drop it into any tab/pane to land in the right dir and resume (no WezTerm needed; format is `copy_resume_command`) |
 | `o` | Session detail (harness, model, cwd, branch, last prompts, resume command, result of the last `Enter`) |
-| `f` | Filter by harness: all → `cc` Claude Code → `cx` Codex → `oc` OpenCode (shown in the panel title; outside the Agents zone `f` is the board filter) |
+| `f` | Filter by harness: all → `cc` Claude Code → `cx` Codex → `oc` OpenCode → `pi` Pi (shown in the panel title; outside the Agents zone `f` is the board filter) |
 
 ### Task actions (work in board, planner, AND timeline zones)
 

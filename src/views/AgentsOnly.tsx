@@ -1,5 +1,5 @@
 /**
- * Fullscreen list of every local agent session (Claude Code, Codex, OpenCode).
+ * Fullscreen list of every local agent session (Claude Code, Codex, OpenCode, Pi).
  * `tuiboard --view=agents`. Shows ALL sessions (including archived),
  * scrollable, cursor-navigable, as two-line cards (see AgentRow). The scrollbox follows the cursor via
  * scrollChildIntoView (same trick used in BoardView for active columns).
@@ -67,7 +67,7 @@ export function AgentsOnly(props: { store: TuiStore }) {
             <text>
               <span style={{ fg: T.textDim }}>
                 {filter() === "all"
-                  ? "No agent sessions found (Claude Code, Codex, OpenCode)."
+                  ? "No agent sessions found (Claude Code, Codex, OpenCode, Pi)."
                   : `No ${HARNESS[filter() as keyof typeof HARNESS].name} sessions — press f to change the filter.`}
               </span>
             </text>

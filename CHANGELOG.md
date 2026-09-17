@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Enter opens agent sessions in any common terminal, not only WezTerm**
+  (#25). tuiboard detects where it runs — tmux, herdr, WezTerm, Windows
+  Terminal (new tab, `pwsh` or `powershell`), Ghostty (new window) — and
+  otherwise uses the OS default: `xdg-terminal-exec` on Linux, a new PowerShell
+  window on Windows, Terminal.app on macOS. If launching fails, the resume
+  command is copied to the clipboard and the banner says so. New
+  `resume_terminal` option forces a specific one; `resume_command` still wins.
 - **Harness badge, model and harness filter in the Agents zone** (#23). Each
   session shows a colored `cc` / `cx` / `oc` badge and its model (`opus-5`,
   `gpt-5.5-codex`, …), also in the `o` detail. `f` in the Agents zone cycles

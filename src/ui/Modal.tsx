@@ -989,7 +989,7 @@ function AgentDetailModal(props: { store: TuiStore; modal: Extract<NonNullable<T
             <box style={{ height: 1 }} />
             <text>
               <span style={{ fg: T.textDim }}>
-                resume — Enter opens this in WezTerm; c copies this command to paste anywhere:
+                resume — Enter opens this in a new terminal tab; c copies this command to paste anywhere:
               </span>
             </text>
             <text wrapMode="word">
@@ -1107,7 +1107,7 @@ const HELP_SECTIONS: HelpSection[] = [
     emoji: "🤖",
     title: "Agents zone",
     rows: [
-      ["Enter", "Open (resume) the selected session in a new WezTerm tab"],
+      ["Enter", "Open (resume) the selected session in a new terminal tab/window"],
       ["c", "Copy a 'cd + resume' command for the session"],
       ["o", "Session detail (harness, model, cwd, branch, last prompts, resume cmd)"],
       ["f", "Filter by harness: all → cc Claude Code → cx Codex → oc OpenCode"],

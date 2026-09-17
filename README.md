@@ -607,6 +607,10 @@ Uninstall: `omarchy plugin remove nazz.tuiboard`.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
+- **v0.13** — tuiboard + herdr: live agent state from herdr (waiting for you,
+  working, done, idle) with herdr's status symbols, `H` to jump to a session
+  in herdr or resume it in its project's workspace, sessions sorted by most
+  recent activity, and the terminal properly restored on quit.
 - **v0.12** — the Agents zone goes multi-agent: Codex, OpenCode and Pi sessions
   next to Claude Code, with a colored harness badge, the model, a harness
   filter (`f`) and two-line cards when zoomed. Enter reopens a session in the

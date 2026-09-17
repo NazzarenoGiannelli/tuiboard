@@ -7,25 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- **Live agent state from herdr** (#37). When [herdr](https://herdr.dev) is
-  running, tuiboard polls `herdr api snapshot` and links every pane running
-  Claude Code, Codex, OpenCode or Pi to its session — by the session id/file
-  herdr reports (with herdr's agent integrations installed), else by agent and
-  directory. Those sessions take herdr's state, including two new ones:
-  **waiting for you** (sorted first) and **done**; idle Codex/OpenCode/Pi
-  sessions become visible, and long Claude turns no longer show as stale
-  (#22). Zoomed cards and the `o` detail show the herdr workspace and tab.
-- **herdr's status symbols** — `×` waiting, `◐` working, `✓` done, `○` idle,
-  `·` closed (tuiboard's `△` for stale) — are now the default for everyone,
-  so both tools read the same; `status_indicators: dots` keeps colored dots.
+## [0.13.0] - 2026-09-17
 
+tuiboard and [herdr](https://herdr.dev) now work as one: the Agents zone shows
+herdr's live state for every session open there, speaks herdr's status
+symbols, and `H` jumps to a session in herdr or resumes it in the right
+workspace. Plus fixes found using it all day on Windows.
+
+### Added
+- **Live agent state from herdr** (#37). When herdr is running, tuiboard polls
+  `herdr api snapshot` and links every pane running Claude Code, Codex,
+  OpenCode or Pi to its session — by the session id/file herdr reports (with
+  herdr's agent integrations installed), else by agent and directory. Those
+  sessions take herdr's state, including two new ones: **waiting for you** and
+  **done**; idle Codex/OpenCode/Pi sessions become visible, and long Claude
+  turns no longer show as stale (#22). Zoomed cards and the `o` detail show the
+  herdr workspace and tab.
+- **herdr's status symbols** — `×` waiting, `◐` working, `✓` done, `○` idle,
+  `·` closed (tuiboard's own `△` for stale) — are the default for everyone, so
+  both tools read the same; `status_indicators: dots` keeps colored dots.
 - **`H` opens sessions in herdr** (#38): focuses the pane a session is open
   in, or resumes it in herdr — a new tab named after the session, in the
   workspace that already holds that directory (else one named like the
-  folder, else the focused one), started with `herdr agent start` so herdr
-  tracks it from the start. **Enter** on a session already open in herdr
+  folder, else the focused one). **Enter** on a session already open in herdr
   focuses it instead of starting a second copy.
+- **Omarchy bar widget in the repo** (#27): `omarchy-plugin/` — an
+  overdue/today badge and a Today/Tomorrow panel (done, undone, defer, open
+  tuiboard) built on `tuiboard summary` / `tuiboard task`, installed with
+  `omarchy-plugin/install.sh`. Repo only, not part of the npm package.
+
+### Changed
+- **Agent sessions are sorted by most recent activity** (#43), newest first,
+  instead of by status first — a session used 40 seconds ago no longer sits
+  below ones idle in herdr for hours. Status only breaks ties; archived
+  sessions stay at the bottom.
+- Launch steps for Enter and `H` run asynchronously: a slow start (cold
+  PowerShell, an agent booting in herdr) no longer freezes the UI.
 
 ### Fixed
 - **Quitting gives the terminal back** (#47). `q`, Ctrl+C and termination
@@ -34,24 +51,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `51;7;45M…`. tuiboard now restores the terminal before exiting, and the
   `tuiboard` launcher resets mouse/paste/focus reporting and the cursor after
   the app ends, whatever way it ended.
-- **Layout right from the first frame on Windows** (#45). Which zones fit (and
-  the narrow single-pane mode) now follow the renderer's own terminal size,
-  the one the frame is drawn at, instead of `process.stdout.columns`, which
-  could lag behind a Windows Terminal tab's real size and left zones
-  overlapping until a manual resize.
-- **`H` on Windows with Codex, OpenCode and Pi** (#41). herdr launches an
-  agent's executable directly, and npm-installed CLIs on Windows are an
-  extensionless sh shim next to `.cmd`/`.ps1` ("not a valid Win32
-  application"). On Windows the resume command is now typed into the new
-  pane's shell, which resolves it; Claude Code (a native .exe) was unaffected.
+- **`H` on Windows with Codex, OpenCode and Pi** (#41). npm-installed CLIs on
+  Windows are an extensionless sh shim next to `.cmd`/`.ps1`, which herdr
+  can't launch directly ("not a valid Win32 application"); on Windows the
+  resume command is typed into the new pane's shell instead.
+- **Responsive layout follows the renderer's terminal size** (#45), the size
+  the frame is drawn at, instead of `process.stdout.columns`.
 
-### Changed
-- **Agent sessions are sorted by most recent activity** (#43), newest first,
-  instead of by status first — a session used 40 seconds ago no longer sits
-  below ones idle in herdr for hours. Status only breaks ties; archived
-  sessions stay at the bottom.
-- Launch steps for Enter run asynchronously: a slow start (cold PowerShell)
-  no longer freezes the UI.
+### Known issues
+- On Windows, herdr may not detect Pi sessions as agents (#49): they open
+  fine, but without herdr's live state.
 
 ## [0.12.0] - 2026-09-17
 
@@ -465,6 +474,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.13.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.0
 [0.12.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.12.0
 [0.11.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.11.0
 [0.10.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.10.0

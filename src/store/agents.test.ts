@@ -6,6 +6,8 @@ import { join } from "node:path";
 import {
   createAgentsStore,
   cwdShort,
+  filterSessions,
+  shortModel,
   formatAge,
   sortSessions,
   type AgentAdapter,
@@ -49,6 +51,10 @@ describe("cwdShort", () => {
     expect(cwdShort("C:\\Users\\nazza\\Documents\\Repos\\Blits")).toBe(
       "…Documents\\Repos\\Blits",
     );
+  });
+
+  it("keeps forward slashes for POSIX paths", () => {
+    expect(cwdShort("/home/nazz/Documents/Repos/tuiboard")).toBe("…Documents/Repos/tuiboard");
   });
 
   it("returns the full path when 3 or fewer parts", () => {
@@ -160,5 +166,32 @@ describe("createAgentsStore watching", () => {
       await store.dispose();
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("shortModel", () => {
+  it("shortens Claude, provider-prefixed and dated ids", () => {
+    expect(shortModel("claude-opus-5[1m]")).toBe("opus-5");
+    expect(shortModel("claude-opus-5")).toBe("opus-5");
+    expect(shortModel("anthropic/claude-sonnet-4-5-20250929")).toBe("sonnet-4-5");
+    expect(shortModel("claude-haiku-4-5-20251001")).toBe("haiku-4-5");
+    expect(shortModel("gpt-5.5-codex")).toBe("gpt-5.5-codex");
+    expect(shortModel("big-pickle")).toBe("big-pickle");
+  });
+
+  it("drops missing and synthetic models", () => {
+    expect(shortModel(undefined)).toBeUndefined();
+    expect(shortModel("")).toBeUndefined();
+    expect(shortModel("<synthetic>")).toBeUndefined();
+  });
+});
+
+describe("filterSessions", () => {
+  it("keeps everything for 'all' and one harness otherwise, in order", () => {
+    const cx = { ...fakeSession("x", "dormant", 1), provider: "codex" as const };
+    const all = [fakeSession("a", "live-busy", 2), cx, fakeSession("b", "dormant", 0)];
+    expect(filterSessions(all, "all")).toEqual(all);
+    expect(filterSessions(all, "codex").map((s) => s.sessionId)).toEqual(["x"]);
+    expect(filterSessions(all, "claude-code").map((s) => s.sessionId)).toEqual(["a", "b"]);
   });
 });

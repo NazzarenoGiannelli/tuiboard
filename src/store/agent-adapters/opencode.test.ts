@@ -105,6 +105,8 @@ describe("readOpenCodeSessions", () => {
       addPart(db, "prt_2", "msg_1", "ses_a", t, { type: "text", text: "<file>", synthetic: true });
       addMessage(db, "msg_2", "ses_a", t + 1, {
         role: "assistant",
+        modelID: "big-pickle",
+        providerID: "opencode",
         time: { created: t + 1, completed: t + 3 },
         finish: "stop",
       });
@@ -133,6 +135,7 @@ describe("readOpenCodeSessions", () => {
       lastUser: "fix the build",
       lastAssistant: "Build fixed.",
       resumeCommand: "opencode --session ses_a",
+      model: "big-pickle",
     });
   });
 

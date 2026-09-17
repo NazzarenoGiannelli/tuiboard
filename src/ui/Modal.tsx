@@ -22,6 +22,8 @@ import {
 import { ATTR, T, cellWidth } from "~/ui/glyphs";
 import { AGENDA_WIDTH } from "~/ui/layout";
 import { formatHm } from "~/store/timeline";
+import { HARNESS } from "~/store/agents";
+import { HARNESS_COLOR } from "~/ui/AgentRow";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
 
@@ -920,6 +922,17 @@ function AgentDetailModal(props: { store: TuiStore; modal: Extract<NonNullable<T
               <span style={{ fg: T.accent }}>{s().sessionId}</span>
             </text>
             <text>
+              <span style={{ fg: T.textDim }}>harness   </span>
+              <span style={{ fg: HARNESS_COLOR[s().provider] }}>{HARNESS[s().provider].code}</span>
+              <span style={{ fg: T.text }}>{"  "}{HARNESS[s().provider].name}</span>
+            </text>
+            <Show when={s().model}>
+              <text>
+                <span style={{ fg: T.textDim }}>model     </span>
+                <span style={{ fg: T.text }}>{s().model}</span>
+              </text>
+            </Show>
+            <text>
               <span style={{ fg: T.textDim }}>status    </span>
               <span style={{ fg: T.text }}>{s().status}</span>
             </text>
@@ -1086,7 +1099,7 @@ const HELP_SECTIONS: HelpSection[] = [
     rows: [
       ["n", "New task in current column (quick-add syntax)"],
       ["g", "Grab task — h/l then moves it between columns; g/Esc to drop"],
-      ["f", "Cycle board filter: all → today → overdue → tomorrow → followup"],
+      ["f", "Cycle board filter: all → today → overdue → tomorrow → followup (Agents zone: harness filter)"],
       ["/", "Search task titles — jumps cursor to first match"],
     ],
   },
@@ -1096,7 +1109,8 @@ const HELP_SECTIONS: HelpSection[] = [
     rows: [
       ["Enter", "Open (resume) the selected session in a new WezTerm tab"],
       ["c", "Copy a 'cd + resume' command for the session"],
-      ["o", "Session detail (cwd, branch, last prompts, resume cmd)"],
+      ["o", "Session detail (harness, model, cwd, branch, last prompts, resume cmd)"],
+      ["f", "Filter by harness: all → cc Claude Code → cx Codex → oc OpenCode"],
     ],
   },
   {

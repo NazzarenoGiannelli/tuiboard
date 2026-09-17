@@ -66,6 +66,7 @@ const complete = line("event_msg", {
 
 const FINISHED = [
   meta(ID),
+  line("turn_context", { turn_id: "t1", cwd: "/home/u/code/app", model: "gpt-5.5-codex" }),
   started,
   userItem("# AGENTS.md stuff\n## My request for Codex:\nfix the flaky test"),
   line("response_item", { type: "message", role: "user", content: [] }),
@@ -89,6 +90,7 @@ describe("parseRollout", () => {
     expect(r).toMatchObject({
       cwd: "/home/u/code/app",
       gitBranch: "main",
+      model: "gpt-5.5-codex",
       hidden: false,
       firstUser: "fix the flaky test",
       lastUser: "fix the flaky test",

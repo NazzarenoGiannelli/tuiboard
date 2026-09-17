@@ -66,6 +66,7 @@ describe("parseTranscript", () => {
       type: "assistant",
       message: {
         role: "assistant",
+        model: "claude-opus-5",
         content: [
           { type: "text", text: "Hello" },
           { type: "tool_use", name: "Read" },
@@ -84,6 +85,15 @@ describe("parseTranscript", () => {
     expect(result.messageCount).toBe(2);
     expect(result.toolCount).toBe(1);
     expect(result.gitBranch).toBe("main");
+    expect(result.model).toBe("claude-opus-5");
+  });
+
+  it("ignores synthetic assistant models", () => {
+    const synthetic = JSON.stringify({
+      type: "assistant",
+      message: { role: "assistant", model: "<synthetic>", content: [] },
+    });
+    expect(parseTranscript(SAMPLE_JSONL + "\n" + synthetic).model).toBe("claude-opus-5");
   });
 
   it("tolerates malformed lines", () => {

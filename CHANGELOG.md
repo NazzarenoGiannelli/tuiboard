@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Harness badge, model and harness filter in the Agents zone** (#23). Each
+  session shows a colored `cc` / `cx` / `oc` badge and its model (`opus-5`,
+  `gpt-5.5-codex`, …), also in the `o` detail. `f` in the Agents zone cycles
+  all → cc → cx → oc; the active filter shows in the panel title.
+- **Two-line session cards** in the zoomed / fullscreen Agents view: title and
+  age on top, model · branch · directory underneath. The dashboard strip stays
+  one line per session and now fits its fields to the real row width, dropping
+  model, then branch, then directory before shortening the title (OpenTUI's
+  own truncation cut mid-string).
 - **Codex sessions in the Agents zone** (#20). Read-only from Codex's rollout
   files under `$CODEX_HOME` (default `~/.codex`), including archived and
   zstd-compressed ones, with names from `session_index.jsonl` / the state DB;
@@ -19,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `opencode --session <id>`. OpenCode has no running-process registry, so a
   session is busy while its last turn is unfinished and stale once that turn
   stops updating for 30 minutes; an open-but-idle OpenCode TUI isn't detected.
+
+### Fixed
+- **Agent directories keep `/` on macOS/Linux** — the shortened path was always
+  joined with `\`.
 
 ### Changed
 - **Agents zone refreshes per agent.** A change under one agent's session

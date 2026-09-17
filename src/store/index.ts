@@ -29,7 +29,14 @@ import {
   createBoardWatcher,
   type BoardWatcher,
 } from "~/io/watcher";
-import { createAgentsStore, type AgentsStore } from "./agents";
+import {
+  HARNESS,
+  createAgentsStore,
+  filterSessions,
+  type AgentSession,
+  type AgentsFilter,
+  type AgentsStore,
+} from "./agents";
 import { AGENT_ADAPTERS } from "./agent-adapters";
 import {
   createCalendarStore,
@@ -260,6 +267,8 @@ export interface UIState {
   marked: Record<string, true>;
   /** Active filter. */
   filter: "all" | "today" | "overdue" | "tomorrow" | "followup";
+  /** Agents-zone harness filter (`f` while the Agents zone is active). */
+  agentsFilter: AgentsFilter;
   /** Banner messages (errors, conflicts, undo notifications). */
   banner?: { kind: "info" | "warn" | "error"; text: string; ts: number };
   /** Open modal, if any. Keyboard handler routes input to the modal when set. */
@@ -350,6 +359,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       view: "kanban",
       marked: {},
       filter: "all",
+      agentsFilter: "all",
     },
     undo: [],
     rev: 0,
@@ -1231,6 +1241,24 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "zoomed", (z: boolean) => !z);
   }
 
+  /**
+   * Sessions the Agents zone lists, after the harness filter. The dashboard
+   * strip additionally hides archived ones — they sort last, so row indices
+   * into this list stay valid for both views.
+   */
+  function agentSessions(): AgentSession[] {
+    return filterSessions(agentsStore.sessions(), state.ui.agentsFilter);
+  }
+
+  /** Cycle the Agents-zone filter: all → cc → cx → oc → all. */
+  function cycleAgentsFilter(): AgentsFilter {
+    const cycle: AgentsFilter[] = ["all", ...(Object.keys(HARNESS) as AgentsFilter[])];
+    const next = cycle[(cycle.indexOf(state.ui.agentsFilter) + 1) % cycle.length]!;
+    setState("ui", "agentsFilter", next);
+    setState("ui", "row", 0);
+    return next;
+  }
+
   function setFilter(f: UIState["filter"]): void {
     setState("ui", "filter", f);
     // The cursor's row was an index into the unfiltered list — reset to top
@@ -1309,7 +1337,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   /**
    * Manual full refresh (the `r` key). Re-reads every board from disk, rescans
-   * Claude Code agents, and force-refetches the Agenda's calendar (bypassing
+   * agent sessions, and force-refetches the Agenda's calendar (bypassing
    * the 30-min cache). Lets the user pull in external changes — a calendar
    * event edited in the browser, a board touched elsewhere — without leaving
    * tuiboard. Boards normally auto-reload via the file watcher; this also
@@ -1697,6 +1725,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     config,
     activeBoard,
     agents: agentsStore,
+    agentSessions,
+    cycleAgentsFilter,
     calendar: calendarStore,
     // queries
     getBoardByPath,

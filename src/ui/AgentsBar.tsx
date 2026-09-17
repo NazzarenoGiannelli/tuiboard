@@ -12,6 +12,7 @@ import { For, Show, createEffect, createMemo } from "solid-js";
 
 import { AgentRow } from "~/ui/AgentRow";
 import { T } from "~/ui/glyphs";
+import { HARNESS } from "~/store/agents";
 import type { TuiStore } from "~/store/index";
 
 interface ScrollBoxLike {
@@ -31,10 +32,14 @@ export function AgentsBar(props: AgentsBarProps) {
   const isActive = () => props.store.state.ui.activeZone === "agents";
   const agentRow = () => props.store.state.ui.row;
 
-  /** All visible (non-archived) sessions. */
+  /** All visible (non-archived) sessions, after the harness filter. */
   const allShown = createMemo(() =>
-    props.store.agents.sessions().filter((s) => s.status !== "archived"),
+    props.store.agentSessions().filter((s) => s.status !== "archived"),
   );
+  const filterTag = () => {
+    const f = props.store.state.ui.agentsFilter;
+    return f === "all" ? "" : ` · ${HARNESS[f].code}`;
+  };
 
   let scrollBoxRef: ScrollBoxLike | undefined;
 
@@ -68,7 +73,7 @@ export function AgentsBar(props: AgentsBarProps) {
         paddingLeft: 1,
         paddingRight: 1,
       }}
-      title={`┤ Agents (live) · ${allShown().length} ├`}
+      title={`┤ Agents (live)${filterTag()} · ${allShown().length} ├`}
       titleAlignment="left"
     >
       <Show

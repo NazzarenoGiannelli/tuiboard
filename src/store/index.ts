@@ -1256,7 +1256,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "lastLaunch", { sessionId, ok, text, ts: Date.now() });
   }
 
-  /** Cycle the Agents-zone filter: all → cc → cx → oc → all. */
+  /** Cycle the Agents-zone filter: all → cc → cx → oc → pi → all. */
   function cycleAgentsFilter(): AgentsFilter {
     const cycle: AgentsFilter[] = ["all", ...(Object.keys(HARNESS) as AgentsFilter[])];
     const next = cycle[(cycle.indexOf(state.ui.agentsFilter) + 1) % cycle.length]!;

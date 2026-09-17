@@ -1129,7 +1129,7 @@ const HELP_SECTIONS: HelpSection[] = [
       ["Enter", "Open (resume) the selected session in a new terminal tab/window"],
       ["c", "Copy a 'cd + resume' command for the session"],
       ["o", "Session detail (harness, model, cwd, branch, last prompts, resume cmd)"],
-      ["f", "Filter by harness: all → cc Claude Code → cx Codex → oc OpenCode"],
+      ["f", "Filter by harness: all → cc Claude Code → cx Codex → oc OpenCode → pi Pi"],
     ],
   },
   {

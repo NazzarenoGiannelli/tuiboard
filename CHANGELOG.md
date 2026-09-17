@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Pi sessions in the Agents zone** (#33), completing Claude Code, Codex,
+  OpenCode and Pi (#12). Read-only from Pi's JSONL sessions
+  (`~/.pi/agent/sessions/`, honoring `PI_CODING_AGENT_DIR`,
+  `PI_CODING_AGENT_SESSION_DIR` and `sessionDir`); badge `pi` in acid
+  yellow-green; names from `/name`; resume with `pi --session <id>`.
 - **Resumed sessions run in your shell** (#31). On Windows, Enter used to open
   PowerShell even when tuiboard ran in Git Bash; now `auto` follows the shell
   you started tuiboard from (Git Bash via Git's `bin\bash.exe` — never WSL's —,

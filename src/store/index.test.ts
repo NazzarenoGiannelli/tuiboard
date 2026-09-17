@@ -313,7 +313,7 @@ describe("UI helpScroll", () => {
 });
 
 describe("Agents harness filter", () => {
-  it("cycles all → cc → cx → oc → all and resets the cursor", () => {
+  it("cycles all → cc → cx → oc → pi → all and resets the cursor", () => {
     const store = createTuiStore({ config: emptyConfig() });
     store.setCursor(0, 3);
     expect(store.state.ui.agentsFilter).toBe("all");
@@ -321,6 +321,7 @@ describe("Agents harness filter", () => {
     expect(store.state.ui.row).toBe(0);
     expect(store.cycleAgentsFilter()).toBe("codex");
     expect(store.cycleAgentsFilter()).toBe("opencode");
+    expect(store.cycleAgentsFilter()).toBe("pi");
     expect(store.cycleAgentsFilter()).toBe("all");
   });
 

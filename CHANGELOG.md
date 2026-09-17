@@ -7,75 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-17
+
+The Agents zone stops being Claude-Code-only: it now lists **Codex, OpenCode
+and Pi** sessions next to Claude Code, tells them apart at a glance, and
+reopens any of them in whatever terminal and shell you use (#12).
+
 ### Added
-- **Pi sessions in the Agents zone** (#33), completing Claude Code, Codex,
-  OpenCode and Pi (#12). Read-only from Pi's JSONL sessions
+- **Codex sessions** (#20). Read-only from Codex's rollout files under
+  `$CODEX_HOME` (default `~/.codex`), including archived and zstd-compressed
+  ones, with names from `session_index.jsonl` / the state DB; resume with
+  `codex resume <id>`. Subagent threads are hidden.
+- **OpenCode sessions** (#17). Read-only from OpenCode's SQLite store
+  (`$XDG_DATA_HOME/opencode/opencode.db`); resume with
+  `opencode --session <id>`.
+- **Pi sessions** (#33). Read-only from Pi's JSONL sessions
   (`~/.pi/agent/sessions/`, honoring `PI_CODING_AGENT_DIR`,
-  `PI_CODING_AGENT_SESSION_DIR` and `sessionDir`); badge `pi` in acid
-  yellow-green; names from `/name`; resume with `pi --session <id>`.
-- **Resumed sessions run in your shell** (#31). On Windows, Enter used to open
-  PowerShell even when tuiboard ran in Git Bash; now `auto` follows the shell
-  you started tuiboard from (Git Bash via Git's `bin\bash.exe` — never WSL's —,
-  Nushell, else PowerShell), and the shell stays open after the agent exits.
-  New `resume_shell` option (`bash | zsh | fish | nu | pwsh | powershell |
-  cmd`) forces one on any OS.
-- **Enter diagnostics.** The `o` detail shows the full result of a session's
-  last Enter (the banner gets cut on narrow terminals), and
-  `bun run agents:open <session-id-prefix> [--dry-run]` prints the detected
-  terminal, shell and exact launch command.
-- **Enter opens agent sessions in any common terminal, not only WezTerm**
-  (#25). tuiboard detects where it runs — tmux, herdr, WezTerm, Windows
-  Terminal (new tab, `pwsh` or `powershell`), Ghostty (new window) — and
-  otherwise uses the OS default: `xdg-terminal-exec` on Linux, a new PowerShell
-  window on Windows, Terminal.app on macOS. If launching fails, the resume
-  command is copied to the clipboard and the banner says so. New
-  `resume_terminal` option forces a specific one; `resume_command` still wins.
-- **Harness badge, model and harness filter in the Agents zone** (#23). Each
-  session shows a colored `cc` / `cx` / `oc` badge and its model (`opus-5`,
+  `PI_CODING_AGENT_SESSION_DIR` and `sessionDir`); names from `/name`; resume
+  with `pi --session <id>`.
+- Codex, OpenCode and Pi keep no record of running processes, so their
+  sessions are busy while a turn is open and turn stale once it stops updating
+  for 30 minutes; an open-but-idle TUI of theirs isn't detected.
+- **Harness badge, model and harness filter** (#23). Each session shows a
+  colored `cc` / `cx` / `oc` / `pi` badge and its model (`opus-5`,
   `gpt-5.5-codex`, …), also in the `o` detail. `f` in the Agents zone cycles
-  all → cc → cx → oc; the active filter shows in the panel title.
+  all → cc → cx → oc → pi; the active filter shows in the panel title.
 - **Two-line session cards** in the zoomed / fullscreen Agents view: title and
   age on top, model · branch · directory underneath. The dashboard strip stays
-  one line per session and now fits its fields to the real row width, dropping
-  model, then branch, then directory before shortening the title (OpenTUI's
-  own truncation cut mid-string).
-- **Codex sessions in the Agents zone** (#20). Read-only from Codex's rollout
-  files under `$CODEX_HOME` (default `~/.codex`), including archived and
-  zstd-compressed ones, with names from `session_index.jsonl` / the state DB;
-  Enter / `c` resume with `codex resume <id>`. Subagent threads are hidden.
-  Like OpenCode, a session is busy while a turn is open and stale once it stops
-  updating for 30 minutes; an open-but-idle Codex TUI isn't detected.
-- **OpenCode sessions in the Agents zone** (#17). Read-only from OpenCode's
-  SQLite store (`$XDG_DATA_HOME/opencode/opencode.db`); Enter / `c` resume with
-  `opencode --session <id>`. OpenCode has no running-process registry, so a
-  session is busy while its last turn is unfinished and stale once that turn
-  stops updating for 30 minutes; an open-but-idle OpenCode TUI isn't detected.
-
-### Fixed
-- **Windows session directories stored with `/`** (OpenCode) are handed to
-  Windows Terminal with `\`, and the PowerShell launcher waits up to 30 s on a
-  cold start instead of 10 s (#31).
-- **Enter opens sessions in Windows Terminal** (#29). `wt.exe` (and a
-  Store-installed `pwsh`) are App Execution Aliases that Bun's spawn can't
-  find, so launching failed with "not found in $PATH". Windows launches now go
-  through PowerShell's `Start-Process`, which resolves them.
-- **Agent directories keep `/` on macOS/Linux** — the shortened path was always
-  joined with `\`.
+  one line per session and fits its fields to the real row width, dropping
+  model, then branch, then directory before shortening the title.
+- **Enter opens sessions in any common terminal, not only WezTerm** (#25).
+  tuiboard detects where it runs — tmux, herdr, WezTerm, Windows Terminal (new
+  tab), Ghostty (new window) — and otherwise uses the OS default:
+  `xdg-terminal-exec` on Linux, a new console window on Windows, Terminal.app
+  on macOS. If launching fails, the resume command is copied to the clipboard
+  and the banner says so. New `resume_terminal` option forces one;
+  `resume_command` still wins.
+- **Resumed sessions run in your shell** (#31). `auto` follows the shell you
+  started tuiboard from — on Windows Git Bash (Git's `bin\bash.exe`, never
+  WSL's), Nushell or PowerShell; `$SHELL` elsewhere — and the shell stays open
+  after the agent exits. New `resume_shell` option (`bash | zsh | fish | nu |
+  pwsh | powershell | cmd`) forces one.
+- **Enter diagnostics.** The `o` detail shows the full result of a session's
+  last Enter, and `bun run agents:open <session-id-prefix> [--dry-run]` (in a
+  checkout) prints the detected terminal, shell and exact launch command.
 
 ### Changed
-- **Agents zone refreshes per agent.** A change under one agent's session
-  store re-scans only that agent, and a session writing non-stop still
-  refreshes at least once a second. Session stores that don't exist yet when
-  tuiboard starts (agent installed later, first session) are picked up within
-  a few seconds instead of needing a restart.
-- **Agents zone: agent CLIs now plug in through a common adapter interface**
-  (#16), groundwork for Codex / OpenCode / Pi support (#12). Claude Code
-  sessions behave exactly as before. The `stale-pid` status is now `stale`
-  (same glyph and color), since not every agent writes PID records.
+- **Agent CLIs plug in through a common adapter interface** (#16). Claude Code
+  sessions behave as before. The `stale-pid` status is now `stale` (same glyph
+  and color), since not every agent writes PID records.
 - **New `{resume}` token** for `resume_command` and `copy_resume_command`: the
   selected agent's own resume command. The `copy_resume_command` default is now
   `cd "{cwd}" && {resume}`; custom templates using `claude --resume
   {sessionId}` keep working unchanged.
+- **The Agents zone refreshes per agent.** A change under one agent's session
+  store re-scans only that agent, and a session writing non-stop still
+  refreshes at least once a second. Session stores that don't exist yet when
+  tuiboard starts (agent installed later, first session) are picked up within
+  a few seconds instead of needing a restart.
+
+### Fixed
+- **Enter in Windows Terminal** (#29). `wt.exe` (and a Store-installed `pwsh`)
+  are App Execution Aliases that Bun's spawn can't find; Windows launches now
+  go through PowerShell's `Start-Process`, which resolves them. Session
+  directories stored with `/` (OpenCode) are passed as `\`.
+- **Agent directories keep `/` on macOS/Linux** — the shortened path was always
+  joined with `\`.
 
 ## [0.11.0] - 2026-09-16
 
@@ -422,6 +419,8 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.12.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.12.0
+[0.11.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.11.0
 [0.10.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.10.0
 [0.9.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.9.2
 [0.9.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.9.1

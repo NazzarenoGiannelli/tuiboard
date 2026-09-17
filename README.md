@@ -3,7 +3,8 @@
 A terminal **kanban** board on plain markdown files, with three optional panels
 you switch on or off: a **Today/Tomorrow planner** across all your boards, a
 **24-hour agenda** with a read-only Google / Microsoft 365 calendar overlay, and
-a **live view of your Claude Code sessions**. Run it as a pure kanban, or any mix
+a **live view of your coding-agent sessions** (Claude Code, Codex, OpenCode, Pi).
+Run it as a pure kanban, or any mix
 of the four. The board is always on; the rest is opt-in (see [Zones](#zones)).
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun. Cross-platform
@@ -11,7 +12,7 @@ Built with [OpenTUI](https://opentui.com) + SolidJS on Bun. Cross-platform
 the Obsidian Tasks-plugin emoji vocabulary, so they open and edit fine in
 any markdown editor.
 
-![tuiboard — kanban board, Today/Tomorrow panel, 24h agenda with calendar overlay, and live Claude Code agents in one terminal dashboard](docs/screenshot.png)
+![tuiboard — kanban board, Today/Tomorrow panel, 24h agenda with calendar overlay, and live coding-agent sessions in one terminal dashboard](docs/screenshot.png)
 
 ## Install
 
@@ -114,11 +115,11 @@ https://github.com/NazzarenoGiannelli/tuiboard). Set it up for me from scratch:
    home path) with a `boards:` list pointing at those files by ABSOLUTE path,
    plus `assignees: [...]`, `done_column: Done`, `archive_column: Archive`.
 4. Ask me which zones I want besides the kanban board: the Today/Tomorrow
-   planner, the 24h agenda, and the live Claude Code agents view. For any I
-   don't want, add a `zones:` block setting it to `off` (e.g. someone who
-   doesn't use Claude Code would set `agents: off`). If I want them all, omit
-   the block. Do NOT configure the agents view beyond on/off — it reads
-   `~/.claude` automatically when enabled.
+   planner, the 24h agenda, and the live agent-sessions view (Claude Code,
+   Codex, OpenCode, Pi). For any I don't want, add a `zones:` block setting it
+   to `off` (e.g. someone who uses none of those agents would set
+   `agents: off`). If I want them all, omit the block. Do NOT configure the
+   agents view beyond on/off — it finds each agent's sessions automatically.
 5. Ask me whether I want to overlay my Google Calendar or Microsoft 365 events
    on the Agenda (skip this if I turned the agenda off). If yes, tell me to run
    `tuiboard calendar-setup google` (or `microsoft`) — it interviews me, opens
@@ -195,7 +196,7 @@ archive_column: Archive
 
 tuiboard is four zones — **board** (kanban), **planner** (Today/Tomorrow across
 all boards), **agenda** (24h timeline + calendar overlay), and **agents** (live
-Claude Code sessions). Only want some of them? The board is always on; the other
+coding-agent sessions). Only want some of them? The board is always on; the other
 three are yours to configure:
 
 ```yaml
@@ -216,8 +217,8 @@ Each zone takes one of:
 `true`/`false` work as aliases for `on`/`off`. So a pure kanban is just
 `agenda: off` and `agents: off`; kanban + calendar is `agents: off`. The
 difference between `off` and the F-key hide: `off` means the feature never runs
-at all — handy if you don't use Claude Code and don't want tuiboard reading
-`~/.claude`.
+at all — handy if you use none of the supported agents and don't want
+tuiboard reading their session stores.
 
 ## Calendars (Agenda overlay)
 
@@ -557,6 +558,11 @@ clobber an edit made in the TUI or another editor in the meantime.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
+- **v0.12** — the Agents zone goes multi-agent: Codex, OpenCode and Pi sessions
+  next to Claude Code, with a colored harness badge, the model, a harness
+  filter (`f`) and two-line cards when zoomed. Enter reopens a session in the
+  terminal and shell you're using — Windows Terminal, Ghostty, tmux, herdr,
+  WezTerm, Git Bash, Nushell… — instead of WezTerm only.
 - **v0.11** — zoomed columns no longer clip task titles short of the available
   width, a board's custom name survives external edits instead of reverting to
   the filename, and the keyboard reference (`?`) got a scroll + visual restyle

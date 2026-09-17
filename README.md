@@ -155,17 +155,18 @@ assignees: [Alice, Bob]
 done_column: Done
 archive_column: Archive
 
-# Optional: override Enter in the Agents zone. argv array, {cwd}/{sessionId}
-# substituted, run directly (no shell — element 0 must be a real binary/abs
+# Optional: override Enter in the Agents zone. argv array, {cwd}/{sessionId}/
+# {resume} substituted, run directly (no shell — element 0 must be a real binary/abs
 # path, NOT a shell builtin or Windows App Execution Alias). Defaults to
-# opening a WezTerm tab with `claude --resume <id>`. For a custom layout:
+# opening a WezTerm tab with the agent's resume command (`claude --resume
+# <id>`). For a custom layout:
 # resume_command: ["nu", "C:/Users/you/.config/tuiboard/code-resume.nu", "{cwd}", "{sessionId}"]
 
 # Optional: the command `c` copies to the clipboard in the Agents zone — one
 # paste that cd's into the session dir and resumes it, so you can open it
-# yourself in any tab/pane (no WezTerm needed). {cwd}/{sessionId} substituted.
-# Default: 'cd "{cwd}" && claude --resume {sessionId}'. Nushell users:
-# copy_resume_command: 'cd "{cwd}"; claude --resume {sessionId}'
+# yourself in any tab/pane (no WezTerm needed). {cwd}/{sessionId}/{resume}
+# substituted. Default: 'cd "{cwd}" && {resume}'. Nushell users:
+# copy_resume_command: 'cd "{cwd}"; {resume}'
 ```
 
 ## Zones
@@ -425,7 +426,7 @@ session (until the next terminal resize).
 |---|---|
 | `j` / `k` | Move the cursor down / up the session list |
 | `Enter` | Open (resume) the selected session in a new WezTerm tab |
-| `c` | Copy a one-paste `cd … && claude --resume <id>` command for the selected session — drop it into any tab/pane to land in the right dir and resume (no WezTerm needed; format is `copy_resume_command`) |
+| `c` | Copy a one-paste `cd … && <resume>` command (e.g. `claude --resume <id>`) for the selected session — drop it into any tab/pane to land in the right dir and resume (no WezTerm needed; format is `copy_resume_command`) |
 | `o` | Session detail (cwd, branch, last prompts, resume command) |
 
 ### Task actions (work in board, planner, AND timeline zones)

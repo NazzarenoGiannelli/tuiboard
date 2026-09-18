@@ -45,9 +45,24 @@ describe("classifyStatus", () => {
     expect(classifyStatus(now, now, live)).toBe("live-idle");
   });
 
-  it("returns stale when PID record older than 5min", () => {
+  it("returns stale when PID record older than 5min and no pid field", () => {
     const live: LivePidRecord = { mtimeMs: now - minutes(10), status: "busy" };
     expect(classifyStatus(now, now, live)).toBe("stale");
+  });
+
+  it("stays live-busy when PID record is stale by age but process is still running", () => {
+    const live: LivePidRecord = { mtimeMs: now - minutes(10), status: "busy", pid: 12345 };
+    expect(classifyStatus(now, now, live, () => true)).toBe("live-busy");
+  });
+
+  it("stays live-idle when PID record is stale by age but process is still running, non-busy", () => {
+    const live: LivePidRecord = { mtimeMs: now - minutes(10), status: "idle", pid: 12345 };
+    expect(classifyStatus(now, now, live, () => true)).toBe("live-idle");
+  });
+
+  it("returns stale when PID record is stale by age and process is confirmed dead", () => {
+    const live: LivePidRecord = { mtimeMs: now - minutes(10), status: "busy", pid: 12345 };
+    expect(classifyStatus(now, now, live, () => false)).toBe("stale");
   });
 
   it("returns dormant when no PID and jsonl mtime within 7 days", () => {

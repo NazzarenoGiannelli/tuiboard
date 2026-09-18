@@ -65,13 +65,33 @@ export function cwdFromSlug(slug: string): string {
   return slug.replaceAll("-", sep);
 }
 
+/** Returns true if the OS confirms `pid` is still running. */
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function classifyStatus(
   now: number,
   jsonlMtimeMs: number,
   live: LivePidRecord | undefined,
+  checkPid: (pid: number) => boolean = isPidAlive,
 ): AgentStatus {
   if (live) {
-    if (now - live.mtimeMs > LIVE_STALE_AFTER_MS) return "stale";
+    if (now - live.mtimeMs > LIVE_STALE_AFTER_MS) {
+      // Claude Code doesn't rewrite the PID record during a long turn, so a
+      // stale-by-age record doesn't mean the process died. Check liveness
+      // directly when we have the pid — only mark stale when the process is
+      // actually gone or the pid is unknown.
+      if (live.pid != null && checkPid(live.pid)) {
+        return live.status === "busy" ? "live-busy" : "live-idle";
+      }
+      return "stale";
+    }
     return live.status === "busy" ? "live-busy" : "live-idle";
   }
   const age = now - jsonlMtimeMs;

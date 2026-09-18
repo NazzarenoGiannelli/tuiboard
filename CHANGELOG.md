@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`tuiboard task --board` refuses ambiguous boards** (#63) instead of taking
+  the first configured board whose path ends with the argument. Two boards can
+  easily end the same way (`Work/Personal.md`, `Home/Personal.md`), and this is
+  the headless path used by cron jobs and the bar widget, so the wrong board
+  could be mutated silently. It now lists the candidates and writes nothing,
+  the way an ambiguous `--match` already did. Thanks to the commenter on
+  Reddit who spotted it.
+
 ## [0.13.2] - 2026-09-17
 
 ### Fixed

@@ -71,18 +71,31 @@ function isoShift(days: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** Resolve a board by configured name, then by path suffix. */
+/**
+ * Resolve a board by configured name, then by path suffix — and refuse to
+ * guess when more than one matches, the way findTask does for task titles.
+ * Two boards can easily end the same way (`Work/Personal.md`,
+ * `Home/Personal.md`), and this is the headless path: a cron job or the bar
+ * widget mutating the wrong board would go unnoticed.
+ */
 function resolveBoard(needle: string) {
   const cfg = loadConfig();
   const lower = needle.toLowerCase();
-  const hit =
-    cfg.boards.find((b) => (b.name ?? "").toLowerCase() === lower) ??
-    cfg.boards.find((b) => b.path.toLowerCase().endsWith(lower));
-  if (!hit) {
+  const byName = cfg.boards.filter((b) => (b.name ?? "").toLowerCase() === lower);
+  const hits = byName.length > 0
+    ? byName
+    : cfg.boards.filter((b) => b.path.toLowerCase().endsWith(lower));
+  if (hits.length === 0) {
     const names = cfg.boards.map((b) => b.name ?? b.path).join(", ");
     throw new Error(`board "${needle}" not found. Configured: ${names || "(none)"}`);
   }
-  return hit;
+  if (hits.length > 1) {
+    const candidates = hits.map((b) => (b.name ? `${b.name} (${b.path})` : b.path)).join(", ");
+    throw new Error(
+      `board "${needle}" matches ${hits.length} boards: ${candidates}; be more specific`,
+    );
+  }
+  return hits[0]!;
 }
 
 function findColumn(board: Board, name: string): Column {

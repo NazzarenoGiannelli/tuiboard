@@ -173,6 +173,37 @@ describe("tuiboard task — refusing to guess", () => {
   });
 });
 
+describe("tuiboard task — resolving --board", () => {
+  /** Rewrites the config with extra boards; the first one stays the real file. */
+  function configure(...boards: { path: string; name?: string }[]) {
+    const yaml = boards
+      .map((b) => `  - path: ${b.path}${b.name ? `\n    name: ${b.name}` : ""}`)
+      .join("\n");
+    writeFileSync(configPath, `boards:\n${yaml}\n`, "utf-8");
+  }
+
+  it("accepts a path suffix when only one board matches", async () => {
+    configure({ path: boardPath, name: "Test" }, { path: join(dir, "Other.md"), name: "Other" });
+    expect(await runTask(["done", "--board", "Board.md", "--column", "Home", "--match", "Bollette"])).toBe(0);
+    expect(line("Bollette")).toContain("- [x]");
+  });
+
+  it("writes nothing when the suffix matches two boards", async () => {
+    const twin = join(dir, "nested", "Board.md");
+    configure({ path: boardPath, name: "Test" }, { path: twin, name: "Twin" });
+    const before = board();
+    expect(await runTask(["done", "--board", "Board.md", "--column", "Home", "--match", "Bollette"])).toBe(1);
+    expect(board()).toBe(before);
+  });
+
+  it("writes nothing when two boards share the configured name", async () => {
+    configure({ path: boardPath, name: "Test" }, { path: join(dir, "Other.md"), name: "Test" });
+    const before = board();
+    expect(await runTask(["done", ...args("--match", "Bollette")])).toBe(1);
+    expect(board()).toBe(before);
+  });
+});
+
 describe("tuiboard summary — planner entries", () => {
   // The planner buckets against the system clock — `buildSummary({ today })`
   // steers the totals but not `buildPlannerItems()` — so this board is dated

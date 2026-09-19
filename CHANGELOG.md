@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-09-19
+
 ### Fixed
 - **`tuiboard task --board` refuses ambiguous boards** (#63) instead of taking
   the first configured board whose path ends with the argument. Two boards can
@@ -510,6 +512,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.13.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.3
 [0.13.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.2
 [0.13.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.1
 [0.13.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.0

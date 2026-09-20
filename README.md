@@ -506,6 +506,11 @@ session (until the next terminal resize).
 
 ## Headless commands
 
+> Driving tuiboard from Claude Code, Codex or any other agent?
+> [docs/agent-interface.md](docs/agent-interface.md) documents these two
+> commands as an API: the JSON shape, the matching rules, the exit codes, and
+> the handful of rules that keep an agent from corrupting a board.
+
 Two subcommands run without the TUI, for status bars, widgets and scripts.
 Both reuse the same config loader and parser as the dashboard, so they can
 never disagree with it about what is on your board.

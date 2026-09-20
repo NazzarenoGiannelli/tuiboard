@@ -111,11 +111,29 @@ These are two unrelated, independently shippable changes:
 1. **Part B first** — smaller, self-contained, no config surface, immediately useful given Nazz's current backlog. One threshold constant, one new color, one branch in `titleColorFor`.
 2. **Part A** — config field, modal, watcher wiring, `summary` field.
 
-## 5. Risks & open issues
+## 5. Open questions — resolved during implementation
 
-- **Overdue-band threshold** (the spec above uses 7 days as a placeholder) is Nazz's call.
-- **Modal keybinding** — `i`, `u`, or `w` are free today; final pick is Nazz's, and should be checked again at implementation time in case another PR has claimed one meanwhile.
-- **Whether `BoardWatcher` can watch a not-yet-existing path** still needs verifying against chokidar's actual configuration before Part A's watcher wiring — carried over from the original draft, still unresolved.
+- **Overdue-band threshold: 5 days**, not the 7 used as a placeholder above.
+  Measured against the real boards at implementation time (117 open tasks, 13
+  overdue): 7 days would have painted none of them — a band that never fires —
+  while 3 would have painted 8 of 13, which was just the weekend. Five days
+  means a task survived a weekend *and* working days of being skipped
+  deliberately. It lives in one exported constant (`OVERDUE_HEAVY_AFTER_DAYS`),
+  so changing it is a one-line edit with the tests already around it.
+- **Modal keybinding: `i`.** Re-checked at implementation time: `i`, `u` and
+  `w` were still the only free lowercase letters. `i` for "info"; `u` reads as
+  undo (which is Ctrl-Z here) and `w` as write, on a dialog that never writes.
+  Unconfigured, the dialog explains how to set `status_file` instead of the key
+  doing nothing — it is listed in the help, and a key that silently ignores you
+  looks broken.
+- **Can `BoardWatcher` watch a not-yet-existing path? Yes, if its directory
+  exists.** Verified against the real watcher: a file created after `start()`
+  emits `add` and subsequent `change` events, because chokidar watches the
+  parent directory. A path whose *directory* is also missing emits nothing —
+  the same limitation the agents store hit with `~/.codex/sessions`. That edge
+  is left alone rather than polled: the dialog reads the file every time it
+  opens, so only live refresh of an already-open dialog is affected, and only
+  until the next restart.
 
 ## 6. Decisions captured
 
@@ -124,3 +142,8 @@ These are two unrelated, independently shippable changes:
 - **Status file reading reuses `readNoteBody`, unchanged** — no new reader module.
 - **Overdue aging is color-only, two bands, no new date semantics** beyond what `statusOf()` already computes.
 - **tuiboard never writes the status file.** Read-only, same posture as boards.
+- **Two bands, one constant, no config.** The threshold is a source constant,
+  not a setting: a second knob for something with two states is more
+  explanation than it is worth.
+- **The status file's body never reaches `tuiboard summary`.** Path and mtime
+  only, so a widget can show *that* it changed.

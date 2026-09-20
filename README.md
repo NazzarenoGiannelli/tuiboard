@@ -204,6 +204,12 @@ archive_column: Archive
 # yourself in any tab/pane (no WezTerm needed). {cwd}/{sessionId}/{resume}
 # substituted. Default: 'cd "{cwd}" && {resume}'. Nushell users:
 # copy_resume_command: 'cd "{cwd}"; {resume}'
+
+# Optional: a markdown file to read from inside tuiboard with `i` — a morning
+# digest, a handover note, whatever you (or an agent) write there. Shown as it
+# is: never parsed, never written to. `~` works, relative paths resolve against
+# the config file. Unconfigured, `i` just explains how to set it.
+# status_file: ~/vault/Home.md
 ```
 
 ## Zones
@@ -505,6 +511,7 @@ A placed task stays armed, so it can be sized and moved straight away.
 | `n` | New task in current column (quick-add syntax) |
 | `Shift-T` | Reset ALL overdue tasks (any board) to today |
 | `Ctrl-Z` | Undo last mutation |
+| `i` | Status file — the markdown file set as `status_file`, shown read-only |
 | `?` | Help modal with the full reference |
 | `q` · `Ctrl-C` | Quit |
 

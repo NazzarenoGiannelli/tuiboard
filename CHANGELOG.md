@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Status file viewer** (#67): point `status_file:` at a markdown file — a
+  morning digest, a handover note, whatever you or an agent write there — and
+  `i` shows it in a dialog, read-only, never parsed. It re-reads itself while
+  open when the file changes, and `tuiboard summary` reports its path and
+  mtime (never its body) when configured.
+- **Overdue tasks show how late they are** (#67): a task overdue for days is
+  painted in a louder red than one that slipped yesterday. No day count
+  anywhere — just two bands.
+
 ## [0.13.3] - 2026-09-19
 
 ### Fixed

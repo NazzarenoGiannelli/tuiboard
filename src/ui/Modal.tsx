@@ -22,7 +22,7 @@ import {
 import { ATTR, T, cellWidth } from "~/ui/glyphs";
 import { AGENDA_WIDTH } from "~/ui/layout";
 import { formatHm } from "~/store/timeline";
-import { HARNESS } from "~/store/agents";
+import { HARNESS, formatAge } from "~/store/agents";
 import { HARNESS_COLOR } from "~/ui/AgentRow";
 import { herdrPlace } from "~/store/herdr";
 import type { TuiStore } from "~/store/index";
@@ -68,6 +68,7 @@ function ModalRouter(props: { store: TuiStore; modal: NonNullable<TuiStore["stat
     case "confirm-delete-event": return <ConfirmDeleteEventModal store={props.store} />;
     case "search":   return <SearchModal store={props.store} />;
     case "board-new": return <BoardNewModal store={props.store} />;
+    case "status-file": return <StatusFileModal store={props.store} />;
     case "help":     return <HelpModal store={props.store} />;
   }
 }
@@ -837,6 +838,77 @@ function DetailModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiSto
   );
 }
 
+/**
+ * The configured status file (`status_file`), shown and nothing else: no
+ * parsing, no writing. Same shape as a task's note — a dialog with a
+ * scrollable body — because from tuiboard's side it is the same object.
+ */
+/** "updated now" / "updated 5m ago" — same vocabulary the agents rows use. */
+function updatedLabel(iso: string): string {
+  const age = formatAge(Date.parse(iso), Date.now());
+  return age === "now" ? "updated just now" : `updated ${age} ago`;
+}
+
+function StatusFileModal(props: { store: TuiStore }) {
+  const view = createMemo(() => {
+    props.store.state.ui.statusFileRev; // re-read when the file changes on disk
+    return props.store.statusFile();
+  });
+  return (
+    <Show
+      when={view()}
+      fallback={
+        <DialogShell title="Status file" hint="Esc to close" width={70}>
+          <text wrapMode="word">
+            <span style={{ fg: T.textDim }}>
+              No status file configured. Set `status_file:` in your config to the markdown
+              file you want to read here.
+            </span>
+          </text>
+        </DialogShell>
+      }
+    >
+      {(v: () => NonNullable<ReturnType<typeof view>>) => (
+        <DialogShell title="Status file" hint="j/k scroll · Esc/i to close" width={90}>
+          <text wrapMode="word">
+            <span style={{ fg: T.tag }}>{v().path}</span>
+            <Show when={v().updatedAt}>
+              <span style={{ fg: T.textDim }}>{"  " + updatedLabel(v().updatedAt!)}</span>
+            </Show>
+          </text>
+          <Show when={v().missing}>
+            <box style={{ height: 1 }} />
+            <text wrapMode="word">
+              <span style={{ fg: T.overdue }}>{"File not found: " + v().missing}</span>
+            </text>
+          </Show>
+          <Show when={v().error}>
+            <box style={{ height: 1 }} />
+            <text wrapMode="word">
+              <span style={{ fg: T.overdue }}>{"File unreadable: " + v().error}</span>
+            </text>
+          </Show>
+          <Show when={v().body !== undefined}>
+            <box style={{ height: 1 }} />
+            <scrollbox style={{ flexGrow: 1, minHeight: 0 }}>
+              <text wrapMode="word">
+                <span style={{ fg: T.text }}>
+                  {v().body === "" ? "(the status file is empty)" : v().body}
+                </span>
+              </text>
+            </scrollbox>
+            <Show when={v().truncated}>
+              <text wrapMode="word">
+                <span style={{ fg: T.textDim }}>… shown truncated (the file is large)</span>
+              </text>
+            </Show>
+          </Show>
+        </DialogShell>
+      )}
+    </Show>
+  );
+}
+
 // ─── Search ──────────────────────────────────────────────────────────────────
 
 function SearchModal(props: { store: TuiStore }) {
@@ -1173,6 +1245,7 @@ const HELP_SECTIONS: HelpSection[] = [
     title: "Global",
     rows: [
       ["Ctrl-Z", "Undo last mutation"],
+      ["i", "Status file (the markdown file set as `status_file`)"],
       ["?", "This help"],
       ["q · Ctrl-C", "Quit"],
     ],

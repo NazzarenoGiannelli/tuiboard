@@ -1,7 +1,11 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import type { Config } from "~/config/loader";
-import { createTuiStore, isoAddDays, isoToday } from "./index";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { STATUS_FILE_MAX_BYTES, createTuiStore, isoAddDays, isoToday } from "./index";
 
 describe("test runner smoke", () => {
   it("can run a trivial assertion", () => {
@@ -336,10 +340,6 @@ describe("Agents harness filter", () => {
 });
 
 describe("arm mode (#73)", () => {
-  const { mkdtempSync, rmSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
-  const { tmpdir } = require("node:os") as typeof import("node:os");
-  const { join } = require("node:path") as typeof import("node:path");
-
   function withBoard(run: (store: ReturnType<typeof createTuiStore>, path: string) => void) {
     const dir = mkdtempSync(join(tmpdir(), "tb-arm-"));
     const path = join(dir, "board.md");
@@ -396,5 +396,52 @@ describe("arm mode (#73)", () => {
       expect(store.getTask(first)!.timeBlock).toEqual({ startMin: 540, endMin: 600 });
       expect(store.getTask(second)!.timeBlock).toBeUndefined();
     });
+  });
+});
+
+describe("status file", () => {
+  let dir: string;
+  beforeEach(() => (dir = mkdtempSync(join(tmpdir(), "tuiboard-status-"))));
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  const storeFor = (statusFilePath?: string) =>
+    createTuiStore({ config: emptyConfig({ statusFilePath }) });
+
+  it("is undefined when nothing is configured", () => {
+    expect(storeFor().statusFile()).toBeUndefined();
+  });
+
+  it("reads the body without frontmatter", () => {
+    const path = join(dir, "status.md");
+    writeFileSync(path, "---\ndate: 2026-09-20\n---\n\nDue cose oggi.\n");
+    const view = storeFor(path).statusFile()!;
+    expect(view.body).toBe("Due cose oggi.");
+    expect(view.path).toBe(path);
+    expect(view.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(view.missing).toBeUndefined();
+  });
+
+  it("reports a configured file that isn't there, instead of throwing", () => {
+    const path = join(dir, "never-written.md");
+    const view = storeFor(path).statusFile()!;
+    expect(view.missing).toBe(path);
+    expect(view.body).toBeUndefined();
+    expect(view.updatedAt).toBeUndefined();
+  });
+
+  it("reads an empty file as an empty body, not as missing", () => {
+    const path = join(dir, "empty.md");
+    writeFileSync(path, "");
+    const view = storeFor(path).statusFile()!;
+    expect(view.body).toBe("");
+    expect(view.missing).toBeUndefined();
+  });
+
+  it("cuts a file too large to be prose", () => {
+    const path = join(dir, "huge.md");
+    writeFileSync(path, "x".repeat(STATUS_FILE_MAX_BYTES + 5_000));
+    const view = storeFor(path).statusFile()!;
+    expect(view.truncated).toBe(true);
+    expect(view.body!.length).toBe(STATUS_FILE_MAX_BYTES);
   });
 });

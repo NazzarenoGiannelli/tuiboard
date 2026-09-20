@@ -60,6 +60,13 @@ export interface Config {
    */
   resumeShell: "auto" | Shell;
   /**
+   * A markdown file to read from inside tuiboard with `i` (config
+   * `status_file`) — a morning digest, a handover note, whatever is written
+   * there. Read-only and never parsed: tuiboard shows it, nothing else.
+   * Unset means the key does nothing.
+   */
+  statusFilePath?: string;
+  /**
    * Agent status glyphs (config `status_indicators`): `symbols` (default —
    * the same × ◐ ✓ ○ · herdr uses) or `dots` (● ○ ·).
    */
@@ -223,6 +230,7 @@ interface RawConfig {
   resume_terminal: string;
   resume_shell: string;
   status_indicators: string;
+  status_file: string;
   copy_resume_command: string;
   calendars: {
     google?: {
@@ -374,6 +382,10 @@ function normalize(raw: Partial<RawConfig>, root: string, loaded: boolean): Conf
     resumeShell: (SHELLS as readonly string[]).includes(raw.resume_shell ?? "")
       ? (raw.resume_shell as Shell)
       : "auto",
+    statusFilePath:
+      typeof raw.status_file === "string" && raw.status_file.trim()
+        ? expandPath(raw.status_file.trim(), root)
+        : undefined,
     statusIndicators: raw.status_indicators === "dots" ? "dots" : "symbols",
     copyResumeCommand:
       typeof raw.copy_resume_command === "string" &&

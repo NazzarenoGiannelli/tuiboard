@@ -118,6 +118,11 @@ export function handleKey(
       store.closeModal();
       return;
     }
+    // The status file closes on its own key too, like `o` closes the detail.
+    if (ui.modal.kind === "status-file" && key.name === "i") {
+      store.closeModal();
+      return;
+    }
     // Help modal: j/k (or arrows) scroll its keyboard reference.
     if (ui.modal.kind === "help") {
       if (key.name === "j" || key.name === "down") { store.setHelpScroll(ui.helpScroll + 1); return; }
@@ -271,6 +276,14 @@ export function handleKey(
   // restarting. Shift+R is ignored here so it stays free for future use.
   if (key.name === "r" && !key.ctrl && !key.shift) {
     store.refreshAll();
+    return;
+  }
+
+  // The status file: a markdown file read once in a while (a morning digest,
+  // a handover note), shown in a dialog. `i` for "info"; `u` and `w` were the
+  // other free letters, both easier to misread as undo / write.
+  if (key.name === "i") {
+    store.openModal({ kind: "status-file" });
     return;
   }
 

@@ -12,7 +12,7 @@
  * dashboard shows — the parser stays the single source of truth.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 
 import { isHiddenColumn, loadConfig } from "~/config/loader";
 import { isTask, parseBoard } from "~/parser/markdown";
@@ -92,6 +92,22 @@ export interface Summary {
    * widget and the dashboard can never disagree about what is due.
    */
   planner: Record<PlannerSection, PlannerEntry[]>;
+  /**
+   * The configured status file, when there is one: mtime only, never the
+   * body. A bar widget wants to know *that* it changed — laying out a page of
+   * prose is the TUI's job. Absent when unconfigured, so every existing
+   * consumer sees the shape it already knows.
+   */
+  statusFile?: { path: string; updatedAt: string | null };
+}
+
+/** A file's mtime as ISO, or null when it isn't there. */
+function statMtimeIso(path: string): string | null {
+  try {
+    return new Date(statSync(path).mtimeMs).toISOString();
+  } catch {
+    return null;
+  }
 }
 
 /** Local calendar date as YYYY-MM-DD — never UTC, or "today" flips at the wrong hour. */
@@ -253,7 +269,22 @@ export function buildSummary(options: { next?: number; today?: string } = {}): S
     });
   }
 
-  return { generatedAt: new Date().toISOString(), totals, boards, planner };
+  const statusFile = config.statusFilePath
+    ? {
+        path: config.statusFilePath,
+        // null, not absent: configured but not written yet is a state a widget
+        // may want to show, and it differs from "no status file at all".
+        updatedAt: statMtimeIso(config.statusFilePath),
+      }
+    : undefined;
+
+  return {
+    generatedAt: new Date().toISOString(),
+    totals,
+    boards,
+    planner,
+    ...(statusFile ? { statusFile } : {}),
+  };
 }
 
 export async function runSummary(argv: readonly string[]): Promise<number> {

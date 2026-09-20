@@ -18,7 +18,7 @@
  *   4. Schedule a debounced write to disk (writer + watcher self-mark).
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createMemo } from "solid-js";
@@ -106,6 +106,7 @@ export type ModalKind =
   | { kind: "confirm-delete-event" }
   | { kind: "search" }
   | { kind: "board-new" }
+  | { kind: "status-file" }
   | { kind: "help" };
 
 /**
@@ -141,6 +142,24 @@ export interface BoardNew {
 }
 
 /** What the detail view needs to show a task's note, or to explain its absence. */
+/** The configured status file, as the modal shows it. */
+export interface StatusFileView {
+  /** Path as configured, for the dialog subtitle. */
+  path: string;
+  body?: string;
+  /** Last write, ISO — undefined when the file isn't there. */
+  updatedAt?: string;
+  /** The configured path doesn't exist. */
+  missing?: string;
+  /** It exists but couldn't be read. */
+  error?: string;
+  /** Shown truncated: bigger than STATUS_FILE_MAX_BYTES. */
+  truncated?: boolean;
+}
+
+/** A status file is prose, not a database: past this it's shown cut. */
+export const STATUS_FILE_MAX_BYTES = 64 * 1024;
+
 export interface TaskNoteView {
   path?: string;
   body?: string;
@@ -276,6 +295,8 @@ export interface UIState {
    * the upper bound (it knows the block count) and scrolls that block into view.
    */
   helpScroll: number;
+  /** Bumped when the status file changes on disk, so an open modal re-reads. */
+  statusFileRev: number;
   view: ViewMode;
   /**
    * Tasks marked for bulk ops (`Space`). Key format:
@@ -377,6 +398,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       armMode: false,
       agendaOffset: 0,
       helpScroll: 0,
+      statusFileRev: 0,
       view: "kanban",
       marked: {},
       filter: "all",
@@ -390,9 +412,12 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   // Last content tuiboard itself wrote per board path — used by the watcher's
   // self-write guard to ignore our own writes echoed back by the OS / sync.
   const lastWrittenContent = new Map<string, string>();
-  const watcher: BoardWatcher = createBoardWatcher(
-    initialBoards.map((b) => b.board.filepath),
-  );
+  const watcher: BoardWatcher = createBoardWatcher([
+    ...initialBoards.map((b) => b.board.filepath),
+    // Watched from the start, even when it doesn't exist yet: chokidar picks
+    // up a file created later as long as its directory exists (verified).
+    ...(config.statusFilePath ? [config.statusFilePath] : []),
+  ]);
 
   // Agents store has its own lifecycle (chokidar watcher on each agent CLI's
   // session dirs). Shared dispose() boundary below so SIGINT cleans both. When
@@ -407,6 +432,12 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     ? createCalendarStore(config.calendars, isoToday)
     : noopCalendarStore();
   watcher.onChange((filepath) => {
+    // The status file is not a board: nothing to parse, just tell an open
+    // modal to read it again.
+    if (config.statusFilePath && filepath === config.statusFilePath) {
+      setState("ui", "statusFileRev", (n: number) => n + 1);
+      return;
+    }
     // External edit. Re-read this board from disk.
     try {
       const content = readFileSync(filepath, "utf-8");
@@ -1432,6 +1463,37 @@ export function createTuiStore({ config }: CreateStoreOptions) {
    * from, or why it could not be read. `undefined` means the task has no note —
    * which is most tasks, and must produce no message at all.
    */
+  /**
+   * The configured status file, read fresh. No parsing and no caching: it is
+   * read when the modal opens and again whenever the watcher says it changed,
+   * which is rare enough that a cache would only be a way to show stale text.
+   */
+  function statusFile(): StatusFileView | undefined {
+    const path = config.statusFilePath;
+    if (!path) return undefined;
+    let size: number;
+    let mtimeMs: number;
+    try {
+      const st = statSync(path);
+      size = st.size;
+      mtimeMs = st.mtimeMs;
+    } catch {
+      return { path, missing: path };
+    }
+    try {
+      const body = readNoteBody(path);
+      const truncated = size > STATUS_FILE_MAX_BYTES;
+      return {
+        path,
+        updatedAt: new Date(mtimeMs).toISOString(),
+        body: truncated ? body.slice(0, STATUS_FILE_MAX_BYTES) : body,
+        ...(truncated ? { truncated: true } : {}),
+      };
+    } catch (e) {
+      return { path, updatedAt: new Date(mtimeMs).toISOString(), error: (e as Error).message };
+    }
+  }
+
   function taskNote(ref: TaskRef): TaskNoteView | undefined {
     const task = getTask(ref);
     if (!task?.note) return undefined;
@@ -1815,6 +1877,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     moveTaskWithinBoard,
     // notes
     taskNote,
+    statusFile,
     // boards
     addBoard,
     openBoardNew,

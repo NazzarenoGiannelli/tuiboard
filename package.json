@@ -1,6 +1,6 @@
 {
   "name": "tuiboard",
-  "version": "0.13.3",
+  "version": "0.14.0",
   "description": "Terminal kanban for markdown task boards, with optional Today/Tomorrow planner, 24h agenda + calendar overlay, and a live view of your coding-agent sessions (Claude Code, Codex, OpenCode, Pi). Use only the panels you want.",
   "type": "module",
   "license": "MIT",

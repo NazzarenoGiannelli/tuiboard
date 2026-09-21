@@ -204,6 +204,38 @@ describe("tuiboard task — resolving --board", () => {
   });
 });
 
+describe("tuiboard summary — status file", () => {
+  it("says nothing when no status file is configured", () => {
+    expect(buildSummary().statusFile).toBeUndefined();
+  });
+
+  it("reports the path and mtime when configured, never the body", () => {
+    const status = join(dir, "status.md");
+    writeFileSync(status, "# Digest\n\nqualcosa", "utf-8");
+    writeFileSync(
+      configPath,
+      `boards:\n  - path: ${boardPath}\n    name: Test\nstatus_file: ${status}\n`,
+      "utf-8",
+    );
+    const summary = buildSummary();
+    expect(summary.statusFile).toEqual({
+      path: status,
+      updatedAt: new Date(statMtime(status)).toISOString(),
+    });
+    expect(JSON.stringify(summary)).not.toContain("qualcosa");
+  });
+
+  it("reports updatedAt: null when it's configured but not written yet", () => {
+    const status = join(dir, "not-yet.md");
+    writeFileSync(
+      configPath,
+      `boards:\n  - path: ${boardPath}\n    name: Test\nstatus_file: ${status}\n`,
+      "utf-8",
+    );
+    expect(buildSummary().statusFile).toEqual({ path: status, updatedAt: null });
+  });
+});
+
 describe("tuiboard summary — planner entries", () => {
   // The planner buckets against the system clock — `buildSummary({ today })`
   // steers the totals but not `buildPlannerItems()` — so this board is dated

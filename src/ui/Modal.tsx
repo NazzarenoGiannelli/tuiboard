@@ -22,9 +22,10 @@ import {
 import { ATTR, T, cellWidth } from "~/ui/glyphs";
 import { AGENDA_WIDTH } from "~/ui/layout";
 import { formatHm } from "~/store/timeline";
-import { HARNESS } from "~/store/agents";
+import { HARNESS, formatAge } from "~/store/agents";
 import { HARNESS_COLOR } from "~/ui/AgentRow";
 import { herdrPlace } from "~/store/herdr";
+import { markdownLines, type MdLine, type MdStyle } from "~/ui/markdown-lines";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
 
@@ -68,6 +69,7 @@ function ModalRouter(props: { store: TuiStore; modal: NonNullable<TuiStore["stat
     case "confirm-delete-event": return <ConfirmDeleteEventModal store={props.store} />;
     case "search":   return <SearchModal store={props.store} />;
     case "board-new": return <BoardNewModal store={props.store} />;
+    case "status-file": return <StatusFileModal store={props.store} />;
     case "help":     return <HelpModal store={props.store} />;
   }
 }
@@ -258,7 +260,7 @@ function DialogShell(props: DialogShellProps) {
     >
       {props.children}
       <Show when={props.hint}>
-        <text>
+        <text style={{ flexShrink: 0 }}>
           <span style={{ fg: T.textDim }}>{props.hint}</span>
         </text>
       </Show>
@@ -837,6 +839,145 @@ function DetailModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiSto
   );
 }
 
+/**
+ * The configured status file (`status_file`), shown and nothing else: no
+ * writing, and no parsing beyond the light markdown rendering of
+ * markdown-lines.ts — markers become colour and weight, link targets go away.
+ * Same shape as a task's note — a dialog with a scrollable body — because
+ * from tuiboard's side it is the same object.
+ */
+/** "updated now" / "updated 5m ago" — same vocabulary the agents rows use. */
+function updatedLabel(iso: string): string {
+  const age = formatAge(Date.parse(iso), Date.now());
+  return age === "now" ? "updated just now" : `updated ${age} ago`;
+}
+
+const MD_SPAN: Record<MdStyle, { fg: string | undefined; attributes?: number }> = {
+  text:     { fg: T.text },
+  bold:     { fg: T.text, attributes: ATTR.bold },
+  italic:   { fg: T.text, attributes: ATTR.italic },
+  code:     { fg: T.tag },
+  link:     { fg: T.accent },
+  wikilink: { fg: T.accent },
+  dim:      { fg: T.textDim },
+};
+
+/** One markdown line as a word-wrapped row; blank lines keep their height. */
+function MarkdownLine(props: { line: MdLine }) {
+  const l = () => props.line;
+  const heading = () => l().kind === "heading";
+  const spanStyle = (style: MdStyle) =>
+    heading()
+      ? { fg: l().level! <= 2 ? T.accent : T.warm, attributes: ATTR.bold }
+      : l().kind === "quote" && style === "text"
+        ? MD_SPAN.dim
+        : MD_SPAN[style];
+  return (
+    <Show when={l().kind !== "blank"} fallback={<box style={{ height: 1 }} />}>
+      <Show
+        when={l().kind !== "rule"}
+        fallback={
+          <text wrapMode="none">
+            <span style={{ fg: T.textDim }}>{"─".repeat(40)}</span>
+          </text>
+        }
+      >
+        <text wrapMode="word">
+          <Show when={l().prefix}>
+            <span style={{ fg: T.textDim }}>{l().prefix}</span>
+          </Show>
+          <For each={l().spans}>
+            {(s) => <span style={spanStyle(s.style)}>{s.text}</span>}
+          </For>
+        </text>
+      </Show>
+    </Show>
+  );
+}
+
+/** The bits of OpenTUI's <scrollbox> the status file needs. */
+interface ScrollTopLike {
+  scrollTop: number;
+}
+
+function StatusFileModal(props: { store: TuiStore }) {
+  let scroller: ScrollTopLike | undefined;
+  // j/k drive `ui.statusScroll`; the scrollbox clamps it to what it can
+  // show, and the clamped value is written back so `k` answers at once after
+  // overshooting the end.
+  createEffect(() => {
+    const want = props.store.state.ui.statusScroll;
+    if (!scroller) return;
+    scroller.scrollTop = want;
+    if (scroller.scrollTop !== want) props.store.setStatusScroll(scroller.scrollTop);
+  });
+  const view = createMemo(() => {
+    props.store.state.ui.statusFileRev; // re-read when the file changes on disk
+    return props.store.statusFile();
+  });
+  return (
+    <Show
+      when={view()}
+      fallback={
+        <DialogShell title="Status file" hint="Esc to close" width={70}>
+          <text wrapMode="word">
+            <span style={{ fg: T.textDim }}>
+              No status file configured. Set `status_file:` in your config to the markdown
+              file you want to read here.
+            </span>
+          </text>
+        </DialogShell>
+      }
+    >
+      {(v: () => NonNullable<ReturnType<typeof view>>) => (
+        <DialogShell title="Status file" hint="j/k scroll · Esc/i to close" width={90}>
+          <text wrapMode="word">
+            <span style={{ fg: T.tag }}>{v().path}</span>
+            <Show when={v().updatedAt}>
+              <span style={{ fg: T.textDim }}>{"  " + updatedLabel(v().updatedAt!)}</span>
+            </Show>
+          </text>
+          <Show when={v().missing}>
+            <box style={{ height: 1 }} />
+            <text wrapMode="word">
+              <span style={{ fg: T.overdue }}>{"File not found: " + v().missing}</span>
+            </text>
+          </Show>
+          <Show when={v().error}>
+            <box style={{ height: 1 }} />
+            <text wrapMode="word">
+              <span style={{ fg: T.overdue }}>{"File unreadable: " + v().error}</span>
+            </text>
+          </Show>
+          <Show when={v().body !== undefined}>
+            <box style={{ height: 1 }} />
+            <scrollbox
+              ref={(r: ScrollTopLike) => (scroller = r)}
+              style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0 }}
+            >
+              <Show
+                when={v().body !== ""}
+                fallback={
+                  <text wrapMode="word">
+                    <span style={{ fg: T.textDim }}>(the status file is empty)</span>
+                  </text>
+                }
+              >
+                <For each={markdownLines(v().body!)}>{(line) => <MarkdownLine line={line} />}</For>
+              </Show>
+            </scrollbox>
+            <Show when={v().truncated}>
+              <text wrapMode="word">
+                <span style={{ fg: T.textDim }}>… shown truncated (the file is large)</span>
+              </text>
+            </Show>
+          </Show>
+        </DialogShell>
+      )}
+    </Show>
+  );
+}
+
 // ─── Search ──────────────────────────────────────────────────────────────────
 
 function SearchModal(props: { store: TuiStore }) {
@@ -1173,6 +1314,7 @@ const HELP_SECTIONS: HelpSection[] = [
     title: "Global",
     rows: [
       ["Ctrl-Z", "Undo last mutation"],
+      ["i", "Status file (the markdown file set as `status_file`)"],
       ["?", "This help"],
       ["q · Ctrl-C", "Quit"],
     ],

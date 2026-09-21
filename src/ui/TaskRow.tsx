@@ -14,6 +14,12 @@ import { Show, createMemo } from "solid-js";
 
 import { PRIORITY_COLOR, PRIORITY_GLYPH, T, cellWidth, fmtMin } from "~/ui/glyphs";
 import { isoToday, isoTomorrow } from "~/store/index";
+import {
+  statusOf,
+  suffixColorFor,
+  titleColorFor,
+  type TaskStatus,
+} from "~/ui/task-status";
 import type { Task } from "~/types";
 
 interface TaskRowProps {
@@ -149,40 +155,6 @@ export function TaskRow(props: TaskRowProps) {
   );
 }
 
-type TaskStatus =
-  | "done"
-  | "overdue"
-  | "today"
-  | "tomorrow"
-  | "future"
-  | "unscheduled";
-
-function statusOf(t: Task): TaskStatus {
-  if (t.done) return "done";
-  const d = t.scheduled ?? t.due;
-  if (!d) return "unscheduled";
-  if (d < isoToday()) return "overdue";
-  if (d === isoToday()) return "today";
-  if (d === isoTomorrow()) return "tomorrow";
-  return "future";
-}
-
-function titleColorFor(task: Task, status: TaskStatus): string | undefined {
-  // Precedence: done (green) > overdue (red) > priority (orange) > today
-  // (pale yellow) > tomorrow (grey) > default. The orange now *means*
-  // "priority flag" — only tasks with a priority get it; everything scheduled
-  // today is the calm pale yellow instead.
-  if (status === "done") return T.done;
-  if (status === "overdue") return T.overdue;
-  // Tomorrow is uniformly grey — even priority tasks — so everything set for
-  // tomorrow reads consistently as "later, de-emphasized".
-  if (status === "tomorrow") return T.textDim;
-  if (task.priority !== "none") return T.today;
-  if (status === "today") return T.todayPale;
-  // future / unscheduled: terminal default fg (looks right on any theme).
-  return T.text;
-}
-
 /**
  * Build the compact right-side suffix shown on a task row.
  *
@@ -209,16 +181,6 @@ function buildSuffix(task: Task, hideDate?: boolean): string | undefined {
   }
   if (parts.length === 0) return undefined;
   return parts.join(" ");
-}
-
-function suffixColorFor(task: Task, status: TaskStatus): string | undefined {
-  if (status === "done") return T.textDone;
-  if (status === "overdue") return T.overdue;
-  if (status === "today") return T.todayPale;
-  if (status === "tomorrow") return T.textDim;
-  if (status === "future") return T.scheduled;
-  return T.textDim;
-  void task;
 }
 
 /**

@@ -74,6 +74,9 @@ export const T = {
 
   // Status-based row colors — kept clearly distinct in hue + brightness
   overdue: "#e26a6a",        // hue 0°, sat 65%, light 65% — clearly red
+  // Same hue, turned up: a task that has been late for days reads louder than
+  // one that slipped yesterday, without introducing a second meaning.
+  overdueHeavy: "#ff5555",   // hue 0°, sat 100%, light 67%
   today: "#e8a05c",          // warm orange — now the PRIORITY accent (flagged tasks)
   // Today/Tomorrow identity + today-scheduled task titles: a soft pale yellow.
   todayPale: "#eaf6ad",      // bright, calm — the Today/Tomorrow zone accent

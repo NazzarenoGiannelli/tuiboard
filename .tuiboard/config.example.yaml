@@ -95,6 +95,12 @@ archive_column: Archive
 # Nushell users typically want `;` instead of `&&`:
 # copy_resume_command: 'cd "{cwd}"; {resume}'
 
+# Optional: a markdown file to read from inside tuiboard with `i` — a morning
+# digest, a handover note, whatever you (or an agent) write there. Shown as it
+# is: never parsed, never written to. Relative paths resolve against this file,
+# `~` works. tuiboard picks up changes while the dialog is open.
+# status_file: ~/vault/Home.md
+
 # Optional: overlay read-only calendar events on the Agenda (the 24h timeline).
 # Connect a provider with `tuiboard calendar-setup google` / `... microsoft`,
 # which opens the auth flow and prints the exact block to paste here. Bring your

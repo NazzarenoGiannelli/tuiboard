@@ -7,15 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-21
+
 ### Added
 - **Status file viewer** (#67): point `status_file:` at a markdown file — a
   morning digest, a handover note, whatever you or an agent write there — and
-  `i` shows it in a dialog, read-only, never parsed. It re-reads itself while
-  open when the file changes, and `tuiboard summary` reports its path and
-  mtime (never its body) when configured.
+  `i` shows it in a dialog, read-only. The markdown is rendered rather than
+  shown as source: headings and bold as weight, links and wikilinks by their
+  label, list and checkbox glyphs, frontmatter hidden. `j`/`k`, arrows and
+  PgUp/PgDn scroll it. It re-reads itself while open when the file changes,
+  and `tuiboard summary` reports its path and mtime (never its body) when
+  configured.
 - **Overdue tasks show how late they are** (#67): a task overdue for days is
   painted in a louder red than one that slipped yesterday. No day count
   anywhere — just two bands.
+- **Agent interface documentation** (#69): `docs/agent-interface.md` spells
+  out `tuiboard summary` and `tuiboard task` as a stable contract for agents
+  and scripts — the JSON shape, title matching, exit codes and the rules that
+  keep an agent from corrupting a board.
+
+### Changed
+- **Time blocking in arm mode takes fewer round trips** (#73). A task placed
+  on the agenda stays armed, so `+`/`-` and `j`/`k` size and move it straight
+  away. `Enter` keeps it and returns to where `c` was pressed (usually
+  Today/Tomorrow — in single-pane, without passing through the agents panel);
+  `Esc` puts the task back as it was and returns the same way.
+
+### Fixed
+- **Keypad `+` grows an armed time block** (#71) instead of opening the "new
+  board" dialog.
+- Arming a second task no longer rewrites the first task's reference in place
+  (#73), a latent bug surfaced by the new arm-mode tests.
 
 ## [0.13.3] - 2026-09-19
 
@@ -522,6 +544,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.14.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.0
 [0.13.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.3
 [0.13.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.2
 [0.13.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.1

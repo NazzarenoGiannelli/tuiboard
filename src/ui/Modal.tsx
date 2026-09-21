@@ -25,6 +25,7 @@ import { formatHm } from "~/store/timeline";
 import { HARNESS, formatAge } from "~/store/agents";
 import { HARNESS_COLOR } from "~/ui/AgentRow";
 import { herdrPlace } from "~/store/herdr";
+import { markdownLines, type MdLine, type MdStyle } from "~/ui/markdown-lines";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
 
@@ -259,7 +260,7 @@ function DialogShell(props: DialogShellProps) {
     >
       {props.children}
       <Show when={props.hint}>
-        <text>
+        <text style={{ flexShrink: 0 }}>
           <span style={{ fg: T.textDim }}>{props.hint}</span>
         </text>
       </Show>
@@ -840,8 +841,10 @@ function DetailModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiSto
 
 /**
  * The configured status file (`status_file`), shown and nothing else: no
- * parsing, no writing. Same shape as a task's note — a dialog with a
- * scrollable body — because from tuiboard's side it is the same object.
+ * writing, and no parsing beyond the light markdown rendering of
+ * markdown-lines.ts — markers become colour and weight, link targets go away.
+ * Same shape as a task's note — a dialog with a scrollable body — because
+ * from tuiboard's side it is the same object.
  */
 /** "updated now" / "updated 5m ago" — same vocabulary the agents rows use. */
 function updatedLabel(iso: string): string {
@@ -849,7 +852,65 @@ function updatedLabel(iso: string): string {
   return age === "now" ? "updated just now" : `updated ${age} ago`;
 }
 
+const MD_SPAN: Record<MdStyle, { fg: string | undefined; attributes?: number }> = {
+  text:     { fg: T.text },
+  bold:     { fg: T.text, attributes: ATTR.bold },
+  italic:   { fg: T.text, attributes: ATTR.italic },
+  code:     { fg: T.tag },
+  link:     { fg: T.accent },
+  wikilink: { fg: T.accent },
+  dim:      { fg: T.textDim },
+};
+
+/** One markdown line as a word-wrapped row; blank lines keep their height. */
+function MarkdownLine(props: { line: MdLine }) {
+  const l = () => props.line;
+  const heading = () => l().kind === "heading";
+  const spanStyle = (style: MdStyle) =>
+    heading()
+      ? { fg: l().level! <= 2 ? T.accent : T.warm, attributes: ATTR.bold }
+      : l().kind === "quote" && style === "text"
+        ? MD_SPAN.dim
+        : MD_SPAN[style];
+  return (
+    <Show when={l().kind !== "blank"} fallback={<box style={{ height: 1 }} />}>
+      <Show
+        when={l().kind !== "rule"}
+        fallback={
+          <text wrapMode="none">
+            <span style={{ fg: T.textDim }}>{"─".repeat(40)}</span>
+          </text>
+        }
+      >
+        <text wrapMode="word">
+          <Show when={l().prefix}>
+            <span style={{ fg: T.textDim }}>{l().prefix}</span>
+          </Show>
+          <For each={l().spans}>
+            {(s) => <span style={spanStyle(s.style)}>{s.text}</span>}
+          </For>
+        </text>
+      </Show>
+    </Show>
+  );
+}
+
+/** The bits of OpenTUI's <scrollbox> the status file needs. */
+interface ScrollTopLike {
+  scrollTop: number;
+}
+
 function StatusFileModal(props: { store: TuiStore }) {
+  let scroller: ScrollTopLike | undefined;
+  // j/k drive `ui.statusScroll`; the scrollbox clamps it to what it can
+  // show, and the clamped value is written back so `k` answers at once after
+  // overshooting the end.
+  createEffect(() => {
+    const want = props.store.state.ui.statusScroll;
+    if (!scroller) return;
+    scroller.scrollTop = want;
+    if (scroller.scrollTop !== want) props.store.setStatusScroll(scroller.scrollTop);
+  });
   const view = createMemo(() => {
     props.store.state.ui.statusFileRev; // re-read when the file changes on disk
     return props.store.statusFile();
@@ -890,12 +951,20 @@ function StatusFileModal(props: { store: TuiStore }) {
           </Show>
           <Show when={v().body !== undefined}>
             <box style={{ height: 1 }} />
-            <scrollbox style={{ flexGrow: 1, minHeight: 0 }}>
-              <text wrapMode="word">
-                <span style={{ fg: T.text }}>
-                  {v().body === "" ? "(the status file is empty)" : v().body}
-                </span>
-              </text>
+            <scrollbox
+              ref={(r: ScrollTopLike) => (scroller = r)}
+              style={{ flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0 }}
+            >
+              <Show
+                when={v().body !== ""}
+                fallback={
+                  <text wrapMode="word">
+                    <span style={{ fg: T.textDim }}>(the status file is empty)</span>
+                  </text>
+                }
+              >
+                <For each={markdownLines(v().body!)}>{(line) => <MarkdownLine line={line} />}</For>
+              </Show>
             </scrollbox>
             <Show when={v().truncated}>
               <text wrapMode="word">

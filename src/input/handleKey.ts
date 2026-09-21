@@ -119,8 +119,14 @@ export function handleKey(
       return;
     }
     // The status file closes on its own key too, like `o` closes the detail.
-    if (ui.modal.kind === "status-file" && key.name === "i") {
-      store.closeModal();
+    if (ui.modal.kind === "status-file") {
+      if (key.name === "i") { store.closeModal(); return; }
+      const step =
+        key.name === "j" || key.name === "down" ? 1 :
+        key.name === "k" || key.name === "up" ? -1 :
+        key.name === "pagedown" || key.name === "space" ? 10 :
+        key.name === "pageup" ? -10 : 0;
+      if (step) store.setStatusScroll(ui.statusScroll + step);
       return;
     }
     // Help modal: j/k (or arrows) scroll its keyboard reference.

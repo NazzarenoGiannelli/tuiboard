@@ -315,6 +315,16 @@ describe("UI helpScroll", () => {
     store.openModal({ kind: "help" });
     expect(store.state.ui.helpScroll).toBe(0);
   });
+
+  it("the status file scrolls from the top each time it opens", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    store.setStatusScroll(-2);
+    expect(store.state.ui.statusScroll).toBe(0);
+    store.setStatusScroll(12);
+    expect(store.state.ui.statusScroll).toBe(12);
+    store.openModal({ kind: "status-file" });
+    expect(store.state.ui.statusScroll).toBe(0);
+  });
 });
 
 describe("Agents harness filter", () => {

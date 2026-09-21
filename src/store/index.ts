@@ -297,6 +297,8 @@ export interface UIState {
   helpScroll: number;
   /** Bumped when the status file changes on disk, so an open modal re-reads. */
   statusFileRev: number;
+  /** Status-file modal scroll, in rows. The modal clamps the upper bound. */
+  statusScroll: number;
   view: ViewMode;
   /**
    * Tasks marked for bulk ops (`Space`). Key format:
@@ -399,6 +401,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       agendaOffset: 0,
       helpScroll: 0,
       statusFileRev: 0,
+      statusScroll: 0,
       view: "kanban",
       marked: {},
       filter: "all",
@@ -1665,6 +1668,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   function openModal(m: ModalKind): void {
     // Help always opens scrolled to the top.
     if (m.kind === "help") setState("ui", "helpScroll", 0);
+    if (m.kind === "status-file") setState("ui", "statusScroll", 0);
     setState("ui", "modal", m);
   }
 
@@ -1726,6 +1730,11 @@ export function createTuiStore({ config }: CreateStoreOptions) {
    *  HelpModal component enforces the upper bound against its block count). */
   function setHelpScroll(n: number): void {
     setState("ui", "helpScroll", Math.max(0, n));
+  }
+  /** Scroll the status file (rows, lower-clamped at 0; StatusFileModal writes
+   *  back the upper bound once it knows how tall the file renders). */
+  function setStatusScroll(n: number): void {
+    setState("ui", "statusScroll", Math.max(0, n));
   }
 
   /** Move the step-2 calendar selection (wraps). */
@@ -1925,6 +1934,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     openEventModal,
     advanceEventToStep2,
     setHelpScroll,
+    setStatusScroll,
     setEventSel,
     confirmEventPicker,
     selectCalEvent,

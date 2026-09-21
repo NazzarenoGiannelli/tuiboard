@@ -20,7 +20,8 @@
  *   Enter                → bounce kanban cursor to the underlying task
  *   j/k while armed      → nudge armed block ±15 min (move)
  *   +/- while armed      → resize armed block end ±15 min
- *   Esc                  → disarm
+ *   Enter while armed    → keep, leave arm mode, back to where `c` started
+ *   Esc while armed      → undo the placement, then the same way back
  *
  * Each timeline row is exactly 1 terminal line tall, so row index maps
  * 1:1 to MINS_PER_ROW (15) minute offsets from DAY_START_HOUR.
@@ -258,7 +259,7 @@ export function TimelineView(props: TimelineViewProps) {
       props.store.armTimeline(entry.ref);
       props.store.flashBanner(
         "info",
-        `Armed ⌚${formatHm(entry.startMin)}-${formatHm(entry.endMin)} · click empty row to move, shift+click to resize, Esc to cancel`,
+        `Armed ⌚${formatHm(entry.startMin)}-${formatHm(entry.endMin)} · click a row to move, shift+click to resize · Enter done · Esc cancel`,
       );
     }
   };
@@ -298,11 +299,10 @@ export function TimelineView(props: TimelineViewProps) {
       props.store.setTimeBlock(ref, { startMin, endMin });
       props.store.flashBanner(
         "info",
-        `⌚ Scheduled → ${formatHm(startMin)}-${formatHm(endMin)}`,
+        `⌚ ${formatHm(startMin)}-${formatHm(endMin)} · +/- length · j/k move · Enter done · Esc cancel`,
       );
-      // Auto-disarm: the task now has a block and will appear as a band;
-      // the user can re-click on that band to keep adjusting.
-      props.store.armTimeline(undefined);
+      // Stays armed (#73): the default length is rarely the right one, so
+      // +/- and j/k apply straight away, without re-clicking the band.
       return;
     }
 
@@ -361,7 +361,7 @@ export function TimelineView(props: TimelineViewProps) {
             {"◉ ARM MODE "}
           </span>
           <span style={{ fg: T.textDim }}>
-            {"click a task → click a slot · Esc to exit"}
+            {"click a task → click a slot · Enter done · Esc cancel"}
           </span>
         </text>
       </Show>
@@ -376,7 +376,7 @@ export function TimelineView(props: TimelineViewProps) {
           <span style={{ fg: T.textDim }}>
             {armedIsUnscheduled()
               ? "  click row to place · Esc to cancel"
-              : "  click row to move · shift+click to resize · Esc"}
+              : "  +/- length · j/k move · Enter done · Esc cancel"}
           </span>
         </text>
       </Show>

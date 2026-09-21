@@ -32,6 +32,7 @@ import { isTask } from "~/parser/markdown";
 import {
   isoToday,
   isoTomorrow,
+  type ArmOrigin,
   type ModalKind,
   type TaskRef,
   type TuiStore,
@@ -147,10 +148,11 @@ export function handleKey(
   // disruptive first.
   if (key.name === "escape") {
     if (ui.armMode || ui.armedTimelineRef) {
-      const wasMode = ui.armMode;
-      store.setArmMode(false);
-      store.armTimeline(undefined);
-      store.flashBanner("info", wasMode ? "Arm mode off" : "Disarmed");
+      // Cancel: the armed task goes back to how it was, the cursor to where
+      // `c` was pressed (#73).
+      const hadTask = !!ui.armedTimelineRef;
+      restoreArmOrigin(store, store.leaveArmMode(false), plannerCount);
+      store.flashBanner("info", hadTask ? "Cancelled" : "Arm mode off");
       return;
     }
     if (ui.selectedCalEvent) {
@@ -322,7 +324,7 @@ export function handleKey(
   }
 
   if (ui.activeZone === "timeline") {
-    handleTimelineZone(store, key, openLater);
+    handleTimelineZone(store, key, plannerCount, openLater);
     return;
   }
 
@@ -375,9 +377,22 @@ function handlePlannerZone(
   }
 }
 
+/** Put the cursor back where `c` started arm mode. */
+function restoreArmOrigin(store: TuiStore, origin: ArmOrigin | undefined, plannerCount = Infinity): boolean {
+  if (!origin) return false;
+  if (origin.boardIndex !== store.state.ui.activeBoardIndex) store.setActiveBoard(origin.boardIndex);
+  store.setActiveZone(origin.zone);
+  // Placing a task can reorder the planner (it joins the time-blocked
+  // bucket); the row stays, clamped to what's there.
+  const row = origin.zone === "planner" ? Math.min(origin.row, Math.max(0, plannerCount - 1)) : origin.row;
+  store.setCursor(origin.col, row);
+  return true;
+}
+
 function handleTimelineZone(
   store: TuiStore,
   key: KeyEvent,
+  plannerCount: number,
   openLater: (m: ModalKind) => void,
 ): void {
   const ui = store.state.ui;
@@ -429,6 +444,16 @@ function handleTimelineZone(
       )
     : undefined;
 
+  // Enter confirms whatever is armed — placed or not — and goes back to where
+  // `c` started; a task armed straight from its band still jumps to its card.
+  if (armedRef && (key.name === "enter" || key.name === "return")) {
+    const origin = store.leaveArmMode(true);
+    if (!restoreArmOrigin(store, origin, plannerCount)) jumpToKanban(store, armedRef);
+    const t = store.getTask(armedRef);
+    store.flashBanner("info", t?.timeBlock ? `✓ ${fmtHm(t.timeBlock.startMin)}-${fmtHm(t.timeBlock.endMin)}` : "Arm mode off");
+    return;
+  }
+
   if (armed) {
     const NUDGE = 15; // minutes
     if (key.name === "j" || key.name === "down") {
@@ -455,12 +480,6 @@ function handleTimelineZone(
       const newEnd = Math.max(armed.startMin + 15, armed.endMin - NUDGE);
       store.setTimeBlock(armed.ref, { startMin: armed.startMin, endMin: newEnd });
       store.flashBanner("info", `↕ ${fmtHm(armed.startMin)}-${fmtHm(newEnd)}`);
-      return;
-    }
-    if (key.name === "enter" || key.name === "return") {
-      // Commit + jump to kanban + disarm.
-      store.armTimeline(undefined);
-      jumpToKanban(store, armed.ref);
       return;
     }
     // Fall through for other keys (Esc handled globally, task actions below).
@@ -786,13 +805,12 @@ function dispatchTaskAction(
   // slot, repeat. `c` again or `Esc` exits. Works from any zone.
   if (key.name === "c" && !key.shift) {
     if (store.state.ui.armMode) {
-      store.setArmMode(false);
-      store.armTimeline(undefined);
+      // `c` again keeps what was placed, like Enter.
+      restoreArmOrigin(store, store.leaveArmMode(true));
       store.flashBanner("info", "Arm mode off");
       return true;
     }
-    store.setArmMode(true);
-    store.armTimeline(ref);
+    store.startArmMode(ref);
     store.setZoneVisible("timeline", true);
     store.setActiveZone("timeline");
     const t = store.getTask(ref);

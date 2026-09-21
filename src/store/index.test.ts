@@ -334,3 +334,67 @@ describe("Agents harness filter", () => {
     expect(store.agentSessions().every((s) => s.provider === "codex")).toBe(true);
   });
 });
+
+describe("arm mode (#73)", () => {
+  const { mkdtempSync, rmSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
+  const { tmpdir } = require("node:os") as typeof import("node:os");
+  const { join } = require("node:path") as typeof import("node:path");
+
+  function withBoard(run: (store: ReturnType<typeof createTuiStore>, path: string) => void) {
+    const dir = mkdtempSync(join(tmpdir(), "tb-arm-"));
+    const path = join(dir, "board.md");
+    writeFileSync(path, "## Todo\n\n- [ ] Write the report ⏳ 2026-09-20\n- [ ] Call back\n");
+    const store = createTuiStore({ config: emptyConfig({ boards: [{ path }] }) });
+    try {
+      run(store, path);
+    } finally {
+      store.dispose();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("remembers where c was pressed and hands it back on leave", () => {
+    withBoard((store, path) => {
+      store.setActiveZone("planner");
+      store.setCursor(0, 3);
+      store.startArmMode({ boardPath: path, columnIndex: 0, taskIndex: 0 });
+      expect(store.state.ui.armMode).toBe(true);
+      store.setActiveZone("timeline");
+      expect(store.leaveArmMode(true)).toEqual({ zone: "planner", boardIndex: 0, col: 0, row: 3 });
+      expect(store.state.ui.armMode).toBe(false);
+      expect(store.state.ui.armedTimelineRef).toBeUndefined();
+      expect(store.state.ui.armOrigin).toBeUndefined();
+    });
+  });
+
+  it("confirm keeps the placement, cancel puts the task back", () => {
+    withBoard((store, path) => {
+      const ref = { boardPath: path, columnIndex: 0, taskIndex: 0 };
+      store.startArmMode(ref);
+      store.setScheduled(ref, "2026-09-21");
+      store.setTimeBlock(ref, { startMin: 600, endMin: 720 });
+      store.leaveArmMode(false);
+      expect(store.getTask(ref)!.scheduled).toBe("2026-09-20");
+      expect(store.getTask(ref)!.timeBlock).toBeUndefined();
+
+      store.startArmMode(ref);
+      store.setTimeBlock(ref, { startMin: 600, endMin: 720 });
+      store.leaveArmMode(true);
+      expect(store.getTask(ref)!.timeBlock).toEqual({ startMin: 600, endMin: 720 });
+    });
+  });
+
+  it("cancel only undoes the task that is armed now", () => {
+    withBoard((store, path) => {
+      const first = { boardPath: path, columnIndex: 0, taskIndex: 0 };
+      const second = { boardPath: path, columnIndex: 0, taskIndex: 1 };
+      store.startArmMode(first);
+      store.setTimeBlock(first, { startMin: 540, endMin: 600 });
+      store.armTimeline(second); // arm mode: clicking the next task
+      store.setTimeBlock(second, { startMin: 600, endMin: 660 });
+      store.leaveArmMode(false);
+      expect(store.getTask(first)!.timeBlock).toEqual({ startMin: 540, endMin: 600 });
+      expect(store.getTask(second)!.timeBlock).toBeUndefined();
+    });
+  });
+});

@@ -76,6 +76,14 @@ export interface TaskRef {
   taskIndex: number;
 }
 
+function sameRef(a: TaskRef, b: TaskRef): boolean {
+  return a.boardPath === b.boardPath && a.columnIndex === b.columnIndex && a.taskIndex === b.taskIndex;
+}
+
+function sameBlock(a: TimeBlock | undefined, b: TimeBlock | undefined): boolean {
+  return a?.startMin === b?.startMin && a?.endMin === b?.endMin;
+}
+
 export interface LoadedBoard {
   board: Board;
   /** mtime in ms at the moment of the last successful read or write. */
@@ -177,6 +185,14 @@ export interface SelectedCalEvent {
 export type ActiveZone = "planner" | "board" | "timeline" | "agents";
 
 /** Fixed cycling order for Shift+Tab navigation. */
+/** Where `c` was pressed, so leaving arm mode can put the cursor back. */
+export interface ArmOrigin {
+  zone: ActiveZone;
+  boardIndex: number;
+  col: number;
+  row: number;
+}
+
 const ZONE_ORDER: readonly ActiveZone[] = ["planner", "board", "timeline", "agents"];
 
 export interface UIState {
@@ -246,6 +262,8 @@ export interface UIState {
    * `armedTimelineRef`, which is the single task currently armed.
    */
   armMode: boolean;
+  /** Set when `c` starts arm mode; `Enter`/`Esc` return here (#73). */
+  armOrigin?: ArmOrigin;
   /**
    * Which day the Agenda (timeline) zone is showing, as a signed offset from
    * today (0 = today, +1 = tomorrow, -1 = yesterday). Drives both the task
@@ -1308,12 +1326,56 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "grabbing", false);
   }
 
+  /**
+   * The armed task as it was when it was armed, so `Esc` can put it back.
+   * Not UI state: nothing renders it, and it only means something while the
+   * same ref is still armed.
+   */
+  let armSnapshot: { ref: TaskRef; scheduled?: string; timeBlock?: TimeBlock } | undefined;
+
   function armTimeline(ref: TaskRef | undefined): void {
-    setState("ui", "armedTimelineRef", ref);
+    // A copy: handed an object, setState merges it into the one already
+    // stored, so arming a second task used to rewrite the first task's ref
+    // object in place — wherever a caller still held it.
+    const own = ref && { ...ref };
+    setState("ui", "armedTimelineRef", own);
+    const t = own && getTask(own);
+    armSnapshot =
+      own && t
+        ? { ref: own, scheduled: t.scheduled, timeBlock: t.timeBlock && { ...t.timeBlock } }
+        : undefined;
   }
 
   function setArmMode(on: boolean): void {
     setState("ui", "armMode", on);
+  }
+
+  /** Start arm mode from the cursor, remembering where it started. */
+  function startArmMode(ref: TaskRef): void {
+    const ui = state.ui;
+    setState("ui", "armOrigin", { zone: ui.activeZone, boardIndex: ui.activeBoardIndex, col: ui.col, row: ui.row });
+    setArmMode(true);
+    armTimeline(ref);
+  }
+
+  /**
+   * Leave arm mode. `confirm` keeps whatever was placed; otherwise the armed
+   * task goes back to how it was when armed. Returns the origin to restore,
+   * if arm mode was started with `c`.
+   */
+  function leaveArmMode(confirm: boolean): ArmOrigin | undefined {
+    const ref = state.ui.armedTimelineRef;
+    const snap = armSnapshot;
+    if (!confirm && ref && snap && sameRef(ref, snap.ref)) {
+      const t = getTask(ref);
+      if (t && !sameBlock(t.timeBlock, snap.timeBlock)) setTimeBlock(ref, snap.timeBlock);
+      if (t && t.scheduled !== snap.scheduled) setScheduled(ref, snap.scheduled);
+    }
+    const origin = state.ui.armOrigin;
+    armTimeline(undefined);
+    setArmMode(false);
+    setState("ui", "armOrigin", undefined);
+    return origin;
   }
 
   /** ISO date the Agenda is currently showing (today + offset). Reactive. */
@@ -1779,6 +1841,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     exitGrab,
     armTimeline,
     setArmMode,
+    startArmMode,
+    leaveArmMode,
     agendaDate,
     shiftAgendaDay,
     resetAgendaDay,

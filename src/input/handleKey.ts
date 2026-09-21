@@ -24,6 +24,7 @@ import {
   systemLaunchEnv,
 } from "~/input/open-session";
 import { planHerdrFocus, planHerdrResume } from "~/input/herdr-open";
+import { isMinusKey, isPlusKey } from "~/input/keys";
 import { HARNESS, type AgentSession } from "~/store/agents";
 import { herdrBin, herdrPlace } from "~/store/herdr";
 import { googleTokenCanWrite } from "~/store/calendar";
@@ -212,9 +213,10 @@ export function handleKey(
     return;
   }
 
-  // New board — the `+` chip in the top bar, and its key. Free at this level:
-  // `+` is otherwise only used inside the timeline's duration sub-mode.
-  if (key.name === "+" || key.sequence === "+" || (key.name === "=" && key.shift)) {
+  // New board — the `+` chip in the top bar, and its key. Except on the
+  // agenda with a block armed: there `+` grows the block (handleTimelineZone),
+  // and this shortcut running first used to swallow it (#71).
+  if (isPlusKey(key) && !(ui.armedTimelineRef && ui.activeZone === "timeline")) {
     store.openBoardNew();
     return;
   }
@@ -443,13 +445,13 @@ function handleTimelineZone(
       store.flashBanner("info", `✋ ${fmtHm(newStart)}-${fmtHm(newEnd)}`);
       return;
     }
-    if (key.name === "+" || key.name === "=" || key.sequence === "+") {
+    if (isPlusKey(key) || key.name === "=") {
       const newEnd = Math.min(24 * 60 - 1, armed.endMin + NUDGE);
       store.setTimeBlock(armed.ref, { startMin: armed.startMin, endMin: newEnd });
       store.flashBanner("info", `↕ ${fmtHm(armed.startMin)}-${fmtHm(newEnd)}`);
       return;
     }
-    if (key.name === "-" || key.name === "_" || key.sequence === "-") {
+    if (isMinusKey(key) || key.name === "_") {
       const newEnd = Math.max(armed.startMin + 15, armed.endMin - NUDGE);
       store.setTimeBlock(armed.ref, { startMin: armed.startMin, endMin: newEnd });
       store.flashBanner("info", `↕ ${fmtHm(armed.startMin)}-${fmtHm(newEnd)}`);

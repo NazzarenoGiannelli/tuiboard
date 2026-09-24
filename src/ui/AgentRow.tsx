@@ -71,6 +71,7 @@ export const HARNESS_COLOR: Record<AgentProvider, string> = {
   codex:         T.accent,  // blue-cyan
   opencode:      "#d27ee0", // violet-fuchsia
   pi:            "#c3d94e", // acid yellow-green
+  omp:           "#a8d94e", // slightly cooler yellow-green (omp is a Pi fork)
 };
 
 /** Card cwd: `~`-relative when under $HOME, shortened when still long. */

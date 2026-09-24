@@ -23,7 +23,7 @@ import {
 /** Threshold: session untouched longer than this is "archived" (won't show in compact list). */
 export const DORMANT_AFTER_MS = 7 * 86_400 * 1000;
 
-export type AgentProvider = "claude-code" | "codex" | "opencode" | "pi";
+export type AgentProvider = "claude-code" | "codex" | "opencode" | "pi" | "omp";
 
 /** Two-letter harness badge + display name, per provider. */
 export const HARNESS: Record<AgentProvider, { code: string; name: string }> = {
@@ -31,6 +31,7 @@ export const HARNESS: Record<AgentProvider, { code: string; name: string }> = {
   codex: { code: "cx", name: "Codex" },
   opencode: { code: "oc", name: "OpenCode" },
   pi: { code: "pi", name: "Pi" },
+  omp: { code: "om", name: "oh-my-pi" },
 };
 
 /** Agents-zone filter: every harness, or just one. */

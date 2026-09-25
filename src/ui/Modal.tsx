@@ -1307,7 +1307,7 @@ const HELP_SECTIONS: HelpSection[] = [
   {
     emoji: "📦",
     title: "Bulk",
-    rows: [["T", "Reset ALL overdue tasks (any board) to today"]],
+    rows: [["T", "Reset ALL overdue tasks (any board) to today — clears their time blocks"]],
   },
   {
     emoji: "🌐",

@@ -349,6 +349,41 @@ describe("Agents harness filter", () => {
   });
 });
 
+describe("Shift+T — overdue to today (#79)", () => {
+  it("moves overdue tasks and drops the blocks that belonged to their old day", () => {
+    const dir = mkdtempSync(join(tmpdir(), "tb-reset-"));
+    const path = join(dir, "board.md");
+    const past = isoAddDays(isoToday(), -3);
+    writeFileSync(
+      path,
+      `## Todo\n\n- [ ] Late with a block ⌚ 09:30-11:00 ⏳ ${past}\n` +
+        `- [ ] Late, no block ⏳ ${past}\n` +
+        `- [ ] Today already ⌚ 14:00-15:00 ⏳ ${isoToday()}\n` +
+        `- [x] Done and late ⏳ ${past}\n`,
+    );
+    const store = createTuiStore({ config: emptyConfig({ boards: [{ path }] }) });
+    try {
+      expect(store.resetAllOverdueToToday()).toEqual({ tasks: 2, blocks: 1 });
+      const task = (i: number) => store.getTask({ boardPath: path, columnIndex: 0, taskIndex: i })!;
+      expect(task(0)).toMatchObject({ scheduled: isoToday(), timeBlock: undefined });
+      expect(task(1).scheduled).toBe(isoToday());
+      // Already today: untouched, block and all.
+      expect(task(2).timeBlock).toEqual({ startMin: 840, endMin: 900 });
+      // Done tasks are left where they are.
+      expect(task(3).scheduled).toBe(past);
+    } finally {
+      store.dispose();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("reports nothing to do on a board with no overdue tasks", () => {
+    const store = createTuiStore({ config: emptyConfig() });
+    expect(store.resetAllOverdueToToday()).toEqual({ tasks: 0, blocks: 0 });
+    store.dispose();
+  });
+});
+
 describe("arm mode (#73)", () => {
   function withBoard(run: (store: ReturnType<typeof createTuiStore>, path: string) => void) {
     const dir = mkdtempSync(join(tmpdir(), "tb-arm-"));

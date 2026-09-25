@@ -509,7 +509,7 @@ A placed task stays armed, so it can be sized and moved straight away.
 | Key | Action |
 |---|---|
 | `n` | New task in current column (quick-add syntax) |
-| `Shift-T` | Reset ALL overdue tasks (any board) to today |
+| `Shift-T` | Reset ALL overdue tasks (any board) to today — their time blocks are cleared, since a slot chosen for another day means nothing today |
 | `Ctrl-Z` | Undo last mutation |
 | `i` | Status file — the markdown file set as `status_file`, shown read-only |
 | `?` | Help modal with the full reference |

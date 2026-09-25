@@ -1641,9 +1641,15 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   // ─── Bulk: reset all overdue across all boards to today ──────────────────
 
-  function resetAllOverdueToToday(): number {
+  /**
+   * Every overdue task → today, and its time block goes with the day it was
+   * planned for: a slot chosen for last Tuesday means nothing on today's
+   * agenda, and re-placing it is two keys with arm mode (#79).
+   */
+  function resetAllOverdueToToday(): { tasks: number; blocks: number } {
     const today = isoToday();
-    let count = 0;
+    let tasks = 0;
+    let blocks = 0;
     for (const lb of state.boards) {
       const board = lb.board;
       for (let ci = 0; ci < board.columns.length; ci++) {
@@ -1652,17 +1658,19 @@ export function createTuiStore({ config }: CreateStoreOptions) {
         for (const child of col.children) {
           if (!isTask(child)) continue;
           if (!child.done && child.scheduled && child.scheduled < today) {
-            setScheduled(
-              { boardPath: board.filepath, columnIndex: ci, taskIndex: ti },
-              today,
-            );
-            count++;
+            const ref = { boardPath: board.filepath, columnIndex: ci, taskIndex: ti };
+            if (child.timeBlock) {
+              setTimeBlock(ref, undefined);
+              blocks++;
+            }
+            setScheduled(ref, today);
+            tasks++;
           }
           ti++;
         }
       }
     }
-    return count;
+    return { tasks, blocks };
   }
 
   function openModal(m: ModalKind): void {

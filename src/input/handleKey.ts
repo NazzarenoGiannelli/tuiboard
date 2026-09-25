@@ -200,8 +200,9 @@ export function handleKey(
 
   // Bulk: reset all overdue across all boards → today (Shift+T).
   if (key.name === "t" && key.shift) {
-    const n = store.resetAllOverdueToToday();
-    store.flashBanner("info", n > 0 ? `Reset ${n} overdue → today` : "No overdue tasks");
+    const { tasks, blocks } = store.resetAllOverdueToToday();
+    const cleared = blocks > 0 ? ` (${blocks} time block${blocks > 1 ? "s" : ""} cleared)` : "";
+    store.flashBanner("info", tasks > 0 ? `Reset ${tasks} overdue → today${cleared}` : "No overdue tasks");
     return;
   }
 

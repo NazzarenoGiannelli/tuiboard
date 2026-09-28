@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-09-28
+
+### Changed
+- **Shift+T clears the time blocks it carries to today** (#79). A time block
+  is a slot on a particular day, so moving every overdue task to today used to
+  keep theirs: tasks landed in today's agenda at hours nobody chose, stacked on
+  whatever was already there. Now each moved task drops its block and waits in
+  today's planner to be placed again (two keys, with arm mode). The banner
+  says how many were cleared. `t` / `m` on a single task and the headless
+  `tuiboard task defer` are unchanged.
+
 ## [0.14.0] - 2026-09-21
 
 ### Added
@@ -544,6 +555,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.14.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.1
 [0.14.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.0
 [0.13.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.3
 [0.13.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.2

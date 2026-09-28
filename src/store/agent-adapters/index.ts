@@ -6,6 +6,7 @@
 import type { AgentAdapter } from "~/store/agents";
 import { claudeCodeAdapter } from "./claude-code";
 import { createCodexAdapter } from "./codex";
+import { createOmpAdapter } from "./omp";
 import { createOpenCodeAdapter } from "./opencode";
 import { createPiAdapter } from "./pi";
 
@@ -14,4 +15,5 @@ export const AGENT_ADAPTERS: AgentAdapter[] = [
   createCodexAdapter(),
   createOpenCodeAdapter(),
   createPiAdapter(),
+  createOmpAdapter(),
 ];

@@ -470,6 +470,13 @@ session (until the next terminal resize).
 
 A placed task stays armed, so it can be sized and moved straight away.
 
+**Mouse: one click selects, two arm.** Clicking a block or a row of the tray
+moves the cursor to it, so `Enter` ticks it and `m`, `t`, `s`, `b` work on it;
+clicking it twice arms it (and, for a tray task, places it in the first free
+half hour, like `c`), and twice on the armed one disarms it. With another task
+armed, a click on a block places that task at the block's start. Arm mode
+(`c` toggles it) arms on every click.
+
 The **To place** tray sits at the top of the Agenda whenever the viewed day has
 tasks scheduled but not yet placed on the clock. It is part of the Agenda's
 cursor, so every task key (`Enter`, `m`, `t`, `s`, `b`, `.`, `c`…) works on it, in

@@ -880,15 +880,11 @@ function dispatchTaskAction(
       store.flashBanner("info", "The Agenda is off (zones.agenda) — nothing to place a task on");
       return true;
     }
-    store.startArmMode(ref);
-    store.revealAgendaForArm();
-    store.setActiveZone("timeline");
+    // No hour yet: armAndPlace proposes the first free half hour, so there is
+    // a block to move with j/k and stretch with +/- and placing never needs
+    // the mouse.
+    const slot = store.armAndPlace(ref);
     const t = store.getTask(ref);
-    // No hour yet: propose the first free half hour, so there is a block to
-    // move with j/k and stretch with +/- and placing never needs the mouse.
-    const slot = t && !t.timeBlock ? store.placeAtFreeSlot(ref) : undefined;
-    const at = store.agendaIndexOf(ref);
-    if (at !== undefined) store.setCursor(0, at);
     const name = t ? `"${t.displayTitle.slice(0, 28)}"` : "";
     store.flashBanner(
       "info",

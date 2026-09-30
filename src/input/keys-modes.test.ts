@@ -613,3 +613,28 @@ describe("the Agenda workflow: one cursor over the tray and the grid", () => {
     expect(taskA(store, 0, 1).timeBlock).toEqual({ startMin: 570, endMin: 600 });
   });
 });
+
+describe("arming from the mouse goes through the same door as c", () => {
+  for (const layout of ["wide", "narrow"] as const) {
+    it(`${layout}: armAndPlace on a tray task is what a double click does`, () => {
+      const store = build(layout);
+      goTo(store, "timeline");
+      const slot = store.armAndPlace({ boardPath: pathA, columnIndex: 0, taskIndex: 1 }); // Beta
+      expect(slot).toBeDefined();
+      expect(taskA(store, 1).timeBlock).toEqual(slot);
+      expect(store.state.ui.armedTimelineRef).toMatchObject({ taskIndex: 1 });
+      expect(zoneOf(store)).toBe("timeline");
+      expect(store.state.ui.row).toBe(store.agendaIndexOf({ boardPath: pathA, columnIndex: 0, taskIndex: 1 }) ?? -1);
+    });
+  }
+
+  it("a task that already has an hour is armed where it is, not moved", () => {
+    const store = build("narrow");
+    goTo(store, "timeline");
+    const slot = store.armAndPlace({ boardPath: pathA, columnIndex: 0, taskIndex: 0 }); // Alpha, 09:30-10:30
+    expect(slot).toBeUndefined();
+    expect(taskA(store, 0).timeBlock).toEqual({ startMin: 570, endMin: 630 });
+    expect(store.state.ui.armedTimelineRef).toMatchObject({ taskIndex: 0 });
+  });
+});
+

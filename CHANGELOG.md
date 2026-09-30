@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arm mode waiting for a task says what to click.
 
 ### Changed
+- **Agenda mouse: one click selects, two arm.** Any click on a block used to
+  arm it, so merely pointing at a task made it the armed one: `Enter` then
+  meant "keep the placement" instead of "done", and the only tasks you could
+  tick were the ones you had not touched. Now a click moves the cursor to the
+  block (Enter ticks it, `m`/`t`/`s`/`b` work on it) and a double click arms
+  it; a double click on the armed one disarms it. With another task armed, a
+  click on a block still places that task at its start, and arm mode, turned
+  on with `c`, still arms on every click.
 - **One line says what is armed** in the Agenda, instead of two; the keys that
   apply are on the bottom bar.
 - **A click on an empty slot no longer opens the new-event dialog.** With nothing
@@ -40,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bunfig.toml` that registers it for `bun test`.
 
 ### Fixed
+- **The tray's rows can be clicked.** They ignored the mouse, so a task in the
+  "To place" tray could only be reached with the keyboard. A click selects it
+  and a double click arms it and places it, as `c` does.
 - **The lines above the Agenda's grid no longer get squeezed away.** The grid's
   scrollbox started from the height of the whole day, and the short lines above it
   (day navigation, armed state) paid for it; on a short terminal they could

@@ -9,11 +9,12 @@
  *
  * Mouse interaction (click-to-arm + click-to-place, like Python timeline.py):
  *
- *   Click on a band      → ARM that block (warm highlight)
+ *   Click on a band      → SELECT it (cursor); two clicks → ARM it (warm highlight)
+ *   Click a tray row     → SELECT it; two clicks → ARM it and place it (like `c`)
  *   Click on empty row   → if armed, MOVE the armed block's start there;
  *                          if not, only a reminder (n adds an event, c places a task)
  *   Shift+click empty    → if armed, RESIZE the armed block's end there
- *   Click again on band  → toggle: re-arms (or disarms if same block)
+ *   Two clicks on armed  → disarm
  *
  * Keyboard interaction (handled in handleKey when activeZone === "timeline"):
  *
@@ -66,6 +67,7 @@ import {
   boardColor,
 } from "~/ui/glyphs";
 import type { TuiStore } from "~/store/index";
+import { clickIntent, createClickTracker } from "~/ui/agenda-click";
 import type { Task } from "~/types";
 
 interface ScrollBoxLike {
@@ -209,13 +211,18 @@ export function TimelineView(props: TimelineViewProps) {
 
   const cursorEntry = createMemo(() => entries()[cursor() - tray().length]);
 
+  // One click selects, two arm (see agenda-click.ts).
+  const clicks = createClickTracker();
+  const sameTask = (a: TaskRef | undefined, b: TaskRef) =>
+    !!a && a.boardPath === b.boardPath && a.columnIndex === b.columnIndex && a.taskIndex === b.taskIndex;
+  const keyOf = (prefix: string, r: TaskRef) => `${prefix}:${r.boardPath}:${r.columnIndex}:${r.taskIndex}`;
+
   /**
-   * Click on a block band. Three behaviors, in priority order:
-   *   1. DIFFERENT task already armed → PLACE armed task at this band's
-   *      startMin (lets the user stack two blocks at the same start time
-   *      by clicking on an existing band).
-   *   2. SAME block already armed → DISARM.
-   *   3. Nothing armed → ARM this band.
+   * Click on a block band. One click SELECTS it (the cursor moves, Enter
+   * ticks it, m/t/s/b work on it); two clicks ARM it, or disarm it when it is
+   * the armed one. With a DIFFERENT task armed, a click PLACES that task at this
+   * band's start (stacking two blocks at the same minute). Arm mode, turned on
+   * with `c`, arms on every click. The rules live in agenda-click.ts.
    */
   const onBlockClick = (entry: TimelineEntry, event: MouseEventLike) => {
     props.store.setActiveZone("timeline");
@@ -252,14 +259,15 @@ export function TimelineView(props: TimelineViewProps) {
     }
 
     const arm = armedRef();
-    const armedSame =
-      !!arm &&
-      arm.boardPath === entry.ref.boardPath &&
-      arm.columnIndex === entry.ref.columnIndex &&
-      arm.taskIndex === entry.ref.taskIndex;
-    const armedDifferent = !!arm && !armedSame;
+    const armedState = !arm ? "none" : sameTask(arm, entry.ref) ? "same" : "other";
+    const intent = clickIntent({
+      kind: clicks.click(keyOf("band", entry.ref)),
+      armMode: armMode(),
+      armed: armedState,
+      target: "band",
+    });
 
-    if (armedDifferent) {
+    if (intent === "place") {
       // Delegate to onEmptyRowClick using the band's startRow — places
       // (move or create) the armed task at this band's start time. Lets
       // the user pile two blocks at the same minute (e.g. both at 9:00).
@@ -270,15 +278,46 @@ export function TimelineView(props: TimelineViewProps) {
     const idx = entries().indexOf(entry);
     if (idx >= 0) props.store.setCursor(0, tray().length + idx);
 
-    if (armedSame) {
+    if (intent === "disarm") {
       props.store.armTimeline(undefined);
       props.store.flashBanner("info", "Disarmed");
-    } else {
+    } else if (intent === "arm") {
       props.store.armTimeline(entry.ref);
       props.store.flashBanner(
         "info",
-        `Armed ⌚${formatHm(entry.startMin)}-${formatHm(entry.endMin)} · click a row to move, shift+click to resize · Enter done · Esc cancel`,
+        `◉ ${formatHm(entry.startMin)}-${formatHm(entry.endMin)} · j/k move · +/- length · ⏎ keep · esc undo`,
       );
+    }
+  };
+
+  /**
+   * Click on a row of the "To place" tray: one click selects it, two arm it
+   * and put it in the first free half hour, exactly as `c` does. In arm mode
+   * every click arms.
+   */
+  const onTrayClick = (index: number) => {
+    const item = tray()[index];
+    if (!item) return;
+    props.store.setActiveZone("timeline");
+    props.store.setCursor(0, index);
+    const arm = armedRef();
+    const intent = clickIntent({
+      kind: clicks.click(keyOf("tray", item.ref)),
+      armMode: armMode(),
+      armed: !arm ? "none" : sameTask(arm, item.ref) ? "same" : "other",
+      target: "tray",
+    });
+    if (intent === "arm") {
+      const slot = props.store.armAndPlace(item.ref);
+      props.store.flashBanner(
+        "info",
+        slot
+          ? `◉ ${formatHm(slot.startMin)}-${formatHm(slot.endMin)} ${tailTruncate(item.task.displayTitle, 28)} · j/k move · +/- length · ⏎ keep · esc undo`
+          : `◉ Armed ${tailTruncate(item.task.displayTitle, 28)} · ⏎ keep · esc undo`,
+      );
+    } else if (intent === "disarm") {
+      props.store.armTimeline(undefined);
+      props.store.flashBanner("info", "Disarmed");
     }
   };
 
@@ -416,6 +455,7 @@ export function TimelineView(props: TimelineViewProps) {
           cursor={cursor()}
           active={isActive()}
           armedRef={armedRef()}
+          onClickItem={onTrayClick}
         />
       </Show>
       <Show when={!armedTask() && rowMap().overflow > 0}>
@@ -883,6 +923,7 @@ function TrayList(props: {
   cursor: number;
   active: boolean;
   armedRef: TaskRef | undefined;
+  onClickItem: (index: number) => void;
 }) {
   const n = () => props.items.length;
   const focused = () => props.active && props.cursor < n();
@@ -916,6 +957,7 @@ function TrayList(props: {
               flexDirection: "row",
               backgroundColor: props.active && index === props.cursor ? T.cardBgCursor : undefined,
             }}
+            onMouseDown={() => props.onClickItem(index)}
           >
             <text wrapMode="none" truncate>
               <span style={{ fg: isArmed(item.ref) ? T.warmActive : T.textDim }}>

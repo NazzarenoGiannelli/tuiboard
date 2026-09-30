@@ -1517,6 +1517,24 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   }
 
   /**
+   * Arm a task in the Agenda, from the keyboard (`c`) or the mouse (a double
+   * click): bring the Agenda on screen, focus it, and — when the task has no
+   * hour yet — put it in the first free half hour, so there is a block to move
+   * with j/k and stretch with +/-. The cursor follows the task. The caller has
+   * checked the Agenda is enabled. Returns the slot it chose, if it placed one.
+   */
+  function armAndPlace(ref: TaskRef): { startMin: number; endMin: number } | undefined {
+    startArmMode(ref);
+    revealAgendaForArm();
+    setActiveZone("timeline");
+    const t = getTask(ref);
+    const slot = t && !t.timeBlock ? placeAtFreeSlot(ref) : undefined;
+    const at = agendaIndexOf(ref);
+    if (at !== undefined) setCursor(0, at);
+    return slot;
+  }
+
+  /**
    * Move the Agenda's viewed day. `delta` shifts relative to the current day;
    * pass `0`-reset behavior via `resetAgendaDay`. Clamped to ±365 days so the
    * calendar fetch can't run away. Resets the timeline cursor and disarms,
@@ -2040,6 +2058,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     startArmMode,
     revealAgendaForArm,
     placeAtFreeSlot,
+    armAndPlace,
     agendaIndexOf,
     leaveArmMode,
     agendaDate,

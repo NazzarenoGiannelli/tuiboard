@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.5] - 2026-09-30
+
 ### Fixed
 - **tuiboard no longer freezes under a busy Claude Code history.** The Agents
   list read and parsed *every* Claude Code transcript from the start on every
@@ -614,6 +616,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.14.5]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.5
 [0.14.4]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.4
 [0.14.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.3
 [0.14.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.2

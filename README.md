@@ -21,6 +21,8 @@ any markdown editor.
 on an invented demo board: `bun run demo` opens it, `bun run demo:shots` regenerates these
 pictures.*
 
+<p align="center"><a href="https://tuiboard.nazzareno.xyz/#film"><img src="docs/media/film-poster.jpg" alt="Watch the 36-second tuiboard film" width="720" /></a><br /><sub><b>Watch the 36-second film</b> (sound on) on the website</sub></p>
+
 ## A short tour
 
 <table>

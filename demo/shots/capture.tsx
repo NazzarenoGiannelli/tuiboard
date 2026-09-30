@@ -366,10 +366,13 @@ async function resizeTo(s: Stage, cols: number, rows: number) {
 
 const promo: Scene = async () => {
   const s = await stage("promo", wide.cols, wide.rows, (st) => st.setActiveZone("planner"));
-  const mark = (seg: string) => s.frame(undefined, 1, { seg });
+  // `keys` is what the film shows on screen as a key cap: the key pressed or the mouse gesture used
+  const mark = (seg: string, keys?: string) => s.frame(undefined, 1, keys ? { seg, keys } : { seg });
+  const keyLabel = (key: string, mods: { shift?: boolean }) =>
+    mods.shift && key === "tab" ? "Shift+Tab" : key === "return" ? "Enter" : key;
   const press = async (seg: string, key: string, mods: { shift?: boolean } = {}) => {
     await s.key(key, mods);
-    await mark(seg);
+    await mark(seg, keyLabel(key, mods));
   };
   const zone = (z: "planner" | "board" | "timeline" | "agents") => s.store.setActiveZone(z);
   const walkTo = async (seg: string, text: string) => {
@@ -423,37 +426,37 @@ const promo: Scene = async () => {
   const grid = (text: string) => s.find(text, 9);
   const head = grid("Deep work");
   await s.t.mockMouse.click(head.x + 4, head.y);
-  await mark("drag");
+  await mark("drag", "click");
   await s.t.mockMouse.doubleClick(head.x + 4, head.y);
-  await mark("drag");
+  await mark("drag", "double-click");
   const body = grid("Deep work");
   await s.t.mockMouse.pressDown(body.x + 4, body.y + 1);
   for (let k = 1; k <= 3; k++) {
     await s.t.mockMouse.emitMouseEvent("drag", body.x + 4, body.y + 1 + k);
-    await mark("drag");
+    await mark("drag", "drag");
   }
   await s.t.mockMouse.release(body.x + 4, body.y + 4);
-  await mark("drag");
+  await mark("drag", "drag");
   const edge = grid("━ ↕");
   await s.t.mockMouse.pressDown(edge.x + 4, edge.y);
   for (let k = 1; k <= 2; k++) {
     await s.t.mockMouse.emitMouseEvent("drag", edge.x + 4, edge.y + k);
-    await mark("drag");
+    await mark("drag", "drag");
   }
   await s.t.mockMouse.release(edge.x + 4, edge.y + 2);
-  await mark("drag");
+  await mark("drag", "drag");
   const keep = grid("━ ↕");
   await s.t.mockMouse.doubleClick(keep.x + 10, keep.y);
-  await mark("drag");
+  await mark("drag", "double-click");
 
   // the tray: arm a task with no hour, click a slot, nudge, keep
   await mark("tray");
   const row = s.find("Write the release notes");
   await s.t.mockMouse.doubleClick(row.x + 4, row.y);
-  await mark("tray");
+  await mark("tray", "double-click");
   const slot = s.find("08 ─");
   await s.t.mockMouse.click(slot.x + 10, slot.y);
-  await mark("tray");
+  await mark("tray", "click");
   await press("tray", "j");
   await press("tray", "j");
   await press("tray", "+");

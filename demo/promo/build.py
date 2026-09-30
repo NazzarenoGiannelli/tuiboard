@@ -1,23 +1,22 @@
-"""The tuiboard launch film: 1920x1080, 30 fps, cut to a track.
+"""The tuiboard launch film: 1920x1080, 30 fps, about 36 seconds, cut to a track.
 
-    bun run demo:film                                    # capture + build
+    bun run demo:film                                    # capture + audio edit + build
     python demo/promo/build.py                           # build from the captured frames
-    python demo/promo/build.py --audio other.mp3         # another track (re-time CUES first)
-    python demo/promo/build.py --preview 8 16 30 45      # stills at those seconds, to look at
+    python demo/promo/build.py --preview 2 6 14 20 33    # stills at those seconds, to look at
 
-The frames are the real app, captured headless (demo/shots/capture.tsx, scene `promo`), including
-the window being dragged narrower: each width is the app's own layout at that width. They arrive
-in named SEGMENTS; the CUES below say when each segment's frames appear. Pacing is decided here,
-by what the film is saying at that moment:
+The pictures are the real app, captured headless (demo/shots/capture.tsx, scene `promo`),
+including the window being dragged narrower: each width is the app's own layout at that width.
+They arrive in named SEGMENTS; the CUES below say when each segment's frames appear.
 
-  - quick when the UI changes state (a zone, a cursor step, a drag), because a person is doing it;
-  - still when there is something to take in (a zone on screen, a finished block, a filtered list);
-  - a few moments land on the music (the drop at 15.44 s takes the window from wide to a single
-    pane; the last kick at 45.9 s brings the URL in); everything else is placed by its content,
-    not snapped to a grid. Nothing pulses and nothing flashes.
+One virtual CAMERA looks at the terminal (world units are terminal cells). It opens on extreme
+close-ups with a shallow depth of field, pulls back to reveal the whole window, holds for a tour,
+follows the window as it narrows, and then drifts gently towards whatever each feature is about.
+Key caps show the key or mouse gesture behind each change. Pacing is by content: quick when the UI
+changes state, still when there is something to take in, and only the drop and the last hit of the
+music are placed on purpose. Nothing pulses and nothing flashes.
 
-The CUES are timed to `Future Launch.mp3` (126 BPM, first drop 15.44 s, break 42.1 to 45.4 s, last
-hit 45.9 s). For another track, measure it with beatgrid.py and re-time the numbers.
+The CUES are timed to demo/promo/out/film-audio.wav, made by edit_audio.py from `Future Launch.mp3`
+(drop at 13.0 s, break 30.1 to 33.9 s, last hit 33.95 s). For another track, re-time them.
 """
 
 import argparse
@@ -32,6 +31,7 @@ from functools import lru_cache
 from multiprocessing import Pool
 from pathlib import Path
 
+import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
@@ -40,9 +40,9 @@ sys.path.insert(0, str(HERE.parent / "shots"))
 import render as R  # noqa: E402  (terminal drawing, fonts, metrics)
 
 W, H, FPS = 1920, 1080, 30
-DURATION = 49.93  # the track's length
+DURATION = 36.2
 
-INK = (10, 13, 20)
+INK = (10, 18, 32)           # the deep blue the film sits on before and after the window
 YEL = (234, 246, 173)
 CYA = (126, 182, 214)
 WHITE = (238, 242, 248)
@@ -51,71 +51,90 @@ K1, K2, KSUB = (10, 13, 20), (12, 72, 104), (22, 46, 64)  # type on the light si
 HARNESS = [("cc", "Claude Code", (232, 160, 92)), ("cx", "Codex", (126, 182, 214)),
            ("oc", "OpenCode", (210, 126, 224)), ("pi", "Pi", (195, 217, 78))]
 
-PAD, BAR = 12, 38  # the window's margin and title bar, in pixels
+UNIT = 9.6  # pixels per cell width the window chrome (title bar, margins) was designed for
+RR = 2.083  # cell height over cell width, for fitting
 
 # ── The cue sheet (seconds) ──────────────────────────────────────────────────
-DROP = 15.44       # first drop of the track
-SHRINK = (15.44, 16.30)  # the window narrows, in under a second
+DROP = 13.0               # first drop of the music
+SHRINK = (13.00, 13.75)   # the window narrows, in under a second, on the drop
 
-# Each segment's frames, in order. A list gives each frame's time; ("span", a, b) spreads them.
 CUES = {
     # the zone tour on the wide dashboard: one zone on screen at a time, long enough to read
-    "tour_planner": [7.70, 8.45, 9.00],
-    "tour_board": [9.30, 9.95, 10.45],
-    "tour_agenda": [10.85, 11.40, 11.85],
-    "tour_agents": [12.25, 12.85, 13.35],
-    "zoom": [13.75, 14.30, 14.70, 15.05],
-    "unzoom": [15.25, 15.35],
+    "tour_planner": [6.70, 7.20, 7.55],
+    "tour_board": [7.95, 8.40, 8.75],
+    "tour_agenda": [9.10, 9.50, 9.85],
+    "tour_agents": [10.30, 10.75, 11.05],
+    "zoom": [11.50, 11.90, 12.25, 12.55],
+    "unzoom": [12.75, 12.85],
     "shrink": ("span", *SHRINK),
-    "single": [16.45],
-    # one pane at a time: the brisk part, four presses, each zone held just long enough to register
-    "ring": [17.00, 17.55, 18.05, 18.65],
-    # drag: select, arm, carry (three steps), let go, stretch (two), let go, keep
-    "drag": [19.30, 19.95, 20.60, 21.45, 21.80, 22.15, 22.55, 23.30, 23.70, 24.15, 24.60],
+    "single": [13.90],
+    # one pane at a time: the brisk part, four presses
+    "ring": [14.25, 14.65, 15.05, 15.50],
+    # drag: rest, click, double-click, carry (three steps), let go, stretch (two), let go, keep
+    "drag": [16.10, 16.50, 16.95, 17.55, 17.85, 18.15, 18.45, 18.95, 19.25, 19.55, 19.85],
     # tray: rest, arm, click a slot, two nudges, resize, keep
-    "tray": [25.30, 26.00, 27.00, 27.75, 28.20, 28.65, 29.40],
+    "tray": [20.20, 20.65, 21.20, 21.65, 21.95, 22.25, 22.80],
     # triage: start, walk to a late task, t, walk (quick), Enter, walk (quick), m
-    "tri_start": [30.20],
-    "tri_walk1": [30.75],
-    "tri_t": [31.35],
-    "tri_walk2": ("span", 32.00, 32.50),
-    "tri_enter": [33.05],
-    "tri_walk3": ("span", 33.60, 34.45),
-    "tri_m": [34.95],
+    "tri_start": [23.10],
+    "tri_walk1": [23.45],
+    "tri_t": [23.90],
+    "tri_walk2": ("span", 24.25, 24.55),
+    "tri_enter": [24.95],
+    "tri_walk3": ("span", 25.30, 25.90),
+    "tri_m": [26.30],
     # agents: the whole list, a step, then each harness in turn, then all again
-    "filter": [35.90, 36.50, 37.20, 38.10, 39.00, 39.90, 40.80],
+    "filter": [27.00, 27.40, 27.85, 28.40, 28.95, 29.50, 30.00],
 }
-FILTER_TAGS = [(37.20, 38.10), (38.10, 39.00), (39.00, 39.90), (39.90, 40.80)]  # cc, cx, oc, pi
+FILTER_TAGS = [(27.85, 28.40), (28.40, 28.95), (28.95, 29.50), (29.50, 30.00)]  # cc, cx, oc, pi
 
-WINDOW_IN = (6.60, 7.50)
-WINDOW_OUT = (41.30, 42.00)
-INK_IN = (6.30, 8.30)       # the gradient lights up behind the window
-INK_OUT = (41.20, 42.20)    # and goes out for the end card
+INK_IN = (5.40, 7.40)       # the gradient lights up as the camera pulls back
+INK_OUT = (30.10, 31.10)    # and goes out for the end card
+WINDOW_OUT = (30.00, 30.60)
 
 INTRO = [  # (text, colour, type from, type to)
-    ("Your kanban board is just markdown.", WHITE, 0.50, 2.90),
-    ("Run it in the terminal.", YEL, 3.40, 5.30),
+    ("A kanban board · agenda · agent view", WHITE, 0.45, 2.55),
+    ("You can run it in the terminal.", YEL, 2.85, 4.35),
 ]
-INTRO_FADE = (6.20, 6.90)
+INTRO_FADE = (4.75, 5.35)
 
 CAPTIONS = [  # (from, to, title, sub)
-    (7.70, 9.25, "Today / Tomorrow", "what needs you right now"),
-    (9.30, 10.75, "Your boards", "plain markdown files you own"),
-    (10.85, 12.10, "Your day on a ruler", "blocks, lanes and a line for now"),
-    (12.25, 13.60, "Every coding agent", "one live list"),
-    (13.75, 15.20, "z zooms any pane", "Claude Code · Codex · OpenCode · Pi"),
+    (6.70, 8.00, "Today / Tomorrow", "what needs you right now"),
+    (7.95, 9.15, "Your boards", "plain markdown files you own"),
+    (9.10, 10.35, "Your day agenda", "time blocking on the fly"),
+    (10.30, 11.55, "Every coding agent", "one live list"),
+    (11.50, 12.95, "Zoom on any pane", "press z"),
 ]
-KICKERS = [  # (from, to, lines, sub)
-    (16.60, 19.00, ["One pane", "at a time."], "Shift-Tab walks the zones."),
-    (19.30, 24.90, ["Drag.", "Resize."], "Double-click a block. Move it. Stretch it."),
-    (25.30, 29.90, ["From the tray", "to the clock."], "Tasks with no hour wait their turn."),
-    (30.20, 35.50, ["Triage", "in three keys."], "t today  ·  ⏎ done  ·  m tomorrow"),
-    (35.90, 41.20, ["Every agent.", "One list."], None),
+KICKERS = [  # (from, to, lines, sub, sub_is_mono)
+    (14.20, 15.95, ["One pane", "at a time."], "Shift + Tab walks the zones.", True),
+    (16.10, 20.05, ["Drag.", "Resize."], "Double-click a block. Move it. Stretch it.", False),
+    (20.20, 23.00, ["From the tray", "to the clock."], "Tasks with no hour wait their turn.", False),
+    (23.10, 26.90, ["Triage", "in three keys."], "t today  ·  Enter done  ·  m tomorrow", True),
+    (27.00, 30.00, ["Every agent.", "One list."], None, False),
 ]
 
-# the end card, in the order things arrive
-END = {"mark": (42.50, 43.50), "sub": (43.30, 43.90), "tag": (43.95, 44.60), "cmd": (44.95, 45.55),
-       "url": (45.90, 46.45), "foot": (46.60, 47.10), "fade": (47.90, 49.60)}
+# the end card, in the order things arrive (the last hit of the music is at 33.95 s)
+END = {"mark": (31.20, 32.10), "tag": (32.00, 32.80), "cmd": (33.05, 33.60),
+       "url": (33.95, 34.50), "foot": (34.60, 35.10), "fade": (35.40, 36.20)}
+
+# camera poses for the single-pane features: (focus cell x, y, zoom, roll in degrees), in the
+# 64x44 layout. The camera eases between them and drifts a little within each.
+POSES = [  # (from, to, pose)
+    (13.75, 16.10, (32, 22, 1.00, 0.0)),   # the ring of zones
+    (16.10, 20.20, (32, 25, 1.30, -1.2)),  # drag
+    (20.20, 23.10, (32, 13, 1.40, 1.0)),   # tray
+    (23.10, 27.00, (32, 15, 1.28, -0.9)),  # triage
+    (27.00, 30.60, (32, 13, 1.32, 1.2)),   # agents
+]
+
+# the opening close-ups on the wide dashboard: (from, to, start pose, end pose) with a pose of
+# (cell x, cell y, cells across the frame, roll in degrees), and a focus line for the depth of field
+SHOTS = [
+    (0.00, 1.80, (158, 14, 46, -4.0), (150, 26, 42, -2.0), 0.6),
+    (1.80, 3.40, (14, 9, 42, 3.0), (30, 24, 44, 1.0), -0.5),
+    (3.40, 5.00, (36, 36, 54, -2.0), (96, 35, 58, 0.0), 0.15),
+]
+PULLBACK = (5.00, 6.60)
+CUT = 0.30  # seconds of dissolve between close-ups
 
 
 def clamp(x, a=0.0, b=1.0):
@@ -140,18 +159,18 @@ def window_of(t, a, b, fi=0.3, fo=0.3):
     return ramp(t, a, a + fi) * (1 - ramp(t, b - fo, b))
 
 
-# ── Fonts ────────────────────────────────────────────────────────────────────
+# ── Fonts: JetBrains Mono for titles and tooltips, a sans for the small subtitles ──
 @lru_cache(maxsize=None)
 def font(path, size):
-    return ImageFont.truetype(str(path), size)
+    return ImageFont.truetype(str(path), max(4, int(size)))
 
 
-def ui(size):
+def mono(size, bold=True):
+    return font(R.MONO_BOLD if bold and R.MONO_BOLD else R.MONO, size)
+
+
+def sans(size):
     return font(R.UI, size)
-
-
-def mono(size):
-    return font(R.MONO_BOLD or R.MONO, size)
 
 
 # ── Frames and their times ───────────────────────────────────────────────────
@@ -191,6 +210,10 @@ def frame_index(t):
     return lo
 
 
+def key_events():
+    return [(ft, f["keys"]) for ft, f in FRAMES if f.get("keys")]
+
+
 # ── Backdrop ─────────────────────────────────────────────────────────────────
 STOPS = [(0.0, (236, 246, 176)), (0.46, (104, 178, 212)), (1.0, (14, 38, 58))]
 
@@ -202,10 +225,11 @@ def grid_low():
     return xs / w, ys / h
 
 
-@lru_cache(maxsize=256)
-def gradient_q(t_q, dark_q):
+@lru_cache(maxsize=128)
+def backdrop(size, t_q, dark_q):
+    """The brand gradient (pale yellow, cyan, ink) drifting very slowly, or plain deep blue."""
     xs, ys = grid_low()
-    drift = 0.03 * math.sin(t_q / DURATION * 2 * math.pi)  # very slow, only there so it is not dead still
+    drift = 0.03 * math.sin(t_q / DURATION * 2 * math.pi)
     t = np.clip(xs * 0.55 + ys * 0.45 + drift, 0, 1)
     out = np.zeros(t.shape + (3,), np.float32)
     for (t0, c0), (t1, c1) in zip(STOPS, STOPS[1:]):
@@ -220,7 +244,8 @@ def gradient_q(t_q, dark_q):
     ink = np.array(INK, np.float32) * (0.85 + 0.3 * (1 - ((xs - 0.5) ** 2 + (ys - 0.5) ** 2)))[..., None]
     dark = dark_q / 100.0
     out = out * (1 - dark) + ink * dark
-    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB").resize((W, H), Image.BICUBIC)
+    img = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
+    return img.resize(size, Image.BICUBIC)
 
 
 def darkness(t):
@@ -231,105 +256,216 @@ def darkness(t):
     return ramp(t, *INK_OUT)
 
 
-# ── The window ───────────────────────────────────────────────────────────────
+# ── The camera ───────────────────────────────────────────────────────────────
 @lru_cache(maxsize=None)
 def metrics(size):
     return R.Metrics(size)
 
 
-def fit_size(cols, rows, box_w, box_h):
-    for size in range(28, 10, -1):
-        m = metrics(size)
-        tw, th = cols * m.cw / R.SS, rows * m.ch / R.SS
-        if tw + 2 * PAD <= box_w and th + BAR + PAD <= box_h:
-            return size
-    return 11
+def fit_ppc(cols, rows, box_w, box_h):
+    """Pixels per cell so the window (with its title bar and margins) fits the box."""
+    return min(box_w / (cols + 2.5), box_h / (rows * RR + 5.21))
 
 
-_TERM_CACHE = {}
+def shrink_progress(t):
+    return smooth((t - SHRINK[0]) / (SHRINK[1] - SHRINK[0]))
 
 
-def term_image(idx, size):
-    key = (idx, size)
-    img = _TERM_CACHE.get(key)
-    if img is None:
-        f, m = FRAMES[idx][1], metrics(size)
-        layer = Image.new("RGBA", (f["cols"] * m.cw, f["rows"] * m.ch), (0, 0, 0, 0))
-        R.draw_terminal(f, m, layer, (0, 0))
-        img = layer.resize((layer.width // R.SS, layer.height // R.SS), Image.LANCZOS)
-        if len(_TERM_CACHE) > 60:
-            _TERM_CACHE.clear()
-        _TERM_CACHE[key] = img
+def base_pose(t, f):
+    """The window framed for the tour and the single-pane work: centred, then on the right."""
+    e = shrink_progress(t)
+    cols, rows = f["cols"], f["rows"]
+    ppc = fit_ppc(cols, rows, lerp(W * 0.92, W * 0.44, e), lerp(H * 0.78, H * 0.88, e))
+    u = ppc / UNIT
+    cx, cy = lerp(W / 2, W * 0.715, e), lerp(H / 2 - 52, H / 2, e)
+    return {"wx": cols / 2, "wy": rows / 2, "ppc": ppc, "ax": cx, "ay": cy + 13 * u, "theta": 0.0}
+
+
+def feature_pose(t, f):
+    """Single-pane features: eased poses, plus a slow drift towards the focus within each."""
+    base = base_pose(t, f)
+    # blend poses across boundaries
+    fx = fy = z = roll = 0.0
+    weights = 0.0
+    for a, b, (px, py, pz, pr) in POSES:
+        w = ramp(t, a - 0.25, a + 0.25) * (1 - ramp(t, b - 0.25, b + 0.25)) if a > POSES[0][0] else 1 - ramp(t, b - 0.25, b + 0.25)
+        if w > 0:
+            drift = 1 + 0.05 * clamp((t - a) / max(b - a, 0.1))
+            fx += w * px
+            fy += w * py
+            z += w * pz * drift
+            roll += w * pr
+            weights += w
+    if weights <= 0:
+        return base
+    fx, fy, z, roll = fx / weights, fy / weights, z / weights, roll / weights
+    # zoom about the focus cell, which stays where it is on screen
+    ppc = base["ppc"]
+    cellh = ppc * RR
+    ax = base["ax"] + (fx - base["wx"]) * ppc
+    ay = base["ay"] + (fy - base["wy"]) * cellh
+    return {"wx": fx, "wy": fy, "ppc": ppc * z, "ax": ax, "ay": ay, "theta": roll}
+
+
+def shot_pose(shot, t):
+    a, b, p0, p1, _ = shot
+    k = smooth((t - a) / (b - a)) * 0.6 + clamp((t - a) / (b - a)) * 0.4
+    wx, wy, vw, th = (lerp(p0[i], p1[i], k) for i in range(4))
+    return {"wx": wx, "wy": wy, "ppc": W / vw, "ax": W / 2, "ay": H / 2, "theta": th}
+
+
+def tour_pose(t, f):
+    base = base_pose(t, f)
+    push = 1 + 0.04 * clamp((t - PULLBACK[1]) / (SHRINK[0] - PULLBACK[1]))  # a slow push in
+    base["ppc"] *= push
+    return base
+
+
+def camera(t, f):
+    """(pose, extras) at time t: the camera parameters and the optical effects."""
+    ex = {"dof": 0.0, "focus": (0.0, 0.0), "bloom": 0.05, "vig": 0.12, "blur_cut": 0.0, "win_alpha": 1.0, "text_blur": 0.0}
+    if t < PULLBACK[0]:
+        shot = next((s for s in SHOTS if s[0] <= t < s[1]), SHOTS[-1])
+        pose = shot_pose(shot, t)
+        ex.update(dof=0.85, bloom=0.42, vig=0.42, focus=(shot[4], (t - shot[0]) * 0.25),
+                  text_blur=0.8 * ramp(t, 0.2, 0.6) * (1 - ramp(t, INTRO_FADE[0], INTRO_FADE[1])))
+        return pose, ex
+    if t < PULLBACK[1]:
+        k = smooth((t - PULLBACK[0]) / (PULLBACK[1] - PULLBACK[0]))
+        p0 = shot_pose(SHOTS[-1], PULLBACK[0])
+        p1 = tour_pose(PULLBACK[1], f)
+        pose = {key: lerp(p0[key], p1[key], k) for key in ("wx", "wy", "ax", "ay", "theta")}
+        pose["ppc"] = math.exp(lerp(math.log(p0["ppc"]), math.log(p1["ppc"]), k ** 1.25))
+        ex.update(dof=0.85 * (1 - k), bloom=lerp(0.42, 0.06, k), vig=lerp(0.42, 0.12, k), focus=(0.15, 0.0), text_blur=0.0)
+        return pose, ex
+    if t < SHRINK[0]:
+        return tour_pose(t, f), ex
+    pose = feature_pose(t, f)
+    out = 1 - ramp(t, *WINDOW_OUT)
+    ex["win_alpha"] = out
+    pose = dict(pose)
+    pose["ppc"] *= lerp(0.97, 1.0, out)
+    return pose, ex
+
+
+# ── The view ─────────────────────────────────────────────────────────────────
+_REGION_CACHE = {}
+
+
+def region_image(idx, size, r0, r1, c0, c1, ppc):
+    """The cells r0..r1 x c0..c1 of a frame, drawn at `ppc` pixels per cell."""
+    key = (idx, size, r0, r1, c0, c1, int(round(ppc * 8)))
+    img = _REGION_CACHE.get(key)
+    if img is not None:
+        return img
+    f, m = FRAMES[idx][1], metrics(size)
+    layer = Image.new("RGBA", ((c1 - c0) * m.cw, (r1 - r0) * m.ch), (0, 0, 0, 0))
+    R.draw_terminal(f, m, layer, (0, 0), region=(r0, r1, c0, c1))
+    k = ppc / m.cw
+    img = layer.resize((max(1, round(layer.width * k)), max(1, round(layer.height * k))), Image.LANCZOS)
+    if len(_REGION_CACHE) > 24:
+        _REGION_CACHE.clear()
+    _REGION_CACHE[key] = img
     return img
 
 
-@lru_cache(maxsize=64)
-def chrome(win_w, win_h):
-    c = Image.new("RGBA", (win_w, win_h), (0, 0, 0, 0))
-    d = ImageDraw.Draw(c)
-    d.rounded_rectangle((10, 7, 200, BAR), radius=8, fill=(255, 255, 255, 30))
-    d.text((26, BAR / 2 + 1), "tuiboard", font=ui(15), fill=(235, 235, 240, 255), anchor="lm")
-    bx, yc = win_w - 12, BAR / 2
-    d.line((bx - 26, yc - 6, bx - 14, yc + 6), fill=(220, 220, 225, 255), width=1)
-    d.line((bx - 26, yc + 6, bx - 14, yc - 6), fill=(220, 220, 225, 255), width=1)
-    d.rectangle((bx - 70, yc - 6, bx - 58, yc + 6), outline=(220, 220, 225, 255), width=1)
-    d.line((bx - 112, yc, bx - 100, yc), fill=(220, 220, 225, 255), width=1)
-    d.rounded_rectangle((0, 0, win_w - 1, win_h - 1), radius=12, outline=(255, 255, 255, 38), width=1)
-    return c
+@lru_cache(maxsize=32)
+def chrome_font(px):
+    return sans(px)
 
 
-@lru_cache(maxsize=64)
-def shadow(win_w, win_h, margin=60):
-    s = Image.new("RGBA", (win_w + 2 * margin, win_h + 2 * margin), (0, 0, 0, 0))
-    ImageDraw.Draw(s).rounded_rectangle((margin, margin + 14, margin + win_w, margin + win_h + 14), radius=14, fill=(0, 0, 0, 150))
-    return s.filter(ImageFilter.GaussianBlur(26))
-
-
-@lru_cache(maxsize=64)
-def round_mask(win_w, win_h):
-    m = Image.new("L", (win_w, win_h), 0)
-    ImageDraw.Draw(m).rounded_rectangle((0, 0, win_w - 1, win_h - 1), radius=12, fill=255)
-    return m
-
-
-def window_state(t):
-    e = smooth((t - SHRINK[0]) / (SHRINK[1] - SHRINK[0]))
-    a_in = ramp(t, *WINDOW_IN)
-    a_out = 1 - ramp(t, *WINDOW_OUT)
-    alpha = a_in * a_out
-    scale = lerp(0.985, 1.0, a_in) * lerp(0.985, 1.0, a_out)
-    return {
-        "box": (lerp(W * 0.92, W * 0.44, e), lerp(H * 0.80, H * 0.88, e)),
-        "cx": lerp(W / 2, W * 0.715, e),
-        "cy": lerp(H / 2 - 30, H / 2, e) + 22 * (1 - a_in),  # rises a little as it arrives
-        "alpha": alpha,
-        "scale": scale,
-    }
-
-
-def draw_window(canvas, t):
-    st = window_state(t)
-    if st["alpha"] <= 0.001:
-        return None
-    idx = frame_index(t)
+def render_view(t, idx, pose, win_alpha=1.0, dark=0.0):
     f = FRAMES[idx][1]
-    size = fit_size(f["cols"], f["rows"], *st["box"])
-    term = term_image(idx, size)
-    win_w, win_h = term.width + 2 * PAD, term.height + BAR + PAD
-    x0, y0 = int(st["cx"] - win_w / 2), int(st["cy"] - win_h / 2)
-    region = canvas.crop((x0, y0, x0 + win_w, y0 + win_h)).convert("RGBA")
-    region.alpha_composite(Image.new("RGBA", (win_w, win_h), R.TINT + (int(255 * R.TINT_ALPHA),)))
-    region.alpha_composite(chrome(win_w, win_h))
-    region.alpha_composite(term, (PAD, BAR))
-    region.putalpha(round_mask(win_w, win_h))
-    sprite = shadow(win_w, win_h).copy()
-    sprite.alpha_composite(region, (60, 60))
-    if st["alpha"] < 1.0:
-        sprite.putalpha(sprite.getchannel("A").point(lambda v: int(v * st["alpha"])))
-    if abs(st["scale"] - 1.0) > 0.0005:
-        sprite = sprite.resize((int(sprite.width * st["scale"]), int(sprite.height * st["scale"])), Image.BICUBIC)
-    canvas.paste(sprite, (int(st["cx"] - sprite.width / 2), int(st["cy"] - sprite.height / 2)), sprite)
-    return {"bottom": st["cy"] + win_h * st["scale"] / 2}
+    cols, rows = f["cols"], f["rows"]
+    ppc, theta = pose["ppc"], pose["theta"]
+    size = max(6, int(math.ceil(ppc / 0.6)))
+    m = metrics(size)
+    rr = m.ch / m.cw
+    cellh = ppc * rr
+    rot = abs(theta) > 0.02
+    mx, my = (60, 90) if rot else (0, 0)
+    Wc, Hc = W + 2 * mx, H + 2 * my
+    bg = backdrop((Wc, Hc), round(t * 2) / 2, int(round(dark * 100)))
+    canvas = bg.copy()
+
+    X = pose["ax"] + mx - pose["wx"] * ppc
+    Y = pose["ay"] + my - pose["wy"] * cellh
+    u = ppc / UNIT
+    pad, bar = 12 * u, 38 * u
+    rx0, ry0, rx1, ry1 = X - pad, Y - bar, X + cols * ppc + pad, Y + rows * cellh + pad
+    visible = rx1 > 0 and ry1 > 0 and rx0 < Wc and ry0 < Hc and win_alpha > 0.001
+    if visible:
+        body = Image.new("RGB", (Wc, Hc), R.TINT)
+        acrylic = Image.blend(canvas, body, R.TINT_ALPHA)
+        mask = Image.new("L", (Wc, Hc), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((rx0, ry0, rx1, ry1), radius=12 * u, fill=255)
+        if u < 5:  # a soft shadow, only while the window's edges are in view
+            sh = Image.new("L", (Wc, Hc), 0)
+            ImageDraw.Draw(sh).rounded_rectangle((rx0, ry0 + 14 * u, rx1, ry1 + 14 * u), radius=14 * u, fill=150)
+            sh = sh.filter(ImageFilter.GaussianBlur(max(2, 26 * u)))
+            canvas = Image.composite(Image.new("RGB", (Wc, Hc), (0, 0, 0)), canvas, sh)
+        canvas.paste(acrylic, (0, 0), mask)
+        # the terminal's cells: only those the camera can see
+        c0 = max(0, int(math.floor((0 - X) / ppc)) - 1)
+        c1 = min(cols, int(math.ceil((Wc - X) / ppc)) + 1)
+        r0 = max(0, int(math.floor((0 - Y) / cellh)) - 1)
+        r1 = min(rows, int(math.ceil((Hc - Y) / cellh)) + 1)
+        if c1 > c0 and r1 > r0:
+            term = region_image(idx, size, r0, r1, c0, c1, ppc)
+            canvas.paste(term.convert("RGB"), (round(X + c0 * ppc), round(Y + r0 * cellh)), term.getchannel("A"))
+        # the title bar and the border
+        if ry0 + bar > -20 and ry0 < Hc:
+            ov = Image.new("RGBA", (Wc, Hc), (0, 0, 0, 0))
+            d = ImageDraw.Draw(ov)
+            d.rounded_rectangle((rx0 + 10 * u, ry0 + 7 * u, rx0 + 200 * u, ry0 + bar), radius=8 * u, fill=(255, 255, 255, 30))
+            d.text((rx0 + 26 * u, ry0 + bar / 2 + u), "tuiboard", font=chrome_font(max(5, int(15 * u))), fill=(235, 235, 240, 255), anchor="lm")
+            bx, yc, w = rx1 - 12 * u, ry0 + bar / 2, max(1, round(u))
+            d.line((bx - 26 * u, yc - 6 * u, bx - 14 * u, yc + 6 * u), fill=(220, 220, 225, 255), width=w)
+            d.line((bx - 26 * u, yc + 6 * u, bx - 14 * u, yc - 6 * u), fill=(220, 220, 225, 255), width=w)
+            d.rectangle((bx - 70 * u, yc - 6 * u, bx - 58 * u, yc + 6 * u), outline=(220, 220, 225, 255), width=w)
+            d.line((bx - 112 * u, yc, bx - 100 * u, yc), fill=(220, 220, 225, 255), width=w)
+            d.rounded_rectangle((rx0, ry0, rx1, ry1), radius=12 * u, outline=(255, 255, 255, 38), width=max(1, round(u * 0.8)))
+            canvas = Image.alpha_composite(canvas.convert("RGBA"), ov).convert("RGB")
+        if win_alpha < 0.999:
+            canvas = Image.blend(bg, canvas, win_alpha)
+    arr = np.asarray(canvas)
+    if rot:
+        M = cv2.getRotationMatrix2D((Wc / 2, Hc / 2), theta, 1.0)
+        arr = cv2.warpAffine(arr, M, (Wc, Hc), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
+        arr = arr[my : my + H, mx : mx + W]
+    return arr
+
+
+@lru_cache(maxsize=1)
+def pixel_grid():
+    ys, xs = np.mgrid[0:H, 0:W].astype(np.float32)
+    return (xs - W / 2) / (W / 2), (ys - H / 2) / (H / 2)
+
+
+def optics(arr, ex, cut=0.0):
+    """Depth of field along a diagonal focus line, bloom on the bright type, a vignette."""
+    img = arr.astype(np.float32)
+    gx, gy = pixel_grid()
+    dof = ex["dof"]
+    if dof > 0.01 or cut > 0.01 or ex.get("text_blur", 0) > 0.01:
+        f0, ph = ex["focus"]
+        ang = 0.62 + ph * 0.5
+        dist = np.abs(gx * math.cos(ang) + gy * math.sin(ang) - f0)
+        band = np.clip((dist - 0.22) / 0.55, 0, 1)
+        band = band * band * (3 - 2 * band)
+        sigma = 3 + 11 * dof
+        blurred = cv2.GaussianBlur(img, (0, 0), sigma)
+        centre = np.exp(-((gy / 0.30) ** 2)) * ex.get("text_blur", 0.0)  # where the headline sits
+        mask = np.clip(band * dof + cut + centre, 0, 1)[..., None]
+        img = img * (1 - mask) + blurred * mask
+    if ex["bloom"] > 0.01:
+        bright = np.clip(img - 120, 0, 255)
+        glow = cv2.GaussianBlur(bright, (0, 0), 16) * (ex["bloom"] * 1.6)
+        img = img + glow
+    if ex["vig"] > 0.01:
+        r2 = gx * gx * 0.8 + gy * gy
+        img = img * (1 - ex["vig"] * r2)[..., None]
+    return np.clip(img, 0, 255).astype(np.uint8)
 
 
 # ── Overlays ─────────────────────────────────────────────────────────────────
@@ -354,41 +490,53 @@ def typed(text, t, a, b, seed):
     return text[: sum(1 for x in typing_times(text, a, b, seed) if x <= t)]
 
 
+def shadowed_text(ov, xy, text, fnt, fill, anchor, strength):
+    """Text with a soft dark glow behind it, so it reads over the close-ups."""
+    if strength > 0.02 and text:
+        layer = Image.new("RGBA", ov.size, (0, 0, 0, 0))
+        ImageDraw.Draw(layer).text(xy, text, font=fnt, fill=(4, 8, 16, int(230 * strength)), anchor=anchor)
+        layer = layer.filter(ImageFilter.GaussianBlur(14))
+        ov.alpha_composite(layer)
+    ImageDraw.Draw(ov).text(xy, text, font=fnt, fill=fill, anchor=anchor)
+
+
 def draw_intro(ov, t):
     if t >= INTRO_FADE[1]:
         return
-    d = ImageDraw.Draw(ov)
     fade = 1 - ramp(t, *INTRO_FADE)
-    f = mono(66)
+    f = mono(68)
     cx, cy = W / 2, H / 2
-    ys = (cy - 46, cy + 46)
+    ys = (cy - 56, cy + 56)
+    # a soft dark band, so the type reads over whatever the close-up shows
+    band = Image.new("RGBA", ov.size, (0, 0, 0, 0))
+    ImageDraw.Draw(band).rectangle((0, cy - 130, W, cy + 130), fill=(5, 9, 18, int(215 * fade)))
+    ov.alpha_composite(band.filter(ImageFilter.GaussianBlur(46)))
     shown = []
     for n, (text, col, a, b) in enumerate(INTRO):
         s = typed(text, t, a, b, 11 + n)
         shown.append(s)
-        d.text((cx, ys[n]), s, font=f, fill=with_alpha(col, fade), anchor="mm")
-    # a steady caret at the end of what has been typed (it blinks slowly once typing stops)
+        shadowed_text(ov, (cx, ys[n]), s, f, with_alpha(col, fade), "mm", fade)
     last = max((n for n, s in enumerate(shown) if s), default=0)
     typing = any(0 < len(s) < len(INTRO[n][0]) for n, s in enumerate(shown))
     if typing or int(t * 1.6) % 2 == 0:
         w = f.getlength(shown[last]) if shown[last] else 0
         x = cx + w / 2 + 6
-        d.rectangle((x, ys[last] - 34, x + 26, ys[last] + 34), fill=with_alpha(YEL, fade * 0.9))
+        ImageDraw.Draw(ov).rectangle((x, ys[last] - 36, x + 28, ys[last] + 36), fill=with_alpha(YEL, fade * 0.9))
 
 
-def draw_caption(ov, t, geom):
+def draw_caption(ov, t):
     cap = next((c for c in CAPTIONS if c[0] <= t < c[1]), None)
-    if not cap or not geom:
+    if not cap:
         return
     a, b, title, sub = cap
     k = window_of(t, a, b, 0.30, 0.25)
     if k <= 0.01:
         return
     d = ImageDraw.Draw(ov)
-    ft, fs = ui(40), ui(24)
+    ft, fs = mono(38), sans(24)
     tw = max(d.textlength(title, font=ft), d.textlength(sub, font=fs))
     pw, ph = tw + 72, 112
-    y0 = min(geom["bottom"] + 20, H - ph - 24) + (1 - k) * 14
+    y0 = H - ph - 16 + (1 - k) * 14
     d.rounded_rectangle((W / 2 - pw / 2, y0, W / 2 + pw / 2, y0 + ph), radius=24, fill=(10, 13, 20, int(225 * k)))
     d.text((W / 2, y0 + 36), title, font=ft, fill=with_alpha(WHITE, k), anchor="mm")
     d.text((W / 2, y0 + 80), sub, font=fs, fill=with_alpha(YEL, k), anchor="mm")
@@ -398,22 +546,28 @@ def draw_kicker(ov, t):
     k = next((c for c in KICKERS if c[0] <= t < c[1]), None)
     if not k:
         return
-    a, b, lines, sub = k
-    v = window_of(t, a, b, 0.35, 0.30)
+    a, b, lines, sub, sub_mono = k
+    out = 1 - ramp(t, b - 0.30, b)
+    d = ImageDraw.Draw(ov)
+    ft = mono(86)
+    y = H / 2 - 110
+    for i, line in enumerate(lines):
+        la = a + 0.12 * i
+        v = ramp(t, la, la + 0.35) * out
+        if v <= 0.01:
+            continue
+        x = 140 - (1 - ramp(t, la, la + 0.45)) * 70
+        d.text((x, y + i * 112), line, font=ft, fill=with_alpha(K1 if i == 0 else K2, v), anchor="lm")
+    yy = y + len(lines) * 112 + 14
+    v = ramp(t, a + 0.35, a + 0.75) * out
     if v <= 0.01:
         return
-    d = ImageDraw.Draw(ov)
-    x = 150 - (1 - ramp(t, a, a + 0.45)) * 60
-    ft = ui(104)
-    y = H / 2 - 120
-    for i, line in enumerate(lines):
-        d.text((x, y + i * 122), line, font=ft, fill=with_alpha(K1 if i == 0 else K2, v), anchor="lm")
-    yy = y + len(lines) * 122 + 18
+    x = 140 - (1 - ramp(t, a + 0.35, a + 0.85)) * 50
     if sub:
-        d.text((x, yy), sub, font=ui(30), fill=with_alpha(KSUB, v), anchor="lm")
+        d.text((x, yy), sub, font=mono(27, False) if sub_mono else sans(30), fill=with_alpha(KSUB, v), anchor="lm")
         return
     active = next((i for i, (lo, hi) in enumerate(FILTER_TAGS) if lo <= t < hi), None)
-    fx = ui(28)
+    fx = mono(27, False)
     cx = x
     for n, (code, name, col) in enumerate(HARNESS):
         label = f"{code}  {name}"
@@ -422,8 +576,39 @@ def draw_kicker(ov, t):
         d.rounded_rectangle((cx, yy - 26, cx + w, yy + 26), radius=26, fill=with_alpha(col, tv))
         d.text((cx + w / 2, yy), label, font=fx, fill=with_alpha(INK, tv), anchor="mm")
         cx += w + 14
-        if cx > 880 and code != "pi":
+        if cx > 860 and code != "pi":
             cx, yy = x, yy + 66
+
+
+KEYS = []
+
+
+def draw_keycaps(ov, t):
+    """The key or gesture behind the change that just happened, in a cap that fades after a moment."""
+    ev = None
+    for ft, label in KEYS:
+        if ft <= t:
+            ev = (ft, label)
+        else:
+            break
+    if not ev or t - ev[0] > 0.85:
+        return
+    ft, label = ev
+    k = ramp(t - ft, 0.0, 0.08) * (1 - ramp(t - ft, 0.65, 0.85))
+    if k <= 0.01 or not (6.6 < t < 30.3):
+        return
+    text = label.replace("Shift+Tab", "Shift + Tab")
+    d = ImageDraw.Draw(ov)
+    fnt = mono(34)
+    w = d.textlength(text, font=fnt) + 56
+    h = 66
+    pop = 1 + 0.10 * math.exp(-(t - ft) * 16)
+    single = t >= 13.8
+    x0, y0 = (140, H - 210) if single else (90, H - 100)
+    w2, h2 = w * pop, h * pop
+    d.rounded_rectangle((x0, y0 - (h2 - h) / 2, x0 + w2, y0 + h2 - (h2 - h) / 2), radius=14,
+                        fill=(10, 13, 20, int(225 * k)), outline=with_alpha(CYA, k), width=2)
+    d.text((x0 + w2 / 2, y0 + h / 2), text, font=fnt, fill=with_alpha(WHITE, k), anchor="mm")
 
 
 # The wordmark the boot splash prints (src/ui/splash.ts): FIGlet "Rectangles", a yellow ramp.
@@ -438,12 +623,10 @@ WORDMARK_RAMP = [(244, 250, 200), (238, 247, 182), (234, 246, 173), (224, 239, 1
 
 def draw_wordmark(ov, cx, top, alpha, cell=(30, 62), thick=5):
     """The splash wordmark, drawn the way a terminal draws it: each cell's bar, rule or dot is a
-    shape that fills the cell, so the strokes join across rows instead of breaking at the font's
-    own glyph edges."""
+    shape that fills the cell, so the strokes join across rows instead of breaking at glyph edges."""
     d = ImageDraw.Draw(ov)
     cw, ch = cell
-    w = cw * len(WORDMARK[0])
-    x0 = cx - w / 2
+    x0 = cx - cw * len(WORDMARK[0]) / 2
     t = thick
     for i, line in enumerate(WORDMARK):
         col = with_alpha(WORDMARK_RAMP[i], alpha)
@@ -469,34 +652,57 @@ def draw_endcard(ov, t):
         return
     d = ImageDraw.Draw(ov)
     cx = W / 2
-    a_mark = ramp(t, *END["mark"])
-    h = draw_wordmark(ov, cx, 185, a_mark)
-    a = ramp(t, *END["sub"])
-    d.text((cx, 185 + h + 34), "terminal kanban · agenda · agents", font=ui(26), fill=with_alpha((110, 120, 110), a), anchor="mm")
+    top = 205
+    h = draw_wordmark(ov, cx, top, ramp(t, *END["mark"]))
+    # four tools in one: the line the film closes on, large
     a = ramp(t, *END["tag"])
-    d.text((cx, 185 + h + 120), "Your kanban board is just markdown.", font=ui(48), fill=with_alpha(WHITE, a), anchor="mm")
+    d.text((cx, top + h + 92 + (1 - a) * 12), "terminal kanban · agenda · agents", font=mono(60), fill=with_alpha(WHITE, a), anchor="mm")
     a = ramp(t, *END["cmd"])
     fc = mono(40)
     w = d.textlength("$ bun install -g tuiboard", font=fc) + 70
-    y = 185 + h + 200
+    y = top + h + 190
     d.rounded_rectangle((cx - w / 2, y, cx + w / 2, y + 82), radius=10, outline=with_alpha(CYA, a), width=2, fill=(13, 17, 23, int(200 * a)))
     d.text((cx - w / 2 + 35, y + 41), "$", font=fc, fill=with_alpha(YEL, a), anchor="lm")
     d.text((cx - w / 2 + 35 + fc.getlength("$ "), y + 41), "bun install -g tuiboard", font=fc, fill=with_alpha(WHITE, a), anchor="lm")
     a = ramp(t, *END["url"])
-    d.text((cx, y + 82 + 56), "github.com/NazzarenoGiannelli/tuiboard", font=ui(28), fill=with_alpha(DIM, a), anchor="mm")
+    d.text((cx, y + 82 + 56), "github.com/NazzarenoGiannelli/tuiboard", font=mono(28, False), fill=with_alpha(DIM, a), anchor="mm")
     a = ramp(t, *END["foot"])
-    d.text((cx, y + 82 + 104), "Plain markdown. MIT. Linux · macOS · Windows.", font=ui(24), fill=with_alpha(CYA, a * 0.8), anchor="mm")
+    d.text((cx, y + 82 + 104), "Plain markdown. MIT. Linux · macOS · Windows.", font=sans(24), fill=with_alpha(CYA, a * 0.8), anchor="mm")
+
+
+def view_at(t, dark):
+    """The picture of the camera at time t (a numpy array), with the optics applied."""
+    idx = frame_index(t)
+    f = FRAMES[idx][1]
+    pose, ex = camera(t, f)
+    if t < PULLBACK[0]:
+        # a dissolve with a pull of focus where one close-up hands over to the next
+        for s in SHOTS[1:]:
+            if abs(t - s[0]) < CUT / 2:
+                prev = SHOTS[SHOTS.index(s) - 1]
+                k = smooth((t - (s[0] - CUT / 2)) / CUT)
+                a = render_view(t, idx, shot_pose(prev, min(t, prev[1])), dark=dark)
+                b = render_view(t, idx, shot_pose(s, max(t, s[0])), dark=dark)
+                arr = cv2.addWeighted(a, 1 - k, b, k, 0)
+                return optics(arr, ex, cut=0.8 * math.sin(k * math.pi))
+    arr = render_view(t, idx, pose, win_alpha=ex["win_alpha"], dark=dark)
+    return optics(arr, ex)
 
 
 def render_frame(f):
     t = f / FPS
     dark = darkness(t)
-    canvas = gradient_q(round(t * 2) / 2, int(round(dark * 100))).convert("RGBA")
-    geom = draw_window(canvas, t)
+    if t >= 30.6 and t < END["mark"][0] - 0.2 or t >= END["mark"][0] - 0.2:
+        # no window on screen: just the deep blue
+        img = Image.fromarray(np.asarray(backdrop((W, H), round(t * 2) / 2, int(round(dark * 100)))))
+    else:
+        img = Image.fromarray(view_at(t, dark))
+    canvas = img.convert("RGBA")
     ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     draw_intro(ov, t)
-    draw_caption(ov, t, geom)
+    draw_caption(ov, t)
     draw_kicker(ov, t)
+    draw_keycaps(ov, t)
     draw_endcard(ov, t)
     canvas.alpha_composite(ov)
     out = canvas.convert("RGB")
@@ -505,20 +711,27 @@ def render_frame(f):
     return f, out
 
 
+def _init():
+    global KEYS
+    load_frames()
+    KEYS = key_events()
+
+
 def _work(f):
     return render_frame(f)
 
 
 def main():
+    global KEYS
     ap = argparse.ArgumentParser()
-    default_audio = next((p for p in (HERE / "out" / "future-launch.mp3",) if p.exists()), HERE / "out" / "music.wav")
-    ap.add_argument("--audio", default=str(default_audio))
+    audio = HERE / "out" / "film-audio.wav"
+    ap.add_argument("--audio", default=str(audio))
     ap.add_argument("--out", default=str(HERE / "out" / "tuiboard-launch.mp4"))
     ap.add_argument("--preview", nargs="*", type=float, help="write stills at these seconds and stop")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) - 4))
     a = ap.parse_args()
 
-    load_frames()
+    _init()
     if not FRAMES:
         sys.exit("no promo frames: run `bun run demo:film` (or capture the `promo` scene) first")
 
@@ -538,8 +751,8 @@ def main():
     tmp.mkdir(parents=True)
     print(f"{total} frames at {FPS} fps, {a.workers} workers")
     done = 0
-    with Pool(a.workers, initializer=load_frames) as pool:
-        for f, img in pool.imap(_work, range(total), chunksize=6):
+    with Pool(a.workers, initializer=_init) as pool:
+        for f, img in pool.imap(_work, range(total), chunksize=4):
             img.save(tmp / f"{f:05d}.jpg", quality=95, subsampling=0)
             done += 1
             if done % 200 == 0:
@@ -547,7 +760,7 @@ def main():
     dur = total / FPS
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(FPS), "-i", str(tmp / "%05d.jpg")]
     if a.audio and Path(a.audio).exists():
-        cmd += ["-i", a.audio, "-af", f"loudnorm=I=-14:TP=-1.5:LRA=9,afade=t=out:st={dur - 1.6:.2f}:d=1.6",
+        cmd += ["-i", a.audio, "-af", f"loudnorm=I=-14:TP=-1.5:LRA=9,afade=t=out:st={dur - 1.4:.2f}:d=1.4",
                 "-c:a", "aac", "-b:a", "192k"]
     cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "16", "-preset", "medium", "-movflags", "+faststart", "-t", f"{dur:.3f}", a.out]
     subprocess.run(cmd, check=True)

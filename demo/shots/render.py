@@ -43,10 +43,10 @@ def find_font(*names):
     raise FileNotFoundError(f"none of {names} in {FONT_DIRS}")
 
 
-MONO = find_font("CascadiaMono.ttf", "consola.ttf")
+MONO = find_font("JetBrainsMonoNerdFontMono-Regular.ttf", "CascadiaMono.ttf", "consola.ttf")
 MONO_BOLD = None
 try:
-    MONO_BOLD = find_font("CascadiaMonoBold.ttf", "consolab.ttf")
+    MONO_BOLD = find_font("JetBrainsMonoNerdFontMono-Bold.ttf", "CascadiaMonoBold.ttf", "consolab.ttf")
 except FileNotFoundError:
     pass
 EMOJI = find_font("seguiemj.ttf")
@@ -161,32 +161,44 @@ def draw_box_char(d, ch, x, y, m, fg):
         seg(cx, cy, x + m.cw, cy, w(right))
 
 
-def draw_terminal(frame, m, back, origin):
-    """Draw one captured frame onto `back` (RGBA, supersampled) with its top-left at `origin`."""
+def draw_terminal(frame, m, back, origin, region=None):
+    """Draw one captured frame onto `back` (RGBA, supersampled) with its top-left at `origin`.
+
+    `region` (r0, r1, c0, c1), in cells, draws only that part; `origin` is then where the region's
+    own top-left goes. The film's close-ups use it to draw just what the camera sees."""
     ox, oy = origin
     cols, rows = frame["cols"], frame["rows"]
-    layer = Image.new("RGBA", (cols * m.cw, rows * m.ch), (0, 0, 0, 0))
+    r0, r1, c0, c1 = region if region else (0, rows, 0, cols)
+    X0, Y0 = c0 * m.cw, r0 * m.ch
+    layer = Image.new("RGBA", ((c1 - c0) * m.cw, (r1 - r0) * m.ch), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     # 1. backgrounds
     for r, line in enumerate(frame["lines"]):
+        if r < r0 or r >= r1:
+            continue
         c = 0
         for s in line:
             bg = rgba(s.get("bg"))
-            if bg and bg[3] > 0:
-                d.rectangle((c * m.cw, r * m.ch, (c + s["w"]) * m.cw - 1, (r + 1) * m.ch - 1), fill=bg)
+            if bg and bg[3] > 0 and c + s["w"] > c0 and c < c1:
+                d.rectangle((c * m.cw - X0, r * m.ch - Y0, (c + s["w"]) * m.cw - 1 - X0, (r + 1) * m.ch - 1 - Y0), fill=bg)
             c += s["w"]
     # 2. text
     for r, line in enumerate(frame["lines"]):
+        if r < r0 or r >= r1:
+            continue
         c = 0
-        y = r * m.ch
+        y = r * m.ch - Y0
         for s in line:
+            if c + s["w"] <= c0 or c >= c1:
+                c += s["w"]
+                continue
             fg = rgba(s.get("fg"), TEXT_DEFAULT + (255,))
             if fg[3] == 0:
                 fg = TEXT_DEFAULT + (255,)
             col = 0
             for ch in s["t"]:
                 cw = cell_width(ch)
-                x = (c + col) * m.cw
+                x = (c + col) * m.cw - X0
                 if ch in LIGHT:
                     draw_box_char(d, ch, x, y, m, fg)
                 elif ch != " ":

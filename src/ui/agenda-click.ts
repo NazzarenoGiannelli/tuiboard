@@ -4,8 +4,11 @@
  * A click used to arm whatever it touched, so merely pointing at a block made
  * it the armed one: Enter then meant "keep the placement" instead of "done", and
  * the thing that had to be selected to be completed was always already armed.
- * Now one click selects, two arm: selecting is how you look at a task, arming
- * is how you decide to move it.
+ *
+ * Now there are two phases. With nothing armed, one click selects and two arm:
+ * selecting is how you look at a task, arming is how you decide to move it. Once
+ * something is armed every click is about it: one click puts it where you
+ * clicked (even inside its own body), two keep it there and let go.
  *
  * Pure (the clock is a parameter), so the rules are testable without a terminal.
  */
@@ -29,7 +32,16 @@ export function createClickTracker(now: () => number = Date.now, windowMs: numbe
   };
 }
 
-export type ClickIntent = "select" | "arm" | "disarm" | "place";
+/**
+ * - `select`  move the cursor to it
+ * - `arm`     arm it (a tray task is also placed, like `c`)
+ * - `place`   put the armed task where this block starts
+ * - `grab`    a press on the armed block itself: what it does (move to the row
+ *             clicked, or follow a drag) depends on what happens next, so the
+ *             view decides on release
+ * - `keep`    leave the armed task where it is and let go, like Enter
+ */
+export type ClickIntent = "select" | "arm" | "place" | "grab" | "keep";
 
 export interface ClickContext {
   kind: ClickKind;
@@ -42,10 +54,16 @@ export interface ClickContext {
 }
 
 export function clickIntent(ctx: ClickContext): ClickIntent {
-  // With another task armed, a click on a block places it at that block's start
-  // (stacking two blocks at the same minute). The tray has no time to place at.
-  if (ctx.target === "band" && ctx.armed === "other") return "place";
-  const arms = ctx.kind === "double" || ctx.armMode;
-  if (!arms) return "select";
-  return ctx.armed === "same" ? "disarm" : "arm";
+  if (ctx.armed === "none") {
+    return ctx.kind === "double" || ctx.armMode ? "arm" : "select";
+  }
+  if (ctx.target === "tray") {
+    // A tray row has no time to place at, so a click there is about the tray
+    // task: two arm it (switching from the armed one), two on the armed one keep.
+    if (ctx.kind === "double") return ctx.armed === "same" ? "keep" : "arm";
+    return ctx.armMode ? "arm" : "select";
+  }
+  // On the grid: two clicks keep the armed task where the first one put it.
+  if (ctx.kind === "double") return "keep";
+  return ctx.armed === "same" ? "grab" : "place";
 }

@@ -37,32 +37,56 @@ describe("createClickTracker", () => {
 describe("clickIntent", () => {
   const ctx = (over = {}) => ({ kind: "single" as const, armMode: false, armed: "none" as const, target: "band" as const, ...over });
 
-  it("one click selects, it does not arm", () => {
-    expect(clickIntent(ctx())).toBe("select");
-    expect(clickIntent(ctx({ target: "tray" }))).toBe("select");
-    expect(clickIntent(ctx({ armed: "same" }))).toBe("select"); // an armed block stays armed when clicked once
+  describe("nothing armed: one click selects, two arm", () => {
+    it("selects on one click, on the grid and in the tray", () => {
+      expect(clickIntent(ctx())).toBe("select");
+      expect(clickIntent(ctx({ target: "tray" }))).toBe("select");
+    });
+
+    it("arms on two", () => {
+      expect(clickIntent(ctx({ kind: "double" }))).toBe("arm");
+      expect(clickIntent(ctx({ kind: "double", target: "tray" }))).toBe("arm");
+    });
+
+    it("arm mode, chosen on purpose, arms on every click", () => {
+      expect(clickIntent(ctx({ armMode: true }))).toBe("arm");
+      expect(clickIntent(ctx({ armMode: true, target: "tray" }))).toBe("arm");
+    });
   });
 
-  it("two clicks arm, and two on the armed one disarm it", () => {
-    expect(clickIntent(ctx({ kind: "double" }))).toBe("arm");
-    expect(clickIntent(ctx({ kind: "double", target: "tray" }))).toBe("arm");
-    expect(clickIntent(ctx({ kind: "double", armed: "same" }))).toBe("disarm");
+  describe("something armed: every click is about it", () => {
+    it("one click on the armed block grabs it, so a click can land inside its own body", () => {
+      expect(clickIntent(ctx({ armed: "same" }))).toBe("grab");
+    });
+
+    it("one click on another block places the armed task at that block's start", () => {
+      expect(clickIntent(ctx({ armed: "other" }))).toBe("place");
+    });
+
+    it("two clicks keep it where the first put it, on either kind of block", () => {
+      expect(clickIntent(ctx({ kind: "double", armed: "same" }))).toBe("keep");
+      expect(clickIntent(ctx({ kind: "double", armed: "other" }))).toBe("keep");
+    });
+
+    it("arm mode does not change that", () => {
+      expect(clickIntent(ctx({ armMode: true, armed: "same" }))).toBe("grab");
+      expect(clickIntent(ctx({ armMode: true, armed: "other" }))).toBe("place");
+      expect(clickIntent(ctx({ armMode: true, kind: "double", armed: "same" }))).toBe("keep");
+    });
   });
 
-  it("with another task armed, a click on a block places it there", () => {
-    expect(clickIntent(ctx({ armed: "other" }))).toBe("place");
-    expect(clickIntent(ctx({ kind: "double", armed: "other" }))).toBe("place");
-  });
+  describe("the tray has no time to place at", () => {
+    it("with another task armed, one click selects and two switch to this one", () => {
+      expect(clickIntent(ctx({ armed: "other", target: "tray" }))).toBe("select");
+      expect(clickIntent(ctx({ kind: "double", armed: "other", target: "tray" }))).toBe("arm");
+    });
 
-  it("a tray row has no time to place at: with another task armed it arms this one", () => {
-    expect(clickIntent(ctx({ kind: "double", armed: "other", target: "tray" }))).toBe("arm");
-    expect(clickIntent(ctx({ armed: "other", target: "tray" }))).toBe("select");
-  });
+    it("two clicks on the armed tray task keep it", () => {
+      expect(clickIntent(ctx({ kind: "double", armed: "same", target: "tray" }))).toBe("keep");
+    });
 
-  it("arm mode, chosen on purpose, arms on every click", () => {
-    expect(clickIntent(ctx({ armMode: true }))).toBe("arm");
-    expect(clickIntent(ctx({ armMode: true, target: "tray" }))).toBe("arm");
-    expect(clickIntent(ctx({ armMode: true, armed: "same" }))).toBe("disarm");
-    expect(clickIntent(ctx({ armMode: true, armed: "other" }))).toBe("place");
+    it("arm mode arms on a single click there", () => {
+      expect(clickIntent(ctx({ armMode: true, armed: "other", target: "tray" }))).toBe("arm");
+    });
   });
 });

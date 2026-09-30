@@ -32,7 +32,6 @@ import { isTask } from "~/parser/markdown";
 import {
   isoToday,
   isoTomorrow,
-  type ArmOrigin,
   type ModalKind,
   type TaskRef,
   type TuiStore,
@@ -161,9 +160,8 @@ export function handleKey(
     if (ui.armMode || ui.armedTimelineRef) {
       // Cancel: the armed task goes back to how it was, the cursor to where
       // `c` was pressed (#73).
-      const armedBefore = ui.armedTimelineRef;
-      const hadTask = !!armedBefore;
-      restoreArmOrigin(store, store.leaveArmMode(false), plannerCount, armedBefore);
+      const hadTask = !!ui.armedTimelineRef;
+      store.endArm(false);
       store.flashBanner("info", hadTask ? "Cancelled" : "Arm mode off");
       return;
     }
@@ -411,44 +409,6 @@ function handlePlannerZone(
   }
 }
 
-/**
- * In the Agenda, put the cursor on `focus`, wherever the last action left it:
- * placing a task moves it from the "To place" tray into the grid, undoing
- * moves it back, and a row number would point at a different task.
- */
-function followInAgenda(store: TuiStore, focus: TaskRef | undefined): boolean {
-  if (!focus || store.state.ui.activeZone !== "timeline") return false;
-  const at = store.agendaIndexOf(focus);
-  if (at === undefined) return false;
-  store.setCursor(0, at);
-  return true;
-}
-
-/**
- * Put the cursor back where `c` started arm mode. `focus` is the task that was
- * armed: when arm mode began in the Agenda (or was never begun, a click armed
- * the block) the cursor follows the task instead of returning to a stale row.
- */
-function restoreArmOrigin(
-  store: TuiStore,
-  origin: ArmOrigin | undefined,
-  plannerCount = Infinity,
-  focus?: TaskRef,
-): boolean {
-  if (!origin) {
-    followInAgenda(store, focus);
-    return false;
-  }
-  if (origin.boardIndex !== store.state.ui.activeBoardIndex) store.setActiveBoard(origin.boardIndex);
-  store.setActiveZone(origin.zone);
-  if (origin.zone === "timeline" && followInAgenda(store, focus)) return true;
-  // Placing a task can reorder the planner (it joins the time-blocked
-  // bucket); the row stays, clamped to what's there.
-  const row = origin.zone === "planner" ? Math.min(origin.row, Math.max(0, plannerCount - 1)) : origin.row;
-  store.setCursor(origin.col, row);
-  return true;
-}
-
 function handleTimelineZone(
   store: TuiStore,
   key: KeyEvent,
@@ -512,8 +472,7 @@ function handleTimelineZone(
   // `c` started. A task armed straight from its band (a click) has no origin:
   // it stays in the Agenda, where the placement was made. `g` goes to the card.
   if (armedRef && (key.name === "enter" || key.name === "return")) {
-    const origin = store.leaveArmMode(true);
-    restoreArmOrigin(store, origin, plannerCount, armedRef);
+    store.endArm(true);
     const t = store.getTask(armedRef);
     store.flashBanner("info", t?.timeBlock ? `✓ ${fmtHm(t.timeBlock.startMin)}-${fmtHm(t.timeBlock.endMin)}` : "Arm mode off");
     return;
@@ -871,8 +830,7 @@ function dispatchTaskAction(
   if (key.name === "c" && !key.shift) {
     if (store.state.ui.armMode) {
       // `c` again keeps what was placed, like Enter.
-      const was = store.state.ui.armedTimelineRef;
-      restoreArmOrigin(store, store.leaveArmMode(true), Infinity, was);
+      store.endArm(true);
       store.flashBanner("info", "Arm mode off");
       return true;
     }

@@ -43,7 +43,8 @@ describe("hintsFor", () => {
       }
     }
     expect(HINTS_ARMED).toContain("esc undo");
-    expect(HINTS_ARMED).toContain("⏎ keep");
+    expect(HINTS_ARMED).toContain("keep");
+    expect(HINTS_ARMED).toContain("2× click"); // the mouse keeps it too
   });
 
   it("arm mode waiting for a task says what to click; armed beats it", () => {

@@ -58,6 +58,7 @@ import { isTask, parseBoard } from "~/parser/markdown";
 import { buildNoteIndex, readNoteBody, resolveNote, type NoteIndex } from "~/notes/index";
 import { buildRing, ringPosition, samePane, stepRing, type Pane } from "~/ui/pane-ring";
 import { serializeBoard } from "~/parser/serialize";
+import { buildPlannerItems } from "~/store/planner-panel";
 import {
   DEFAULT_BLOCK_MIN,
   PLACE_FROM_HOUR,
@@ -1442,6 +1443,37 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     }
   }
 
+  /**
+   * Leave arm mode and put the cursor back — the one way out, whatever asked
+   * for it: Enter and a double click keep the placement (`confirm`), Esc undoes
+   * it. The cursor returns to where `c` was pressed; when arm mode began in the
+   * Agenda, or a click armed the block and there is nowhere to return to, it
+   * follows the armed task instead of a row number that now means another task.
+   */
+  function endArm(confirm: boolean): void {
+    const focus = state.ui.armedTimelineRef;
+    const origin = leaveArmMode(confirm);
+    const follow = (): boolean => {
+      if (!focus || state.ui.activeZone !== "timeline") return false;
+      const at = agendaIndexOf(focus);
+      if (at === undefined) return false;
+      setCursor(0, at);
+      return true;
+    };
+    if (!origin) {
+      follow();
+      return;
+    }
+    if (origin.boardIndex !== state.ui.activeBoardIndex) setActiveBoard(origin.boardIndex);
+    setActiveZone(origin.zone);
+    if (origin.zone === "timeline" && follow()) return;
+    // Placing a task can reorder the planner (it joins the time-blocked
+    // bucket); the row stays, clamped to what is there.
+    const plannerCount = buildPlannerItems(state.boards.map((b) => b.board)).length;
+    const row = origin.zone === "planner" ? Math.min(origin.row, Math.max(0, plannerCount - 1)) : origin.row;
+    setCursor(origin.col, row);
+  }
+
   /** Start arm mode from the cursor, remembering where it started. */
   function startArmMode(ref: TaskRef): void {
     const ui = state.ui;
@@ -2061,6 +2093,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     armAndPlace,
     agendaIndexOf,
     leaveArmMode,
+    endArm,
     agendaDate,
     shiftAgendaDay,
     resetAgendaDay,

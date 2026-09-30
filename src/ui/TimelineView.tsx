@@ -10,11 +10,13 @@
  * Mouse interaction (click-to-arm + click-to-place, like Python timeline.py):
  *
  *   Click on a band      → SELECT it (cursor); two clicks → ARM it (warm highlight)
+ *   Armed: click any row → the block goes there, even inside its own body;
+ *                          drag the body to move it, drag the bottom edge (↕) to resize
+ *   Armed: two clicks    → keep it where it is and let go (like Enter)
  *   Click a tray row     → SELECT it; two clicks → ARM it and place it (like `c`)
  *   Click on empty row   → if armed, MOVE the armed block's start there;
  *                          if not, only a reminder (n adds an event, c places a task)
  *   Shift+click empty    → if armed, RESIZE the armed block's end there
- *   Two clicks on armed  → disarm
  *
  * Keyboard interaction (handled in handleKey when activeZone === "timeline"):
  *
@@ -217,14 +219,37 @@ export function TimelineView(props: TimelineViewProps) {
     !!a && a.boardPath === b.boardPath && a.columnIndex === b.columnIndex && a.taskIndex === b.taskIndex;
   const keyOf = (prefix: string, r: TaskRef) => `${prefix}:${r.boardPath}:${r.columnIndex}:${r.taskIndex}`;
 
+  // A press on the armed block starts a grab: dragging the body moves it, dragging
+  // its bottom edge (the handle) resizes it, and releasing without dragging is a
+  // plain click that puts it at the row clicked. Positions are relative to where
+  // the press landed (rows moved x 15 min), so they do not depend on where the
+  // panel sits on screen.
+  interface Drag {
+    mode: "move" | "resize";
+    ref: TaskRef;
+    startY: number;
+    origStart: number;
+    origEnd: number;
+    moved: boolean;
+  }
+  let drag: Drag | undefined;
+
+  /** Leave the armed task where it is and let go, like Enter. */
+  const keepArmed = () => {
+    const e = armedEntry();
+    props.store.endArm(true);
+    props.store.flashBanner("info", e ? `✓ ${formatHm(e.startMin)}-${formatHm(e.endMin)} kept` : "Kept");
+  };
+
   /**
-   * Click on a block band. One click SELECTS it (the cursor moves, Enter
-   * ticks it, m/t/s/b work on it); two clicks ARM it, or disarm it when it is
-   * the armed one. With a DIFFERENT task armed, a click PLACES that task at this
-   * band's start (stacking two blocks at the same minute). Arm mode, turned on
-   * with `c`, arms on every click. The rules live in agenda-click.ts.
+   * Click on a block band. With nothing armed, one click SELECTS it (the cursor
+   * moves, Enter ticks it, m/t/s/b work on it) and two ARM it. Once a task is
+   * armed, a click on its own block GRABS it (a click puts it at the row clicked,
+   * a drag carries it), a click on another block places the armed task at that
+   * block's start, and two clicks anywhere KEEP it where the first one put it.
+   * Arm mode, turned on with `c`, arms on every click. Rules: agenda-click.ts.
    */
-  const onBlockClick = (entry: TimelineEntry, event: MouseEventLike) => {
+  const onBlockClick = (entry: TimelineEntry, event: MouseEventLike, rowIndex: number) => {
     props.store.setActiveZone("timeline");
 
     // Calendar events can't be armed or time-block-moved. While a task is armed,
@@ -260,34 +285,77 @@ export function TimelineView(props: TimelineViewProps) {
 
     const arm = armedRef();
     const armedState = !arm ? "none" : sameTask(arm, entry.ref) ? "same" : "other";
+    // Armed, a double click is "the same row twice" wherever it lands; otherwise
+    // it is "the same block twice".
     const intent = clickIntent({
-      kind: clicks.click(keyOf("band", entry.ref)),
+      kind: clicks.click(arm ? `row:${rowIndex}` : keyOf("band", entry.ref)),
       armMode: armMode(),
       armed: armedState,
       target: "band",
     });
 
+    if (intent === "keep") {
+      keepArmed();
+      return;
+    }
     if (intent === "place") {
-      // Delegate to onEmptyRowClick using the band's startRow — places
-      // (move or create) the armed task at this band's start time. Lets
-      // the user pile two blocks at the same minute (e.g. both at 9:00).
-      onEmptyRowClick(entry.startRow, event);
+      // Put the armed task where this band starts — lets the user pile two
+      // blocks at the same minute (e.g. both at 9:00).
+      placeArmedAt(entry.startRow, event);
       return;
     }
 
     const idx = entries().indexOf(entry);
     if (idx >= 0) props.store.setCursor(0, tray().length + idx);
 
-    if (intent === "disarm") {
-      props.store.armTimeline(undefined);
-      props.store.flashBanner("info", "Disarmed");
+    if (intent === "grab") {
+      drag = {
+        mode: rowIndex === entry.endRow - 1 ? "resize" : "move",
+        ref: entry.ref,
+        startY: event.y,
+        origStart: entry.startMin,
+        origEnd: entry.endMin,
+        moved: false,
+      };
     } else if (intent === "arm") {
       props.store.armTimeline(entry.ref);
       props.store.flashBanner(
         "info",
-        `◉ ${formatHm(entry.startMin)}-${formatHm(entry.endMin)} · j/k move · +/- length · ⏎ keep · esc undo`,
+        `◉ ${formatHm(entry.startMin)}-${formatHm(entry.endMin)} · click to move · drag ↕ to resize · 2× click keep`,
       );
     }
+  };
+
+  /** The pointer moved with the button down after a press on the armed block. */
+  const onBlockDrag = (event: MouseEventLike) => {
+    const d = drag;
+    if (!d) return;
+    const steps = event.y - d.startY;
+    if (steps !== 0) d.moved = true;
+    const cur = props.store.getTask(d.ref)?.timeBlock;
+    if (!cur) return;
+    const delta = steps * MINS_PER_ROW;
+    const DAY_END = 24 * 60 - 1;
+    let next: { startMin: number; endMin: number };
+    if (d.mode === "move") {
+      const length = d.origEnd - d.origStart;
+      const startMin = Math.max(0, Math.min(DAY_END - length, d.origStart + delta));
+      next = { startMin, endMin: startMin + length };
+    } else {
+      next = { startMin: d.origStart, endMin: Math.max(d.origStart + MIN_BLOCK_MIN, Math.min(DAY_END, d.origEnd + delta)) };
+    }
+    if (next.startMin === cur.startMin && next.endMin === cur.endMin) return;
+    props.store.setTimeBlock(d.ref, next);
+    props.store.flashBanner("info", `${d.mode === "move" ? "✋" : "↕"} ${formatHm(next.startMin)}-${formatHm(next.endMin)}`);
+  };
+
+  /** The button came up (or a drag ended) on a row of the grid. */
+  const onBlockRelease = (rowIndex: number, event: MouseEventLike) => {
+    const d = drag;
+    drag = undefined;
+    // A press that never dragged is a plain click: the block goes to that row.
+    // On the handle a plain click does nothing; dragging is how it resizes.
+    if (d && !d.moved && d.mode === "move" && armedRef()) placeArmedAt(rowIndex, event);
   };
 
   /**
@@ -315,9 +383,8 @@ export function TimelineView(props: TimelineViewProps) {
           ? `◉ ${formatHm(slot.startMin)}-${formatHm(slot.endMin)} ${tailTruncate(item.task.displayTitle, 28)} · j/k move · +/- length · ⏎ keep · esc undo`
           : `◉ Armed ${tailTruncate(item.task.displayTitle, 28)} · ⏎ keep · esc undo`,
       );
-    } else if (intent === "disarm") {
-      props.store.armTimeline(undefined);
-      props.store.flashBanner("info", "Disarmed");
+    } else if (intent === "keep") {
+      keepArmed();
     }
   };
 
@@ -329,6 +396,17 @@ export function TimelineView(props: TimelineViewProps) {
    *   - No block (unscheduled)   → CREATE block at clicked row, 30min default
    */
   const onEmptyRowClick = (rowIndex: number, event: MouseEventLike) => {
+    if (armedRef() && clicks.click(`row:${rowIndex}`) === "double") {
+      // Two clicks on the same row: the first put the armed task there, the
+      // second keeps it, like Enter.
+      keepArmed();
+      return;
+    }
+    placeArmedAt(rowIndex, event);
+  };
+
+  /** Move (or create, or resize) the armed task's block to the row clicked. */
+  const placeArmedAt = (rowIndex: number, event: MouseEventLike) => {
     const armed = armedTask();
     const ref = armedRef();
     if (!armed || !ref) {
@@ -522,6 +600,8 @@ export function TimelineView(props: TimelineViewProps) {
                 innerWidth={props.width ? props.width - 4 : undefined}
                 onBlockClick={onBlockClick}
                 onEmptyRowClick={onEmptyRowClick}
+                onBlockDrag={onBlockDrag}
+                onBlockRelease={onBlockRelease}
               />
             </box>
           )}
@@ -570,8 +650,12 @@ interface TimelineRowProps {
   selectedCalKey: string | undefined;
   /** Panel content width (border+padding already removed). Undefined = fullscreen. */
   innerWidth?: number;
-  onBlockClick: (entry: TimelineEntry, event: MouseEventLike) => void;
+  onBlockClick: (entry: TimelineEntry, event: MouseEventLike, rowIndex: number) => void;
   onEmptyRowClick: (rowIndex: number, event: MouseEventLike) => void;
+  /** The pointer moved with the button down, after a press on the armed block. */
+  onBlockDrag: (event: MouseEventLike) => void;
+  /** The button came up (or the drag ended) on a row of the grid. */
+  onBlockRelease: (rowIndex: number, event: MouseEventLike) => void;
 }
 
 function TimelineRow(props: TimelineRowProps) {
@@ -622,13 +706,17 @@ function TimelineRow(props: TimelineRowProps) {
   const cellMouseDown = (cellEntry: TimelineEntry | undefined) => {
     return (event: MouseEventLike) => {
       if (cellEntry) {
-        props.onBlockClick(cellEntry, event);
+        props.onBlockClick(cellEntry, event, props.rowIndex);
       } else {
         // Empty / hour / now row — placement target when armed.
         props.onEmptyRowClick(props.rowIndex, event);
       }
     };
   };
+
+  /** Drag and release travel with the press, so they are wired wherever a press is. */
+  const onDrag = (event: MouseEventLike) => props.onBlockDrag(event);
+  const onRelease = (event: MouseEventLike) => props.onBlockRelease(props.rowIndex, event);
 
   return (
     <Show
@@ -648,9 +736,12 @@ function TimelineRow(props: TimelineRowProps) {
             ),
           }}
           onMouseDown={cellMouseDown(left().entry)}
+          onMouseDrag={onDrag}
+          onMouseUp={onRelease}
+          onMouseDragEnd={onRelease}
         >
           <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
-            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={innerW()} />
+            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={innerW()} armed={leftIsArmed()} />
           </text>
         </box>
       }
@@ -677,9 +768,12 @@ function TimelineRow(props: TimelineRowProps) {
             ),
           }}
           onMouseDown={cellMouseDown(left().entry)}
+          onMouseDrag={onDrag}
+          onMouseUp={onRelease}
+          onMouseDragEnd={onRelease}
         >
           <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
-            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={splitLeftW()} />
+            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={splitLeftW()} armed={leftIsArmed()} />
           </text>
         </box>
         <text style={{ width: 1, flexShrink: 0 }} wrapMode="none">
@@ -718,6 +812,8 @@ interface RowContentProps {
   skipPrefix?: boolean;
   /** Cell budget for this lane — used to tail-truncate the block title. */
   laneWidth?: number;
+  /** The armed block: its bottom edge becomes a handle to drag. */
+  armed?: boolean;
 }
 
 function RowContent(props: RowContentProps) {
@@ -839,8 +935,15 @@ function RowContent(props: RowContentProps) {
         <span style={{ fg: T.textDim }}>{prefix}</span>
         <span style={{ fg: color }}>{isLast ? "╰" : "│"}</span>
         <Show when={isLast}>
-          {/* Bottom edge of the block — clear visual cap. */}
-          <span style={{ fg: color }}>{"─".repeat(120)}</span>
+          {/* Bottom edge of the block — clear visual cap. Armed, it is also the
+              handle: drag it to change the duration. */}
+          <Show
+            when={props.armed}
+            fallback={<span style={{ fg: color }}>{"─".repeat(120)}</span>}
+          >
+            <span style={{ fg: T.warmActive, attributes: ATTR.bold }}>{"━ ↕ "}</span>
+            <span style={{ fg: T.warmActive }}>{"━".repeat(120)}</span>
+          </Show>
         </Show>
       </>
     );

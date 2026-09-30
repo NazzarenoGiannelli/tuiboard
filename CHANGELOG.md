@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Drag to move and resize.** While a block is armed, dragging its body moves it
+  and dragging its bottom edge changes its length; the edge shows a handle
+  (`━ ↕`) so it can be found. Positions follow the rows you move across, in
+  15-minute steps, and the length never goes below 15 minutes. The Agenda is now
+  tested against OpenTUI's mock mouse on the real view: clicks, double clicks and
+  drags.
 - **A "To place" tray in the Agenda.** The day's tasks that have no hour yet sit
   at the top of the Agenda, and it is one cursor with the blocks below: `j`/`k`
   walk both, and every task key (`Enter`, `m`, `t`, `s`, `b`, `.`, `c`…) works on
@@ -25,14 +31,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arm mode waiting for a task says what to click.
 
 ### Changed
-- **Agenda mouse: one click selects, two arm.** Any click on a block used to
-  arm it, so merely pointing at a task made it the armed one: `Enter` then
-  meant "keep the placement" instead of "done", and the only tasks you could
-  tick were the ones you had not touched. Now a click moves the cursor to the
-  block (Enter ticks it, `m`/`t`/`s`/`b` work on it) and a double click arms
-  it; a double click on the armed one disarms it. With another task armed, a
-  click on a block still places that task at its start, and arm mode, turned
-  on with `c`, still arms on every click.
+- **Agenda mouse: one click selects, two arm; once armed, click anywhere to place
+  and click twice to let go.** Any click on a block used to arm it, so merely
+  pointing at a task made it the armed one: `Enter` then meant "keep the
+  placement" instead of "done", and the only tasks you could tick were the ones
+  you had not touched. Now a click moves the cursor to the block (Enter ticks
+  it, `m`/`t`/`s`/`b` work on it) and a double click arms it. Armed, every click
+  is about that block: one click puts it at the row clicked and two keep it
+  there and let go, like `Enter` (the first click of the pair already moved it,
+  so it stays exactly where you pointed). A click on another block still places
+  the armed task at its start; arm mode, turned on with `c`, still arms on every
+  click.
 - **One line says what is armed** in the Agenda, instead of two; the keys that
   apply are on the bottom bar.
 - **A click on an empty slot no longer opens the new-event dialog.** With nothing
@@ -48,6 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bunfig.toml` that registers it for `bun test`.
 
 ### Fixed
+- **You can click a row covered by the block itself.** Clicking inside the armed
+  block's own body did nothing, so a quarter-hour nudge by mouse was impossible
+  whenever the time you wanted was under the task. It now puts the start on the
+  row you clicked.
 - **The tray's rows can be clicked.** They ignored the mouse, so a task in the
   "To place" tray could only be reached with the keyboard. A click selects it
   and a double click arms it and places it, as `c` does.

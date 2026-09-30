@@ -29,7 +29,7 @@ export const HINTS_FULL =
 export const HINTS_COMPACT = "hl pane · ⇧Tab zone · ⏎ done · ? help · q quit";
 
 /** A block is armed: the four things that apply, and the safe way out. */
-export const HINTS_ARMED = "j/k move · +/- length · ⏎ keep · esc undo";
+export const HINTS_ARMED = "j/k move · +/- length · ⏎ or 2× click keep · esc undo";
 
 /** Arm mode, nothing armed yet. */
 export const HINTS_ARM_MODE = "click a task, then a slot · esc off";

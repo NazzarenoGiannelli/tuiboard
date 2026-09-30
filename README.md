@@ -1,5 +1,7 @@
 # tuiboard
 
+**[tuiboard.nazzareno.xyz](https://tuiboard.nazzareno.xyz)**: the website, with every feature in motion.
+
 A terminal **kanban** board on plain markdown files, with three optional panels
 you switch on or off: a **Today/Tomorrow planner** across all your boards, a
 **24-hour agenda** you drag and resize time blocks on, with a Google / Microsoft 365

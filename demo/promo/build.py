@@ -734,9 +734,9 @@ def draw_endcard(ov, t):
     d.text((cx - w / 2 + 35, y + 41), "$", font=fc, fill=with_alpha(YEL, a), anchor="lm")
     d.text((cx - w / 2 + 35 + fc.getlength("$ "), y + 41), "bun install -g tuiboard", font=fc, fill=with_alpha(WHITE, a), anchor="lm")
     a = ramp(t, *END["url"])
-    d.text((cx, y + 82 + 56), "github.com/NazzarenoGiannelli/tuiboard", font=mono(28), fill=with_alpha(DIM, a), anchor="mm")
+    d.text((cx, y + 82 + 60), "tuiboard.nazzareno.xyz", font=mono(36), fill=with_alpha(WHITE, a), anchor="mm")
     a = ramp(t, *END["foot"])
-    d.text((cx, y + 82 + 104), "Plain markdown. MIT. Linux · macOS · Windows.", font=sans(24), fill=with_alpha(CYA, a * 0.8), anchor="mm")
+    d.text((cx, y + 82 + 116), "Plain markdown | MIT | Linux-macOS-Windows", font=sans(26), fill=with_alpha(CYA, a * 0.9), anchor="mm")
 
 
 def view_at(t, dark):

@@ -523,8 +523,10 @@ function handleTimelineZone(
     if (store.stepPane(1)) return;
     return;
   }
-  // Enter on a timeline block bounces the kanban cursor to its source task.
-  if ((key.name === "enter" || key.name === "return") && target) {
+  // `g` on a timeline block bounces the kanban cursor to its source task
+  // ("go to"). Enter is not taken here: like in board and planner it falls
+  // through to dispatchTaskAction and toggles done.
+  if (key.name === "g" && !key.ctrl && !key.shift && target) {
     jumpToKanban(store, target.ref);
     return;
   }
@@ -763,8 +765,8 @@ function dispatchTaskAction(
   ref: TaskRef,
   openLater: (m: ModalKind) => void,
 ): boolean {
-  // Toggle done (Enter). Only meaningful for board/planner; timeline has
-  // its own Enter behavior (jump to kanban) which is handled earlier.
+  // Toggle done (Enter), the same in board, planner and timeline. A block
+  // armed in the timeline keeps Enter for "keep the placement" (handled earlier).
   if (key.name === "enter" || key.name === "return") {
     const n = store.applyToMarkedOr(ref, (r) => store.toggleDone(r));
     if (n > 1) store.flashBanner("info", `Toggled done on ${n} tasks`);

@@ -462,7 +462,8 @@ session (until the next terminal resize).
 | `c` | Arm mode: click a task, then click a slot to schedule (works from any zone) |
 | `j` / `k` | While armed: nudge the block ±15 min |
 | `+` / `-` | While armed: resize the block's end ±15 min |
-| `Enter` | While armed: keep the placement and go back to where `c` was pressed |
+| `Enter` | While armed: keep the placement and go back to where `c` was pressed. Otherwise: toggle done on the task under the cursor, like everywhere else |
+| `g` | Go to the task's card: jump the kanban cursor to it |
 | `Esc` | While armed: undo the placement and go back to where `c` was pressed |
 
 A placed task stays armed, so it can be sized and moved straight away.

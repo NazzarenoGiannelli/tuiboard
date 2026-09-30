@@ -83,6 +83,14 @@ interface MouseEventLike {
   modifiers?: { shift?: boolean; alt?: boolean; ctrl?: boolean };
 }
 
+/**
+ * The row of a block that resizes it: its closing rule (the row of its end time),
+ * or its last body row when the block runs to the bottom of the day and has none.
+ */
+function handleRowOf(entry: { endRow: number }): number {
+  return entry.endRow < TOTAL_ROWS ? entry.endRow : entry.endRow - 1;
+}
+
 interface TimelineViewProps {
   store: TuiStore;
   width?: number;
@@ -310,7 +318,7 @@ export function TimelineView(props: TimelineViewProps) {
 
     if (intent === "grab") {
       drag = {
-        mode: rowIndex === entry.endRow - 1 ? "resize" : "move",
+        mode: rowIndex === handleRowOf(entry) ? "resize" : "move",
         ref: entry.ref,
         startY: event.y,
         origStart: entry.startMin,
@@ -376,12 +384,12 @@ export function TimelineView(props: TimelineViewProps) {
       target: "tray",
     });
     if (intent === "arm") {
-      const slot = props.store.armAndPlace(item.ref);
+      // Arming only arms: the task stays in the tray, marked, until a click on
+      // a slot (or the first j/k) says where it goes.
+      props.store.armInAgenda(item.ref);
       props.store.flashBanner(
         "info",
-        slot
-          ? `◉ ${formatHm(slot.startMin)}-${formatHm(slot.endMin)} ${tailTruncate(item.task.displayTitle, 28)} · j/k move · +/- length · ⏎ keep · esc undo`
-          : `◉ Armed ${tailTruncate(item.task.displayTitle, 28)} · ⏎ keep · esc undo`,
+        `◉ Armed ${tailTruncate(item.task.displayTitle, 28)} · click a slot to place it · esc cancel`,
       );
     } else if (intent === "keep") {
       keepArmed();
@@ -667,22 +675,27 @@ function TimelineRow(props: TimelineRowProps) {
   // Right lane occupied → split row horizontally.
   const isSplit = () => right().kind !== "empty";
 
+  // The closing rule belongs to its block but is not part of its fill: no
+  // cursor, armed or selection tint on it.
   const leftIsCursor = () =>
     !!props.cursorEntry &&
     left().entry !== undefined &&
+    left().kind !== "edge" &&
     left().entry === props.cursorEntry;
   const rightIsCursor = () =>
     !!props.cursorEntry &&
     right().entry !== undefined &&
+    right().kind !== "edge" &&
     right().entry === props.cursorEntry;
 
   const leftIsBlock = () => isBlockKind(left().kind);
   const rightIsBlock = () => isBlockKind(right().kind);
 
-  const leftIsArmed = () =>
-    !!props.armedEntry && left().entry === props.armedEntry;
+  /** This lane's row belongs to the armed block, its closing rule included. */
+  const leftOwnsArmed = () => !!props.armedEntry && left().entry === props.armedEntry;
+  const leftIsArmed = () => leftOwnsArmed() && left().kind !== "edge";
   const rightIsArmed = () =>
-    !!props.armedEntry && right().entry === props.armedEntry;
+    !!props.armedEntry && right().entry === props.armedEntry && right().kind !== "edge";
 
   const isSelectedCal = (e: TimelineEntry | undefined) =>
     !!props.selectedCalKey &&
@@ -741,7 +754,7 @@ function TimelineRow(props: TimelineRowProps) {
           onMouseDragEnd={onRelease}
         >
           <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
-            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={innerW()} armed={leftIsArmed()} />
+            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={innerW()} armed={leftOwnsArmed()} />
           </text>
         </box>
       }
@@ -773,7 +786,7 @@ function TimelineRow(props: TimelineRowProps) {
           onMouseDragEnd={onRelease}
         >
           <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
-            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={splitLeftW()} armed={leftIsArmed()} />
+            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={splitLeftW()} armed={leftOwnsArmed()} />
           </text>
         </box>
         <text style={{ width: 1, flexShrink: 0 }} wrapMode="none">
@@ -816,9 +829,18 @@ interface RowContentProps {
   armed?: boolean;
 }
 
+/**
+ * The gutter of a row: blank, or the hour on the rows that start one. A block
+ * that covers an hour row used to hide its label; the ruler has to stay readable.
+ */
+function hourPrefix(rowIndex: number): string {
+  if ((rowIndex * MINS_PER_ROW) % 60 !== 0) return "   ";
+  return String(DAY_START_HOUR + Math.floor((rowIndex * MINS_PER_ROW) / 60)).padStart(2, "0") + " ";
+}
+
 function RowContent(props: RowContentProps) {
   const r = props.row;
-  const prefix = props.skipPrefix ? "" : "   ";
+  const prefix = props.skipPrefix ? "" : hourPrefix(props.rowIndex);
 
   if (r.kind === "now") {
     return (
@@ -864,6 +886,11 @@ function RowContent(props: RowContentProps) {
             {"┤ "}{formatHm(e.startMin)}{"-"}{formatHm(e.endMin)}{" "}
           </span>
           <span style={{ fg: e.color }}>{"📅 "}</span>
+          <Show when={e.endRow - e.startRow === 1}>
+            <span style={{ fg: e.color }}>
+              {tailTruncate(e.title, Math.max(4, (props.laneWidth ?? 200) - 3 - 17))}
+            </span>
+          </Show>
         </>
       );
     }
@@ -887,6 +914,16 @@ function RowContent(props: RowContentProps) {
         <Show when={priorityGlyph}>
           <span style={{ fg: PRIORITY_COLOR[e.task.priority] }}>
             {priorityGlyph}
+          </span>
+        </Show>
+        {/* A quarter of an hour is one row: the title rides on it, there is no
+            second row to put it on. */}
+        <Show when={e.endRow - e.startRow === 1}>
+          <span style={{ fg: e.task.done ? T.done : T.text }}>
+            {tailTruncate(
+              e.task.displayTitle,
+              Math.max(4, (props.laneWidth ?? 200) - 3 - 15 - (e.task.assignee ? e.task.assignee.length + 2 : 0) - (priorityGlyph ? 3 : 0)),
+            )}
           </span>
         </Show>
       </>
@@ -929,21 +966,28 @@ function RowContent(props: RowContentProps) {
   if (r.kind === "fill" && r.entry) {
     const e = r.entry;
     const color = e.kind === "calendar" ? e.color : boardColor(e.boardIndex);
-    const isLast = props.rowIndex === e.endRow - 1;
     return (
       <>
         <span style={{ fg: T.textDim }}>{prefix}</span>
-        <span style={{ fg: color }}>{isLast ? "╰" : "│"}</span>
-        <Show when={isLast}>
-          {/* Bottom edge of the block — clear visual cap. Armed, it is also the
-              handle: drag it to change the duration. */}
-          <Show
-            when={props.armed}
-            fallback={<span style={{ fg: color }}>{"─".repeat(120)}</span>}
-          >
-            <span style={{ fg: T.warmActive, attributes: ATTR.bold }}>{"━ ↕ "}</span>
-            <span style={{ fg: T.warmActive }}>{"━".repeat(120)}</span>
-          </Show>
+        <span style={{ fg: color }}>{"│"}</span>
+      </>
+    );
+  }
+  if (r.kind === "edge" && r.entry) {
+    // The rule that closes the block, on the row of its end time. Armed, it is
+    // also the handle: drag it to change the duration.
+    const e = r.entry;
+    const color = e.kind === "calendar" ? e.color : boardColor(e.boardIndex);
+    return (
+      <>
+        <span style={{ fg: T.textDim }}>{prefix}</span>
+        <span style={{ fg: props.armed ? T.warmActive : color }}>{"╰"}</span>
+        <Show
+          when={props.armed}
+          fallback={<span style={{ fg: color }}>{"─".repeat(120)}</span>}
+        >
+          <span style={{ fg: T.warmActive, attributes: ATTR.bold }}>{"━ ↕ "}</span>
+          <span style={{ fg: T.warmActive }}>{"━".repeat(120)}</span>
         </Show>
       </>
     );

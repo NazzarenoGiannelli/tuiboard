@@ -218,14 +218,18 @@ describe("the tray", () => {
     expect(store.state.ui.row).toBe(0);
   });
 
-  it("two clicks arm it and put it in the first free half hour", async () => {
-    const { t, store, find, block, settle } = await mount();
+  it("two clicks arm it and place nothing: it stays in the tray until you click a slot", async () => {
+    const { t, store, find, hourRow, block, settle } = await mount();
     const row = find("Beta");
     await t.mockMouse.doubleClick(row.x + 1, row.y);
     await settle();
     expect(store.state.ui.armedTimelineRef).toMatchObject({ taskIndex: 1 });
-    // Tomorrow the search starts at 09:00 and Alpha holds 09:30-10:30: 09:00-09:30 fits.
-    expect(block(BETA())).toEqual({ startMin: hm(9), endMin: hm(9, 30) });
+    expect(block(BETA())).toBeUndefined(); // nothing moved
+
+    await t.mockMouse.click(row.x + 1, hourRow(12));
+    await settle();
+    expect(block(BETA())).toEqual({ startMin: hm(12), endMin: hm(12, 30) }); // where you clicked, half an hour
+    expect(store.state.ui.armedTimelineRef).toMatchObject({ taskIndex: 1 }); // and still armed
   });
 });
 

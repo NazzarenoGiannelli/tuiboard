@@ -22,8 +22,12 @@ export const MINS_PER_ROW = 15;
 /** Total renderable rows. (23-7)*60/15 = 64. */
 export const TOTAL_ROWS =
   ((DAY_END_HOUR - DAY_START_HOUR) * 60) / MINS_PER_ROW;
-/** Minimum block height in rows — single-row blocks are unreadable. */
-export const MIN_BLOCK_ROWS = 2;
+/**
+ * Minimum block height in rows. The grid is a ruler: a block starts on the row
+ * of its first minute and a closing rule sits on the row of its end, so one body
+ * row is a quarter of an hour and the rule below it comes on top.
+ */
+export const MIN_BLOCK_ROWS = 1;
 
 interface BaseEntry {
   startMin: number;
@@ -74,13 +78,17 @@ function rowsFor(
   const startRow = Math.floor((startMin - windowStart) / MINS_PER_ROW);
   const naturalHeight = Math.max(
     MIN_BLOCK_ROWS,
-    Math.floor((endMin - startMin) / MINS_PER_ROW),
+    Math.round((endMin - startMin) / MINS_PER_ROW),
   );
   const endRow = startRow + naturalHeight;
   return { startRow: Math.max(0, startRow), endRow: Math.min(TOTAL_ROWS, endRow) };
 }
 
-export type RowKind = "empty" | "hour" | "head" | "body" | "fill" | "now";
+/**
+ * `edge` is the rule that closes a block, drawn on the row of its end time (the
+ * row below its last body row). It is not part of the block's fill.
+ */
+export type RowKind = "empty" | "hour" | "head" | "body" | "fill" | "edge" | "now";
 
 export interface RowMapEntry {
   kind: RowKind;
@@ -266,6 +274,11 @@ export function buildRowMap(
       if (r === start) target[r] = { kind: "head", entry };
       else if (r === start + 1) target[r] = { kind: "body", entry };
       else target[r] = { kind: "fill", entry };
+    }
+    // The closing rule goes on the row of the block's end time — unless that row
+    // is taken (the next block starts right there and its first row is the rule).
+    if (end < TOTAL_ROWS && (target[end]!.kind === "empty" || target[end]!.kind === "hour")) {
+      target[end] = { kind: "edge", entry };
     }
   }
 

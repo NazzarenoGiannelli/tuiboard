@@ -202,8 +202,8 @@ describe("buildRowMap", () => {
     // Lane 1 (right) gets B starting at row 7.
     expect(rows[7]!.right.kind).toBe("head");
     expect(titleOf(rows[7]!.right.entry)).toBe("B");
-    // Row 10 is past A's end but inside B → left empty, right fill.
-    expect(rows[10]!.left.kind).toBe("empty");
+    // Row 10 is A's end: its closing rule sits there; B carries on in the right lane.
+    expect(rows[10]!.left.kind).toBe("edge");
     expect(titleOf(rows[10]!.right.entry)).toBe("B");
   });
 
@@ -384,5 +384,69 @@ describe("findFreeSlot", () => {
   it("a full day still returns a slot to nudge, at the asked-for start", () => {
     const full = [{ startMin: 0, endMin: 24 * 60 }];
     expect(findFreeSlot(full, H(12))).toEqual({ startMin: H(12), endMin: H(12, 30) });
+  });
+});
+
+describe("the grid is a ruler: a block closes on the row of its end time", () => {
+  const H = (h: number, m = 0) => h * 60 + m;
+  const rowOf = (mins: number) => (mins - DAY_START_HOUR * 60) / MINS_PER_ROW;
+  const board = (...tasks: Task[]) => makeBoard("Work", "/w.md", tasks);
+  const DAY = "2026-10-01";
+  const at = (title: string, start: number, end: number) =>
+    makeTask({ displayTitle: title, scheduled: DAY, timeBlock: { startMin: start, endMin: end } });
+
+  it("a block covers as many rows as it has quarter hours, and a quarter of an hour is one row", () => {
+    const heights = (start: number, end: number) => {
+      const [e] = buildTimelineEntries([board(at("x", start, end))], DAY);
+      return e!.endRow - e!.startRow;
+    };
+    expect(heights(H(8), H(8, 15))).toBe(1);
+    expect(heights(H(9), H(9, 30))).toBe(2);
+    expect(heights(H(10, 30), H(11, 30))).toBe(4);
+  });
+
+  it("the closing rule is on the row of the end time", () => {
+    const entries = buildTimelineEntries([board(at("x", H(9), H(9, 30)))], DAY);
+    const { rows } = buildRowMap(entries, -1);
+    expect(rows[rowOf(H(9))]!.left.kind).toBe("head");
+    expect(rows[rowOf(H(9, 15))]!.left.kind).toBe("body");
+    expect(rows[rowOf(H(9, 30))]!.left.kind).toBe("edge"); // 09:30, where the block ends
+    expect(rows[rowOf(H(9, 45))]!.left.kind).toBe("empty");
+  });
+
+  it("a one-row block is its head and then its rule", () => {
+    const entries = buildTimelineEntries([board(at("x", H(8), H(8, 15)))], DAY);
+    const { rows } = buildRowMap(entries, -1);
+    expect(rows[rowOf(H(8))]!.left.kind).toBe("head");
+    expect(rows[rowOf(H(8, 15))]!.left.kind).toBe("edge");
+  });
+
+  it("an end on the hour replaces the hour row with the rule (the hour is still labelled by the gutter)", () => {
+    const entries = buildTimelineEntries([board(at("x", H(9), H(10)))], DAY);
+    const { rows } = buildRowMap(entries, -1);
+    expect(rows[rowOf(H(10))]!.left.kind).toBe("edge");
+  });
+
+  it("back to back: the second block's first row is the shared rule, no extra row between", () => {
+    const entries = buildTimelineEntries(
+      [board(at("a", H(9), H(9, 30)), at("b", H(9, 30), H(10)))],
+      DAY,
+    );
+    const { rows } = buildRowMap(entries, -1);
+    expect(rows[rowOf(H(9, 30))]!.left.kind).toBe("head"); // b starts where a ends
+    expect(rows[rowOf(H(10))]!.left.kind).toBe("edge"); // and only b closes
+  });
+
+  it("a block that runs to the bottom of the day has no row left for a rule", () => {
+    const entries = buildTimelineEntries([board(at("x", H(22), H(23)))], DAY);
+    const { rows } = buildRowMap(entries, -1);
+    expect(rows[TOTAL_ROWS - 1]!.left.kind).toBe("fill");
+    expect(rows.some((r) => r.left.kind === "edge")).toBe(false);
+  });
+
+  it("the now marker wins over a rule on the same row", () => {
+    const entries = buildTimelineEntries([board(at("x", H(9), H(9, 30)))], DAY);
+    const { rows } = buildRowMap(entries, H(9, 30));
+    expect(rows[rowOf(H(9, 30))]!.left.kind).toBe("now");
   });
 });

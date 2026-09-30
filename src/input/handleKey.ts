@@ -478,6 +478,24 @@ function handleTimelineZone(
     return;
   }
 
+  // Armed but not on the grid yet (a tray task): the first movement key is how
+  // the keyboard chooses — it puts the task in the first free half hour, and
+  // from there j/k and +/- nudge it like any armed block.
+  if (armedRef && !armed) {
+    const placing =
+      key.name === "j" || key.name === "k" || key.name === "up" || key.name === "down" ||
+      isPlusKey(key) || key.name === "=" || isMinusKey(key) || key.name === "_";
+    if (placing) {
+      const slot = store.placeAtFreeSlot(armedRef);
+      const at = store.agendaIndexOf(armedRef);
+      if (at !== undefined) store.setCursor(0, at);
+      if (slot) {
+        store.flashBanner("info", `◉ ${fmtHm(slot.startMin)}-${fmtHm(slot.endMin)} · j/k move · +/- length · ⏎ keep · esc undo`);
+      }
+      return;
+    }
+  }
+
   if (armed) {
     const NUDGE = 15; // minutes
     if (key.name === "j" || key.name === "down") {
@@ -838,19 +856,18 @@ function dispatchTaskAction(
       store.flashBanner("info", "The Agenda is off (zones.agenda) — nothing to place a task on");
       return true;
     }
-    // No hour yet: armAndPlace proposes the first free half hour, so there is
-    // a block to move with j/k and stretch with +/- and placing never needs
-    // the mouse.
-    const slot = store.armAndPlace(ref);
+    // Arming only arms. A task with no hour yet waits, marked, until you click
+    // a slot or press j/k: nothing moves before you have decided.
+    store.armInAgenda(ref);
     const t = store.getTask(ref);
     const name = t ? `"${t.displayTitle.slice(0, 28)}"` : "";
     store.flashBanner(
       "info",
-      slot
-        ? `◉ ${fmtHm(slot.startMin)}-${fmtHm(slot.endMin)} ${name} · j/k move · +/- length · ⏎ keep · esc undo`
-        : t
+      t
+        ? t.timeBlock
           ? `◉ Armed ${name} · j/k move · +/- length · ⏎ keep · esc undo`
-          : "◉ Arm mode — click a task, then a slot. Esc to exit.",
+          : `◉ Armed ${name} · click a slot, or j/k to place it · esc cancel`
+        : "◉ Arm mode — click a task, then a slot. Esc to exit.",
     );
     return true;
   }

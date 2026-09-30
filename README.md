@@ -461,7 +461,7 @@ session (until the next terminal resize).
 | `j` / `k` | One cursor over the **To place** tray (the day's tasks that have no hour yet) and then the blocks |
 | `[` / `]` | Previous / next day — shows that day's tasks **and** calendar events (works from any zone, single-pane included; does nothing when the Agenda is off or hidden with `F2`) |
 | `\` | Jump back to today |
-| `c` | Arm the task under the cursor. With no hour yet it is placed in the first free half hour (from now today, from 09:00 on other days, clear of blocks and events), so `j`/`k`, `+`/`-` and `Enter` apply at once and the mouse is optional. It is also **arm mode**: click a task, then click a slot (works from any zone). With no room for the Agenda beside the board (100-149 columns) it takes the screen for the placement and gives it back when arm mode ends |
+| `c` | Arm the task under the cursor and take you to the Agenda. Arming only arms: a task with no hour yet waits in the tray until you say where — a click on a slot, or the first `j`/`k`/`+`/`-`, which puts it in the first free half hour (from now today, from 09:00 on other days, clear of blocks and events). It is also **arm mode**: click a task, then click a slot (works from any zone). With no room for the Agenda beside the board (100-149 columns) it takes the screen for the placement and gives it back when arm mode ends |
 | `j` / `k` | While armed: nudge the block ±15 min |
 | `+` / `-` | While armed: resize the block's end ±15 min |
 | `Enter` | While armed: keep the placement and go back to where `c` was pressed (if you armed by clicking a block, you stay in the Agenda). Otherwise: toggle done on the task under the cursor, like everywhere else |
@@ -470,11 +470,17 @@ session (until the next terminal resize).
 
 A placed task stays armed, so it can be sized and moved straight away.
 
+The grid is a **ruler**: each row is an instant, the hour line `10 ───` is 10:00,
+and a block runs from the row of its start to a closing rule on the row of its end
+(`╰───` at 09:30 for a 09:00-09:30 block). A quarter of an hour is one row, with the
+title beside the time; back-to-back blocks share the rule; the hour stays written
+in the gutter on every row that starts one, even under a block.
+
 **Mouse: one click selects, two arm; once armed, click anywhere to place and click
 twice to let go.** With nothing armed, clicking a block or a tray row moves the
 cursor to it, so `Enter` ticks it and `m`, `t`, `s`, `b` work on it; clicking it
-twice arms it (a tray task is also placed in the first free half hour, like
-`c`). From then on every click is about the armed block: a click puts it at the
+twice arms it (a tray task stays in the tray, marked, until a click on a slot
+or the first `j`/`k` says where it goes). From then on every click is about the armed block: a click puts it at the
 row you clicked — including a row of its own body, for a quarter-hour nudge —
 and two clicks on a row put it there and keep it, like `Enter`. You can also
 drag: the body moves the block, and its bottom edge (`━ ↕`, shown while armed)

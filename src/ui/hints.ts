@@ -12,6 +12,8 @@ export interface HintContext {
   singlePane: boolean;
   /** A task is armed in the Agenda: its block can be moved, resized, kept, undone. */
   armed: boolean;
+  /** The armed task is already on the grid. False: it waits for a click or a key to say where. */
+  placed?: boolean;
   /** Arm mode is on with nothing armed yet: waiting for a task, then a slot. */
   armMode: boolean;
 }
@@ -31,6 +33,9 @@ export const HINTS_COMPACT = "hl pane · ⇧Tab zone · ⏎ done · ? help · q 
 /** A block is armed: the four things that apply, and the safe way out. */
 export const HINTS_ARMED = "j/k move · +/- length · ⏎ or 2× click keep · esc undo";
 
+/** Armed, but still in the tray: how to choose where it goes. */
+export const HINTS_ARMED_NEW = "click a slot, or j/k to place · esc cancel";
+
 /** Arm mode, nothing armed yet. */
 export const HINTS_ARM_MODE = "click a task, then a slot · esc off";
 
@@ -41,7 +46,7 @@ export const HINTS_AGENDA_FULL =
 export const HINTS_AGENDA_COMPACT = "c place · n event · [ ] day · ⏎ done · ⇧Tab zone · ? help";
 
 export function hintsFor(ctx: HintContext): string {
-  if (ctx.armed) return HINTS_ARMED;
+  if (ctx.armed) return ctx.placed === false ? HINTS_ARMED_NEW : HINTS_ARMED;
   if (ctx.armMode) return HINTS_ARM_MODE;
   if (ctx.zone === "timeline") return ctx.singlePane ? HINTS_AGENDA_COMPACT : HINTS_AGENDA_FULL;
   return ctx.singlePane ? HINTS_COMPACT : HINTS_FULL;

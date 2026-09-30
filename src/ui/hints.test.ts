@@ -4,6 +4,7 @@ import {
   HINTS_AGENDA_COMPACT,
   HINTS_AGENDA_FULL,
   HINTS_ARMED,
+  HINTS_ARMED_NEW,
   HINTS_ARM_MODE,
   HINTS_COMPACT,
   HINTS_FULL,
@@ -47,13 +48,20 @@ describe("hintsFor", () => {
     expect(HINTS_ARMED).toContain("2× click"); // the mouse keeps it too
   });
 
+  it("an armed task that is not on the grid yet says how to choose where it goes", () => {
+    expect(hintsFor(ctx({ armed: true, placed: false }))).toBe(HINTS_ARMED_NEW);
+    expect(hintsFor(ctx({ armed: true, placed: true }))).toBe(HINTS_ARMED);
+    expect(HINTS_ARMED_NEW).toContain("click a slot");
+    expect(HINTS_ARMED_NEW).toContain("j/k");
+  });
+
   it("arm mode waiting for a task says what to click; armed beats it", () => {
     expect(hintsFor(ctx({ armMode: true }))).toBe(HINTS_ARM_MODE);
     expect(hintsFor(ctx({ armMode: true, armed: true }))).toBe(HINTS_ARMED);
   });
 
   it("the compact lines stay readable at 60 columns", () => {
-    for (const line of [HINTS_COMPACT, HINTS_AGENDA_COMPACT, HINTS_ARMED, HINTS_ARM_MODE]) {
+    for (const line of [HINTS_COMPACT, HINTS_AGENDA_COMPACT, HINTS_ARMED, HINTS_ARMED_NEW, HINTS_ARM_MODE]) {
       expect(line.length).toBeLessThanOrEqual(60);
     }
   });

@@ -1550,20 +1550,20 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   /**
    * Arm a task in the Agenda, from the keyboard (`c`) or the mouse (a double
-   * click): bring the Agenda on screen, focus it, and — when the task has no
-   * hour yet — put it in the first free half hour, so there is a block to move
-   * with j/k and stretch with +/-. The cursor follows the task. The caller has
-   * checked the Agenda is enabled. Returns the slot it chose, if it placed one.
+   * click): bring the Agenda on screen and focus it. Arming only arms: a task
+   * with no hour yet stays where it was (in the tray, marked) until you choose
+   * where it goes, with a click on a slot or with the first j/k/+/- — the one
+   * moment `placeAtFreeSlot` proposes a place. Throwing it to the first free
+   * half hour on arming put it somewhere you had not looked, and out of the
+   * tray, before you had decided anything. The caller has checked the Agenda
+   * is enabled.
    */
-  function armAndPlace(ref: TaskRef): { startMin: number; endMin: number } | undefined {
+  function armInAgenda(ref: TaskRef): void {
     startArmMode(ref);
     revealAgendaForArm();
     setActiveZone("timeline");
-    const t = getTask(ref);
-    const slot = t && !t.timeBlock ? placeAtFreeSlot(ref) : undefined;
     const at = agendaIndexOf(ref);
     if (at !== undefined) setCursor(0, at);
-    return slot;
   }
 
   /**
@@ -2090,7 +2090,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     startArmMode,
     revealAgendaForArm,
     placeAtFreeSlot,
-    armAndPlace,
+    armInAgenda,
     agendaIndexOf,
     leaveArmMode,
     endArm,

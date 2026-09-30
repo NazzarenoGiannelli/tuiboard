@@ -21,16 +21,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Agenda is now enough to look after the day's tasks. (An earlier version had a
   tray; it went to keep the Agenda a plain time scan. Single-pane brought the
   need back.)
-- **`c` on a task with no hour places it, from the keyboard.** It lands in the
-  first free half hour (from now today, from 09:00 on other days, clear of
-  blocks and calendar events) and stays armed, so `j`/`k`, `+`/`-` and `Enter`
-  apply at once. `Enter` keeps it, `Esc` puts it back in the tray, and the cursor
-  follows the task either way. Marking the slot no longer needs the mouse.
+- **Placing a task from the keyboard.** `c` arms the task under the cursor and the
+  first `j`/`k`/`+`/`-` puts it in the first free half hour (from now today, from
+  09:00 on other days, clear of blocks and calendar events); from there the keys
+  nudge it like any armed block. `Enter` keeps it, `Esc` puts it back in the tray,
+  and the cursor follows the task either way. Choosing the slot no longer needs
+  the mouse.
 - **The bottom bar follows what you are doing.** In the Agenda it lists the
   Agenda's keys; with a block armed it says how to move, resize, keep or undo it;
   arm mode waiting for a task says what to click.
 
 ### Changed
+- **Arming only arms.** Arming a task from the tray (a double click, or `c`) put it
+  in the first free half hour straight away, somewhere you had not looked and out of
+  the tray before you had decided anything. Now the task waits, marked in the
+  tray, and you say where it goes: a click on a slot puts it there (30 minutes), or
+  the first `j`/`k`/`+`/`-` puts it in the first free half hour, from where the keys
+  nudge it like any armed block. The bottom bar says which. A task that already has
+  an hour is armed where it is.
 - **Agenda mouse: one click selects, two arm; once armed, click anywhere to place
   and click twice to let go.** Any click on a block used to arm it, so merely
   pointing at a task made it the armed one: `Enter` then meant "keep the
@@ -57,13 +65,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bunfig.toml` that registers it for `bun test`.
 
 ### Fixed
+- **The Agenda grid reads like a ruler.** Rows are instants, not cells: the hour
+  line `10 ───` is 10:00, and a block started on its row but stopped one row short
+  of its end, so every block looked a quarter of an hour too short at the bottom,
+  a 15-minute block looked like 30, and the hour labels vanished under any block
+  that covered them. A block now runs from the row of its start to a closing rule
+  on the row of its end (`╰───` at 09:30 for a 09:00-09:30 block), a quarter of an
+  hour is one row with the title beside the time, and the hour stays written in
+  the gutter on every row that starts one, blocks or not. Back-to-back blocks share
+  the rule: the second block's first row is where the first one ends. The armed
+  block's handle sits on its closing rule.
 - **You can click a row covered by the block itself.** Clicking inside the armed
   block's own body did nothing, so a quarter-hour nudge by mouse was impossible
   whenever the time you wanted was under the task. It now puts the start on the
   row you clicked.
 - **The tray's rows can be clicked.** They ignored the mouse, so a task in the
   "To place" tray could only be reached with the keyboard. A click selects it
-  and a double click arms it and places it, as `c` does.
+  and a double click arms it, as `c` does.
 - **The lines above the Agenda's grid no longer get squeezed away.** The grid's
   scrollbox started from the height of the whole day, and the short lines above it
   (day navigation, armed state) paid for it; on a short terminal they could

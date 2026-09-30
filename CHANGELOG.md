@@ -7,11 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-09-30
+
 ### Fixed
 - **No more "..." in the middle of every grid line.** The Agenda's hour rules, dotted rows and
   the "now" line were drawn 120 cells wide and left to be cut off, and the terminal cut them in
   the middle with an ellipsis: a white blob in each row of the grid. They are now drawn exactly as
   wide as the lane.
+
+### Changed
+- **The README leads with the app in motion**: the whole dashboard, a short tour of clips (drag and
+  resize, the tray, the agents list, multi-select, the zones) and v0.14 and v0.15 in Status. The
+  pictures are tuiboard's own renderer on an invented demo board.
+- **`homepage` is the website**, <https://tuiboard.nazzareno.xyz>, which now shows the real app
+  instead of mockups.
 
 ### Added
 - **A demo environment** (`demo/`, not published): three invented boards for a made-up team,
@@ -766,6 +775,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.15.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.15.1
 [0.15.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.15.0
 [0.14.5]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.5
 [0.14.4]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.4

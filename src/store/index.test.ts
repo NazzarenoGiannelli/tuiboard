@@ -517,8 +517,8 @@ describe("moving a task to another day drops its time block", () => {
       const ref = refAt(path, 0);
       expect(store.getTask(ref)!.timeBlock).toEqual(START);
       expect(store.setScheduled(ref, "2026-09-21")).toBe(true);
-      expect(store.getTask(ref).scheduled).toBe("2026-09-21");
-      expect(store.getTask(ref).timeBlock).toBeUndefined();
+      expect(store.getTask(ref)!.scheduled).toBe("2026-09-21");
+      expect(store.getTask(ref)!.timeBlock).toBeUndefined();
     });
   });
 
@@ -533,8 +533,8 @@ describe("moving a task to another day drops its time block", () => {
   it("clearing the date drops the block too", () => {
     withBoard((store, path) => {
       expect(store.setScheduled(refAt(path, 0), undefined)).toBe(true);
-      expect(store.getTask(refAt(path, 0)).scheduled).toBe(undefined);
-      expect(store.getTask(refAt(path, 0)).timeBlock).toBeUndefined();
+      expect(store.getTask(refAt(path, 0))!.scheduled).toBe(undefined);
+      expect(store.getTask(refAt(path, 0))!.timeBlock).toBeUndefined();
     });
   });
 
@@ -558,10 +558,10 @@ describe("moving a task to another day drops its time block", () => {
       store.toggleMark(refAt(path, 0));
       store.toggleMark(refAt(path, 1));
       expect(store.scheduleMarkedOr(refAt(path, 2), "2026-09-21", "tomorrow")).toBe(2);
-      expect(store.getTask(refAt(path, 0)).scheduled).toBe("2026-09-21");
-      expect(store.getTask(refAt(path, 0)).timeBlock).toBeUndefined();
-      expect(store.getTask(refAt(path, 1)).scheduled).toBe("2026-09-21");
-      expect(store.getTask(refAt(path, 1)).timeBlock).toBeUndefined();
+      expect(store.getTask(refAt(path, 0))!.scheduled).toBe("2026-09-21");
+      expect(store.getTask(refAt(path, 0))!.timeBlock).toBeUndefined();
+      expect(store.getTask(refAt(path, 1))!.scheduled).toBe("2026-09-21");
+      expect(store.getTask(refAt(path, 1))!.timeBlock).toBeUndefined();
       expect(store.getTask(refAt(path, 2))!.scheduled).toBe("2026-09-20"); // marked ones only
     });
   });

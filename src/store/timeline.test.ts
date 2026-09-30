@@ -8,7 +8,9 @@ import {
   buildRowMap,
   buildCalendarEntries,
   buildTimelineEntries,
+  buildUnscheduledToday,
   countOverlaps,
+  findFreeSlot,
   formatAgendaDay,
   formatHm,
   type TimelineEntry,
@@ -330,3 +332,57 @@ describe("formatHm", () => {
 
 // silence unused-var lint about MINS_PER_ROW import
 void MINS_PER_ROW;
+
+describe("buildUnscheduledToday (the To place tray)", () => {
+  it("lists open tasks scheduled for the day that have no time block, in board order", () => {
+    const board = makeBoard("Work", "/w.md", [
+      makeTask({ displayTitle: "first", scheduled: "2026-10-01" }),
+      makeTask({ displayTitle: "blocked", scheduled: "2026-10-01", timeBlock: { startMin: 600, endMin: 660 } }),
+      makeTask({ displayTitle: "done", scheduled: "2026-10-01", done: true }),
+      makeTask({ displayTitle: "other day", scheduled: "2026-10-02" }),
+      makeTask({ displayTitle: "no date" }),
+      makeTask({ displayTitle: "second", scheduled: "2026-10-01" }),
+    ]);
+    const tray = buildUnscheduledToday([board], "2026-10-01");
+    expect(tray.map((t) => t.task.displayTitle)).toEqual(["first", "second"]);
+    // The refs point at the real task inside the column, blocked ones included in the count.
+    expect(tray.map((t) => t.ref.taskIndex)).toEqual([0, 5]);
+  });
+});
+
+describe("findFreeSlot", () => {
+  const H = (h: number, m = 0) => h * 60 + m;
+
+  it("takes the next 15-minute step, half an hour long", () => {
+    expect(findFreeSlot([], H(9, 7))).toEqual({ startMin: H(9, 15), endMin: H(9, 45) });
+    expect(findFreeSlot([], H(9, 15))).toEqual({ startMin: H(9, 15), endMin: H(9, 45) });
+  });
+
+  it("never starts before the grid does", () => {
+    expect(findFreeSlot([], H(3)).startMin).toBe(DAY_START_HOUR * 60);
+  });
+
+  it("steps over blocks and calendar events, and touching is not overlapping", () => {
+    const busy = [
+      { startMin: H(9), endMin: H(10) },
+      { startMin: H(10, 15), endMin: H(11) },
+    ];
+    // 10:00-10:30 would overlap the 10:15 block, so the first fit is 11:00.
+    expect(findFreeSlot(busy, H(9))).toEqual({ startMin: H(11), endMin: H(11, 30) });
+    // A block ending exactly at 10:00 leaves 10:00-10:15 free but too short; 30 min needs the gap.
+    expect(findFreeSlot([{ startMin: H(9), endMin: H(10) }], H(9))).toEqual({ startMin: H(10), endMin: H(10, 30) });
+  });
+
+  it("honours a different length", () => {
+    expect(findFreeSlot([{ startMin: H(9), endMin: H(9, 30) }], H(9), 60)).toEqual({ startMin: H(9, 30), endMin: H(10, 30) });
+  });
+
+  it("late in the evening it falls back to the first free slot of the day", () => {
+    expect(findFreeSlot([], H(22, 45))).toEqual({ startMin: DAY_START_HOUR * 60, endMin: DAY_START_HOUR * 60 + 30 });
+  });
+
+  it("a full day still returns a slot to nudge, at the asked-for start", () => {
+    const full = [{ startMin: 0, endMin: 24 * 60 }];
+    expect(findFreeSlot(full, H(12))).toEqual({ startMin: H(12), endMin: H(12, 30) });
+  });
+});

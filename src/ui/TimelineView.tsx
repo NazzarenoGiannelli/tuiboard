@@ -10,14 +10,19 @@
  * Mouse interaction (click-to-arm + click-to-place, like Python timeline.py):
  *
  *   Click on a band      → ARM that block (warm highlight)
- *   Click on empty row   → if armed, MOVE the armed block's start there
+ *   Click on empty row   → if armed, MOVE the armed block's start there;
+ *                          if not, only a reminder (n adds an event, c places a task)
  *   Shift+click empty    → if armed, RESIZE the armed block's end there
  *   Click again on band  → toggle: re-arms (or disarms if same block)
  *
  * Keyboard interaction (handled in handleKey when activeZone === "timeline"):
  *
- *   j/k                  → cursor between blocks (chronological order)
- *   Enter                → bounce kanban cursor to the underlying task
+ *   j/k                  → one cursor over the "To place" tray (tasks of the day with
+ *                          no hour yet), then the blocks in chronological order
+ *   c                    → arm the task under the cursor; with no hour yet it is
+ *                          placed in the first free half hour, so the keys below apply
+ *   g                    → bounce kanban cursor to the underlying task
+ *   Enter                → toggle done (like everywhere else)
  *   j/k while armed      → nudge armed block ±15 min (move)
  *   +/- while armed      → resize armed block end ±15 min
  *   Enter while armed    → keep, leave arm mode, back to where `c` started
@@ -46,6 +51,7 @@ import {
   buildRowMap,
   buildCalendarEntries,
   buildTimelineEntries,
+  buildUnscheduledToday,
   formatAgendaDay,
   formatHm,
   type RowMapEntry,
@@ -55,6 +61,7 @@ import {
 import {
   ATTR,
   PRIORITY_COLOR,
+  PRIORITY_GLYPH,
   T,
   boardColor,
 } from "~/ui/glyphs";
@@ -105,6 +112,17 @@ export function TimelineView(props: TimelineViewProps) {
   const entries = createMemo(() => {
     props.store.state.rev; // recompute on any board mutation
     return buildTimelineEntries(
+      props.store.state.boards.map((b) => b.board),
+      viewedDate(),
+    );
+  });
+
+  // The "To place" tray: the day's open tasks that have no hour yet. It is the
+  // top of the Agenda's cursor (rows 0..n-1), the time-blocked entries follow,
+  // so j/k walks both and every task key works on either.
+  const tray = createMemo(() => {
+    props.store.state.rev;
+    return buildUnscheduledToday(
       props.store.state.boards.map((b) => b.board),
       viewedDate(),
     );
@@ -176,7 +194,7 @@ export function TimelineView(props: TimelineViewProps) {
 
   // Scroll-to-cursor when navigation moves the cursor entry off-screen.
   createEffect(() => {
-    const c = cursor();
+    const c = cursor() - tray().length;
     if (!isActive() || !scrollBoxRef) return;
     const entry = entries()[c];
     if (!entry) return;
@@ -189,7 +207,7 @@ export function TimelineView(props: TimelineViewProps) {
     }, 0);
   });
 
-  const cursorEntry = createMemo(() => entries()[cursor()]);
+  const cursorEntry = createMemo(() => entries()[cursor() - tray().length]);
 
   /**
    * Click on a block band. Three behaviors, in priority order:
@@ -250,7 +268,7 @@ export function TimelineView(props: TimelineViewProps) {
     }
 
     const idx = entries().indexOf(entry);
-    if (idx >= 0) props.store.setCursor(0, idx);
+    if (idx >= 0) props.store.setCursor(0, tray().length + idx);
 
     if (armedSame) {
       props.store.armTimeline(undefined);
@@ -275,14 +293,10 @@ export function TimelineView(props: TimelineViewProps) {
     const armed = armedTask();
     const ref = armedRef();
     if (!armed || !ref) {
-      // Nothing armed: an empty-slot click creates a Google Calendar event at
-      // that time (only when Google write is connected — otherwise a no-op).
-      const g = props.store.config.calendars?.google;
-      if (g && googleTokenCanWrite(g.token)) {
-        const startMin = Math.max(0, DAY_START_HOUR * 60 + rowIndex * MINS_PER_ROW);
-        const endMin = Math.min(24 * 60 - 1, startMin + DEFAULT_BLOCK_MIN);
-        props.store.openEventModal(viewedDate(), startMin, endMin);
-      }
+      // Nothing armed. A click used to open the new-event dialog here, which is
+      // how a stray click became a calendar event; the dialog is `n` now, and
+      // the click says what to press instead of doing nothing.
+      props.store.flashBanner("info", "Nothing armed · n adds an event · c places a task");
       return;
     }
     const targetMin = DAY_START_HOUR * 60 + rowIndex * MINS_PER_ROW;
@@ -357,29 +371,22 @@ export function TimelineView(props: TimelineViewProps) {
       title={`┤ Agenda · ${formatAgendaDay(props.store.state.ui.agendaOffset, viewedDate())} · ${entries().length}${armMode() ? "  ◉ ARM" : ""} ├`}
       titleAlignment="left"
     >
-      <Show when={armMode()}>
-        <text wrapMode="none">
-          <span style={{ fg: T.warmActive, attributes: ATTR.bold }}>
-            {"◉ ARM MODE "}
-          </span>
-          <span style={{ fg: T.textDim }}>
-            {"click a task → click a slot · Enter done · Esc cancel"}
+      {/* One line says what is armed; the keys that apply are on the bottom bar. */}
+      <Show when={armedTask()}>
+        <text wrapMode="none" truncate>
+          <span style={{ fg: T.warmActive, attributes: ATTR.bold }}>{"◉ "}</span>
+          <span style={{ fg: T.warm, attributes: ATTR.bold }}>
+            {armedEntry()
+              ? `${formatHm(armedEntry()!.startMin)}-${formatHm(armedEntry()!.endMin)} `
+              : ""}
+            {tailTruncate(armedTask()!.displayTitle, 34)}
           </span>
         </text>
       </Show>
-      <Show when={armedTask()}>
+      <Show when={armMode() && !armedTask()}>
         <text wrapMode="none">
-          <span style={{ fg: T.warm, attributes: ATTR.bold }}>
-            {armedIsUnscheduled() ? "⤤ Armed (new): " : "⤤ Armed: "}
-            {armedIsUnscheduled()
-              ? tailTruncate(armedTask()!.displayTitle, 32)
-              : `${formatHm(armedEntry()!.startMin)}-${formatHm(armedEntry()!.endMin)}`}
-          </span>
-          <span style={{ fg: T.textDim }}>
-            {armedIsUnscheduled()
-              ? "  click row to place · Esc to cancel"
-              : "  +/- length · j/k move · Enter done · Esc cancel"}
-          </span>
+          <span style={{ fg: T.warmActive, attributes: ATTR.bold }}>{"◉ ARM MODE "}</span>
+          <span style={{ fg: T.textDim }}>{"click a task, then a slot"}</span>
         </text>
       </Show>
       {/* A selected calendar event shows its own action hint. */}
@@ -402,6 +409,14 @@ export function TimelineView(props: TimelineViewProps) {
           <span style={{ fg: T.textDim }}>{"[ ] change day · "}</span>
           <span style={{ fg: isToday() ? T.textDim : T.warm }}>{"\\ today"}</span>
         </text>
+      </Show>
+      <Show when={tray().length > 0}>
+        <TrayList
+          items={tray()}
+          cursor={cursor()}
+          active={isActive()}
+          armedRef={armedRef()}
+        />
       </Show>
       <Show when={!armedTask() && rowMap().overflow > 0}>
         <text wrapMode="none">
@@ -442,6 +457,12 @@ export function TimelineView(props: TimelineViewProps) {
         style={{
           width: "100%",
           flexGrow: 1,
+          // Its content is the whole day (64 rows). Left at the default basis
+          // that height is what the flex algorithm starts from, and the short
+          // lines above the grid (armed, day navigation, the tray) are the
+          // ones squeezed to pay for it. Basis 0 hands the grid what is left.
+          flexBasis: 0,
+          minHeight: 0,
           scrollX: false,
           scrollY: true,
           rootOptions: {},
@@ -850,3 +871,64 @@ function getNowMin(): number {
 void DAY_START_HOUR;
 void MINS_PER_ROW;
 void TOTAL_ROWS;
+
+// ─── "To place" tray ────────────────────────────────────────────────────────
+
+/** Rows of the tray drawn at once; the window follows the cursor. */
+const TRAY_ROWS = 3;
+
+function TrayList(props: {
+  items: ReadonlyArray<{ ref: TaskRef; task: Task }>;
+  /** The Agenda's cursor: the tray owns rows 0..items-1. */
+  cursor: number;
+  active: boolean;
+  armedRef: TaskRef | undefined;
+}) {
+  const n = () => props.items.length;
+  const focused = () => props.active && props.cursor < n();
+  // Keep the cursor row inside the window, roughly centred.
+  const start = () =>
+    focused() ? Math.max(0, Math.min(n() - TRAY_ROWS, props.cursor - 1)) : 0;
+  const shown = () =>
+    props.items.slice(start(), start() + TRAY_ROWS).map((item, i) => ({ item, index: start() + i }));
+  const isArmed = (r: TaskRef) =>
+    !!props.armedRef &&
+    props.armedRef.boardPath === r.boardPath &&
+    props.armedRef.columnIndex === r.columnIndex &&
+    props.armedRef.taskIndex === r.taskIndex;
+  return (
+    <box style={{ flexDirection: "column" }}>
+      <text wrapMode="none">
+        <span style={{ fg: T.warm }}>{"▤ "}</span>
+        <span style={{ fg: T.textDim }}>
+          {`To place · ${n()}`}
+          {n() > TRAY_ROWS ? ` · ${start() + 1}-${Math.min(n(), start() + TRAY_ROWS)}` : ""}
+        </span>
+        <Show when={focused()}>
+          <span style={{ fg: T.textDim }}>{"  c place · ⏎ done"}</span>
+        </Show>
+      </text>
+      <For each={shown()}>
+        {({ item, index }) => (
+          <box
+            style={{
+              height: 1,
+              flexDirection: "row",
+              backgroundColor: props.active && index === props.cursor ? T.cardBgCursor : undefined,
+            }}
+          >
+            <text wrapMode="none" truncate>
+              <span style={{ fg: isArmed(item.ref) ? T.warmActive : T.textDim }}>
+                {isArmed(item.ref) ? "◉ " : "  "}
+              </span>
+              <span style={{ fg: PRIORITY_COLOR[item.task.priority] }}>
+                {PRIORITY_GLYPH[item.task.priority] ? PRIORITY_GLYPH[item.task.priority] + " " : ""}
+              </span>
+              <span style={{ fg: T.text }}>{item.task.displayTitle}</span>
+            </text>
+          </box>
+        )}
+      </For>
+    </box>
+  );
+}

@@ -7,7 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A "To place" tray in the Agenda.** The day's tasks that have no hour yet sit
+  at the top of the Agenda, and it is one cursor with the blocks below: `j`/`k`
+  walk both, and every task key (`Enter`, `m`, `t`, `s`, `b`, `.`, `c`…) works on
+  a tray row. In single-pane, where the board is not on screen to pick from, the
+  Agenda is now enough to look after the day's tasks. (An earlier version had a
+  tray; it went to keep the Agenda a plain time scan. Single-pane brought the
+  need back.)
+- **`c` on a task with no hour places it, from the keyboard.** It lands in the
+  first free half hour (from now today, from 09:00 on other days, clear of
+  blocks and calendar events) and stays armed, so `j`/`k`, `+`/`-` and `Enter`
+  apply at once. `Enter` keeps it, `Esc` puts it back in the tray, and the cursor
+  follows the task either way. Marking the slot no longer needs the mouse.
+- **The bottom bar follows what you are doing.** In the Agenda it lists the
+  Agenda's keys; with a block armed it says how to move, resize, keep or undo it;
+  arm mode waiting for a task says what to click.
+
+### Changed
+- **One line says what is armed** in the Agenda, instead of two; the keys that
+  apply are on the bottom bar.
+- **A click on an empty slot no longer opens the new-event dialog.** With nothing
+  armed it was how a stray click became a calendar event, and without Google write
+  connected it did nothing at all. It now says what to press: `n` adds an event,
+  `c` places a task. Clicking an event still selects it, and clicking with a task
+  armed still places it.
+- **The keyboard is tested in every layout.** A new suite drives the real key
+  handler in wide, mid-width, narrow (single-pane) and zoomed layouts built the
+  way the app builds them: day navigation, Shift-Tab, `h`/`l`, `z`, `v`, F1-F3,
+  task actions from board, planner and Agenda, arm mode, multi-select, dialogs
+  and boards. It needs OpenTUI's Solid preload, so the repo now has a
+  `bunfig.toml` that registers it for `bun test`.
+
 ### Fixed
+- **The lines above the Agenda's grid no longer get squeezed away.** The grid's
+  scrollbox started from the height of the whole day, and the short lines above it
+  (day navigation, armed state) paid for it; on a short terminal they could
+  vanish. It now takes what is left.
 - **`[`, `]` and `\` work in single-pane.** They moved the Agenda's day only when
   it was drawn, and the Agenda is drawn beside the board from 150 columns up, so
   in a narrow single-pane terminal, where it is one Shift-Tab away but drawn
@@ -22,14 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `c` says so instead of arming.
 - **`v` no longer jumps to a planner that is off or hidden.** It says why and
   stays where it is.
-
-### Changed
-- **The keyboard is tested in every layout.** A new suite drives the real key
-  handler in wide, mid-width, narrow (single-pane) and zoomed layouts built the
-  way the app builds them: day navigation, Shift-Tab, `h`/`l`, `z`, `v`, F1-F3,
-  task actions from board, planner and Agenda, arm mode, multi-select, dialogs
-  and boards. It needs OpenTUI's Solid preload, so the repo now has a
-  `bunfig.toml` that registers it for `bun test`.
 
 ## [0.14.5] - 2026-09-30
 

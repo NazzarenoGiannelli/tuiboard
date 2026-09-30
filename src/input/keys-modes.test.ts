@@ -37,16 +37,21 @@ let pathA: string;
 let pathB: string;
 const stores: Store[] = [];
 
-beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "tb-keys-"));
-  pathA = join(dir, "a.md");
-  pathB = join(dir, "b.md");
+/** The two boards every test starts from; also used to start over inside a test. */
+function writeBoards(): void {
   const today = isoToday();
   writeFileSync(
     pathA,
     `## Todo\n\n- [ ] Alpha ⌚ 09:30-10:30 ⏳ ${today}\n- [ ] Beta ⏳ ${today}\n- [ ] Gamma\n\n## Doing\n\n- [ ] Delta\n`,
   );
   writeFileSync(pathB, "## Todo\n\n- [ ] Other\n");
+}
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "tb-keys-"));
+  pathA = join(dir, "a.md");
+  pathB = join(dir, "b.md");
+  writeBoards();
 });
 
 afterEach(() => {
@@ -300,6 +305,7 @@ describe("task actions reach the task under the cursor, in every zone and layout
   it("a task that moves day takes its time block with it, from the Agenda too", () => {
     const store = build("narrow");
     goTo(store, "timeline");
+    press(store, "j"); // row 0 is the "To place" tray; Alpha, the block, is row 1
     press(store, "m");
     expect(taskA(store, 0).scheduled).toBe(isoAddDays(isoToday(), 1));
     expect(taskA(store, 0).timeBlock).toBeUndefined();
@@ -308,10 +314,12 @@ describe("task actions reach the task under the cursor, in every zone and layout
   it("g in the Agenda jumps to the card, Enter does not", () => {
     const store = build("narrow");
     goTo(store, "timeline");
+    press(store, "j"); // Alpha, the block
     press(store, "g");
     expect(zoneOf(store)).toBe("board");
 
     goTo(store, "timeline");
+    press(store, "j");
     press(store, "return");
     expect(zoneOf(store)).toBe("timeline");
     expect(taskA(store, 0).done).toBe(true);
@@ -484,4 +492,124 @@ describe("n (new task)", () => {
       expect(store.state.ui.modal?.kind).toBe("add");
     });
   }
+});
+
+describe("the Agenda workflow: one cursor over the tray and the grid", () => {
+  const refOf = (i: number) => ({ boardPath: pathA, columnIndex: 0, taskIndex: i });
+  // Alpha is time-blocked today; Beta is scheduled today with no hour (in the tray); Gamma has no date.
+
+  for (const layout of ["wide", "narrow", "zoomed"] as const) {
+    it(`${layout}: the tray comes first, the blocks follow, j/k walk both and stop at the ends`, () => {
+      const store = build(layout);
+      goTo(store, "timeline");
+      expect(store.agendaIndexOf(refOf(1))).toBe(0); // Beta, the tray
+      expect(store.agendaIndexOf(refOf(0))).toBe(1); // Alpha, the grid
+      expect(store.agendaIndexOf(refOf(2))).toBeUndefined(); // Gamma is not on this day
+
+      press(store, "j");
+      expect(store.state.ui.row).toBe(1);
+      press(store, "j");
+      expect(store.state.ui.row).toBe(1);
+      press(store, "k");
+      press(store, "k");
+      expect(store.state.ui.row).toBe(0);
+    });
+
+    it(`${layout}: task keys work on a tray row, and the cursor never points past the end`, () => {
+      const store = build(layout);
+      goTo(store, "timeline");
+      press(store, "m"); // Beta -> tomorrow
+      expect(taskA(store, 1).scheduled).toBe(isoAddDays(isoToday(), 1));
+      expect(store.state.ui.row).toBe(0);
+      press(store, "j"); // only Alpha is left: row 0
+      expect(store.state.ui.row).toBe(0);
+
+      writeBoards();
+      const other = build(layout);
+      goTo(other, "timeline");
+      press(other, "return"); // Beta done
+      expect(taskA(other, 1).done).toBe(true);
+      press(other, "j");
+      expect(other.state.ui.row).toBeLessThanOrEqual(0);
+    });
+
+    it(`${layout}: c on a tray task places it in a free half hour, and the block moves with j/k and +/-`, () => {
+      const store = build(layout);
+      goTo(store, "timeline");
+      press(store, "c");
+
+      expect(store.state.ui.armedTimelineRef).toMatchObject({ taskIndex: 1 });
+      const placed = taskA(store, 1);
+      expect(placed.scheduled).toBe(isoToday());
+      const block = placed.timeBlock!;
+      expect(block.endMin - block.startMin).toBe(30);
+      // Clear of Alpha (09:30-10:30).
+      expect(block.startMin >= 630 || block.endMin <= 570).toBe(true);
+      expect(store.state.ui.row).toBe(store.agendaIndexOf(refOf(1)) ?? -1);
+
+      press(store, "+");
+      expect(taskA(store, 1).timeBlock!.endMin).toBe(block.endMin + 15);
+      press(store, "j");
+      expect(taskA(store, 1).timeBlock!.startMin).toBe(block.startMin + 15);
+      press(store, "k");
+      expect(taskA(store, 1).timeBlock!.startMin).toBe(block.startMin);
+    });
+
+    it(`${layout}: Enter keeps the placement and the cursor stays on the task; Esc puts it back in the tray`, () => {
+      const kept = build(layout);
+      goTo(kept, "timeline");
+      press(kept, "c");
+      press(kept, "return");
+      expect(kept.state.ui.armMode).toBe(false);
+      expect(taskA(kept, 1).timeBlock).toBeDefined();
+      expect(zoneOf(kept)).toBe("timeline");
+      expect(kept.state.ui.row).toBe(kept.agendaIndexOf(refOf(1)) ?? -1);
+      expect(taskA(kept, 1).done).toBe(false); // Enter while armed keeps, it does not tick
+
+      writeBoards();
+      const undone = build(layout);
+      goTo(undone, "timeline");
+      press(undone, "c");
+      press(undone, "escape");
+      expect(undone.state.ui.armMode).toBe(false);
+      expect(taskA(undone, 1).timeBlock).toBeUndefined();
+      expect(taskA(undone, 1).scheduled).toBe(isoToday()); // still today's task, back in the tray
+      expect(zoneOf(undone)).toBe("timeline");
+      expect(undone.state.ui.row).toBe(0);
+      expect(undone.agendaIndexOf(refOf(1))).toBe(0);
+    });
+  }
+
+  for (const layout of ["wide", "narrow"] as const) {
+    it(`${layout}: c from the board on a task with no hour lands it on the viewed day at 09:00, from any day but today`, () => {
+      const store = build(layout);
+      store.shiftAgendaDay(1);
+      goTo(store, "board");
+      store.setCursor(0, 2); // Gamma
+      press(store, "c");
+      const tomorrow = isoAddDays(isoToday(), 1);
+      expect(taskA(store, 2).scheduled).toBe(tomorrow);
+      expect(taskA(store, 2).timeBlock).toEqual({ startMin: 540, endMin: 570 });
+      expect(zoneOf(store)).toBe("timeline");
+      expect(store.state.ui.row).toBe(0);
+
+      press(store, "escape"); // back to how it was, and back where `c` was pressed
+      expect(taskA(store, 2).scheduled).toBeUndefined();
+      expect(taskA(store, 2).timeBlock).toBeUndefined();
+      expect(zoneOf(store)).toBe("board");
+    });
+  }
+
+  it("a second task placed the same day takes the next free half hour, not the same one", () => {
+    const store = build("wide");
+    store.shiftAgendaDay(1);
+    goTo(store, "board");
+    store.setCursor(0, 2);
+    press(store, "c");
+    press(store, "return");
+    goTo(store, "board");
+    store.setCursor(1, 0); // Delta, the first task of the second column
+    press(store, "c");
+    expect(taskA(store, 0, 1).timeBlock).toEqual({ startMin: 570, endMin: 600 });
+  });
 });

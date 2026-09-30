@@ -10,6 +10,7 @@ import { isHiddenColumn } from "~/config/loader";
 import { isoToday } from "~/store/index";
 import { ATTR, T } from "~/ui/glyphs";
 import type { TuiStore } from "~/store/index";
+import { hintsFor } from "~/ui/hints";
 
 export function TopBar(props: { store: TuiStore }) {
   const boards = () => props.store.state.boards;
@@ -120,27 +121,17 @@ function CompactBar(props: { store: TuiStore; label: string }) {
   );
 }
 
-/**
- * Curated cheat-sheet: only the keys that keep you unstuck (move, switch
- * zone/board, help, quit) plus the highest-frequency, on-brand actions (done,
- * new, schedule). Everything else — zoom, toggles, multi-select,
- * edit/assign/archive/delete, undo — lives in `?`.
- */
-const HINTS_FULL =
-  "hjkl ↑↓←→ move · Tab board · ⇧Tab zone · ⏎ done · n new · t today · b block · c schedule · r refresh · z zoom · ? help · q quit";
-
-/**
- * Single-pane keeps the ones that matter with one pane on screen: walking the
- * ring, jumping zones, completing, and the way out. The full line is 130
- * characters and this bar truncates rather than wraps, so at 60 columns the
- * choice is not "which keys fit" but "which keys are still readable" — a hint
- * cut to `⏎ don…` is worse than no hint.
- */
-const HINTS_COMPACT = "hl pane · ⇧Tab zone · ⏎ done · ? help · q quit";
-
 export function BottomBar(props: { store: TuiStore }) {
   const banner = () => props.store.state.ui.banner;
-  const hints = () => (props.store.singlePane() ? HINTS_COMPACT : HINTS_FULL);
+  const hints = () => {
+    const ui = props.store.state.ui;
+    return hintsFor({
+      zone: ui.activeZone,
+      singlePane: props.store.singlePane(),
+      armed: !!ui.armedTimelineRef,
+      armMode: ui.armMode,
+    });
+  };
   return (
     <box style={{ flexDirection: "column", marginTop: 1 }}>
       <box style={{ height: 1, flexDirection: "row" }}>

@@ -38,7 +38,7 @@ import {
   type TuiStore,
 } from "~/store/index";
 import type { Board, PriorityLevel } from "~/types";
-import { buildTimelineEntries, formatAgendaDay } from "~/store/timeline";
+import { buildTimelineEntries, buildUnscheduledToday, formatAgendaDay } from "~/store/timeline";
 import { buildPlannerItems } from "~/store/planner-panel";
 import { jumpToKanban } from "~/ui/TimelineView";
 
@@ -161,8 +161,9 @@ export function handleKey(
     if (ui.armMode || ui.armedTimelineRef) {
       // Cancel: the armed task goes back to how it was, the cursor to where
       // `c` was pressed (#73).
-      const hadTask = !!ui.armedTimelineRef;
-      restoreArmOrigin(store, store.leaveArmMode(false), plannerCount);
+      const armedBefore = ui.armedTimelineRef;
+      const hadTask = !!armedBefore;
+      restoreArmOrigin(store, store.leaveArmMode(false), plannerCount, armedBefore);
       store.flashBanner("info", hadTask ? "Cancelled" : "Arm mode off");
       return;
     }
@@ -410,11 +411,37 @@ function handlePlannerZone(
   }
 }
 
-/** Put the cursor back where `c` started arm mode. */
-function restoreArmOrigin(store: TuiStore, origin: ArmOrigin | undefined, plannerCount = Infinity): boolean {
-  if (!origin) return false;
+/**
+ * In the Agenda, put the cursor on `focus`, wherever the last action left it:
+ * placing a task moves it from the "To place" tray into the grid, undoing
+ * moves it back, and a row number would point at a different task.
+ */
+function followInAgenda(store: TuiStore, focus: TaskRef | undefined): boolean {
+  if (!focus || store.state.ui.activeZone !== "timeline") return false;
+  const at = store.agendaIndexOf(focus);
+  if (at === undefined) return false;
+  store.setCursor(0, at);
+  return true;
+}
+
+/**
+ * Put the cursor back where `c` started arm mode. `focus` is the task that was
+ * armed: when arm mode began in the Agenda (or was never begun, a click armed
+ * the block) the cursor follows the task instead of returning to a stale row.
+ */
+function restoreArmOrigin(
+  store: TuiStore,
+  origin: ArmOrigin | undefined,
+  plannerCount = Infinity,
+  focus?: TaskRef,
+): boolean {
+  if (!origin) {
+    followInAgenda(store, focus);
+    return false;
+  }
   if (origin.boardIndex !== store.state.ui.activeBoardIndex) store.setActiveBoard(origin.boardIndex);
   store.setActiveZone(origin.zone);
+  if (origin.zone === "timeline" && followInAgenda(store, focus)) return true;
   // Placing a task can reorder the planner (it joins the time-blocked
   // bucket); the row stays, clamped to what's there.
   const row = origin.zone === "planner" ? Math.min(origin.row, Math.max(0, plannerCount - 1)) : origin.row;
@@ -431,11 +458,15 @@ function handleTimelineZone(
   const ui = store.state.ui;
   // Note: Agenda day-nav (`[` / `]` / `\`) is handled globally in handleKey
   // before zone dispatch, so it works from any zone — not repeated here.
-  const entries = buildTimelineEntries(
-    store.state.boards.map((b) => b.board),
-    store.agendaDate(),
-  );
-  const target = entries[ui.row];
+  const boards = store.state.boards.map((b) => b.board);
+  const tray = buildUnscheduledToday(boards, store.agendaDate());
+  const entries = buildTimelineEntries(boards, store.agendaDate());
+  // One cursor over both lists: rows 0..tray-1 are the "To place" tray, the
+  // time-blocked entries follow. Actions on either reach the same task API.
+  const total = tray.length + entries.length;
+  if (total > 0 && ui.row > total - 1) store.setCursor(0, total - 1);
+  const at = Math.min(ui.row, Math.max(0, total - 1));
+  const target = at < tray.length ? tray[at] : entries[at - tray.length];
 
   // A selected (clicked) calendar event takes over e/d/Enter for edit/delete.
   // Any other key drops the selection and is then handled normally below.
@@ -482,7 +513,7 @@ function handleTimelineZone(
   // it stays in the Agenda, where the placement was made. `g` goes to the card.
   if (armedRef && (key.name === "enter" || key.name === "return")) {
     const origin = store.leaveArmMode(true);
-    restoreArmOrigin(store, origin, plannerCount);
+    restoreArmOrigin(store, origin, plannerCount, armedRef);
     const t = store.getTask(armedRef);
     store.flashBanner("info", t?.timeBlock ? `✓ ${fmtHm(t.timeBlock.startMin)}-${fmtHm(t.timeBlock.endMin)}` : "Arm mode off");
     return;
@@ -521,7 +552,7 @@ function handleTimelineZone(
 
   // Plain navigation (no armed block, or non-adjustment key while armed).
   if (key.name === "j" || key.name === "down") {
-    store.setCursor(0, Math.min(entries.length - 1, ui.row + 1));
+    store.setCursor(0, Math.max(0, Math.min(total - 1, ui.row + 1)));
     return;
   }
   if (key.name === "k" || key.name === "up") {
@@ -840,7 +871,8 @@ function dispatchTaskAction(
   if (key.name === "c" && !key.shift) {
     if (store.state.ui.armMode) {
       // `c` again keeps what was placed, like Enter.
-      restoreArmOrigin(store, store.leaveArmMode(true));
+      const was = store.state.ui.armedTimelineRef;
+      restoreArmOrigin(store, store.leaveArmMode(true), Infinity, was);
       store.flashBanner("info", "Arm mode off");
       return true;
     }
@@ -852,11 +884,19 @@ function dispatchTaskAction(
     store.revealAgendaForArm();
     store.setActiveZone("timeline");
     const t = store.getTask(ref);
+    // No hour yet: propose the first free half hour, so there is a block to
+    // move with j/k and stretch with +/- and placing never needs the mouse.
+    const slot = t && !t.timeBlock ? store.placeAtFreeSlot(ref) : undefined;
+    const at = store.agendaIndexOf(ref);
+    if (at !== undefined) store.setCursor(0, at);
+    const name = t ? `"${t.displayTitle.slice(0, 28)}"` : "";
     store.flashBanner(
       "info",
-      t
-        ? `◉ Arm mode — armed "${t.displayTitle.slice(0, 28)}". Click a task, then a slot. Esc to exit.`
-        : "◉ Arm mode — click a task, then a slot. Esc to exit.",
+      slot
+        ? `◉ ${fmtHm(slot.startMin)}-${fmtHm(slot.endMin)} ${name} · j/k move · +/- length · ⏎ keep · esc undo`
+        : t
+          ? `◉ Armed ${name} · j/k move · +/- length · ⏎ keep · esc undo`
+          : "◉ Arm mode — click a task, then a slot. Esc to exit.",
     );
     return true;
   }

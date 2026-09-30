@@ -58,6 +58,14 @@ import { isTask, parseBoard } from "~/parser/markdown";
 import { buildNoteIndex, readNoteBody, resolveNote, type NoteIndex } from "~/notes/index";
 import { buildRing, ringPosition, samePane, stepRing, type Pane } from "~/ui/pane-ring";
 import { serializeBoard } from "~/parser/serialize";
+import {
+  DEFAULT_BLOCK_MIN,
+  PLACE_FROM_HOUR,
+  buildCalendarEntries,
+  buildTimelineEntries,
+  buildUnscheduledToday,
+  findFreeSlot,
+} from "~/store/timeline";
 import type {
   Board,
   Column,
@@ -1473,6 +1481,42 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   }
 
   /**
+   * Where a task sits in the Agenda's cursor, or undefined when it is not on the
+   * viewed day. Rows 0..n-1 are the "To place" tray (tasks scheduled for the day
+   * with no time block); the time-blocked entries follow.
+   */
+  function agendaIndexOf(ref: TaskRef): number | undefined {
+    const boards = state.boards.map((b) => b.board);
+    const date = agendaDate();
+    const tray = buildUnscheduledToday(boards, date);
+    const inTray = tray.findIndex((t) => sameRef(t.ref, ref));
+    if (inTray >= 0) return inTray;
+    const inGrid = buildTimelineEntries(boards, date).findIndex((e) => sameRef(e.ref, ref));
+    return inGrid >= 0 ? tray.length + inGrid : undefined;
+  }
+
+  /**
+   * Put a task on the viewed day in the first free half hour: from now when the
+   * day is today, from 09:00 otherwise, clear of the blocks already placed and
+   * of the day's calendar events. The Agenda then has something to move with
+   * j/k and stretch with +/-, so placing a task never needs the mouse.
+   */
+  function placeAtFreeSlot(ref: TaskRef): { startMin: number; endMin: number } | undefined {
+    if (!getTask(ref)) return undefined;
+    const date = agendaDate();
+    const busy = [
+      ...buildTimelineEntries(state.boards.map((b) => b.board), date).filter((e) => !sameRef(e.ref, ref)),
+      ...buildCalendarEntries(calendarStore.events().filter((e) => !e.allDay)),
+    ];
+    const now = new Date();
+    const from = date === isoToday() ? now.getHours() * 60 + now.getMinutes() : PLACE_FROM_HOUR * 60;
+    const slot = findFreeSlot(busy, from, DEFAULT_BLOCK_MIN);
+    setScheduled(ref, date);
+    setTimeBlock(ref, slot);
+    return slot;
+  }
+
+  /**
    * Move the Agenda's viewed day. `delta` shifts relative to the current day;
    * pass `0`-reset behavior via `resetAgendaDay`. Clamped to ±365 days so the
    * calendar fetch can't run away. Resets the timeline cursor and disarms,
@@ -1995,6 +2039,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setArmMode,
     startArmMode,
     revealAgendaForArm,
+    placeAtFreeSlot,
+    agendaIndexOf,
     leaveArmMode,
     agendaDate,
     shiftAgendaDay,

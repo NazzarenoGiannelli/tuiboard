@@ -312,7 +312,8 @@ export interface UnscheduledItem {
 
 /**
  * Tasks scheduled for the given date but without a time block — the ones
- * shown in the sticky "◦ Unscheduled" section above the timeline grid.
+ * shown in the "To place" tray at the top of the Agenda, which is also the top
+ * of its cursor: rows 0..n-1 are these, the time-blocked entries follow.
  * Sorted by board declaration order, then by encounter in the column
  * (preserves the user's manual ordering inside each kanban column).
  */
@@ -344,6 +345,42 @@ export function buildUnscheduledToday(
     }
   }
   return out;
+}
+
+/** Length of a block placed without one: half an hour. */
+export const DEFAULT_BLOCK_MIN = 30;
+
+/** Where a placement starts on a day that has no clock, i.e. any day but today. */
+export const PLACE_FROM_HOUR = 9;
+
+/**
+ * The first free stretch of `durationMin` at or after `fromMin`, on the grid's
+ * 15-minute steps and inside the rendered day. "Free" means clear of every
+ * `busy` span: blocks already placed and calendar events.
+ *
+ * Nothing free after `fromMin` (late evening, a full day) falls back to the
+ * first free stretch from the start of the day, and failing that to where it
+ * was asked to start: the caller gets a slot to nudge either way, never nothing.
+ */
+export function findFreeSlot(
+  busy: ReadonlyArray<{ startMin: number; endMin: number }>,
+  fromMin: number,
+  durationMin: number = DEFAULT_BLOCK_MIN,
+): { startMin: number; endMin: number } {
+  const dayStart = DAY_START_HOUR * 60;
+  const dayEnd = DAY_END_HOUR * 60;
+  const step = MINS_PER_ROW;
+  const firstFree = (from: number) => {
+    for (let start = Math.ceil(Math.max(from, dayStart) / step) * step; start + durationMin <= dayEnd; start += step) {
+      const end = start + durationMin;
+      if (!busy.some((b) => start < b.endMin && b.startMin < end)) return { startMin: start, endMin: end };
+    }
+    return undefined;
+  };
+  const slot = firstFree(fromMin) ?? firstFree(dayStart);
+  if (slot) return slot;
+  const startMin = Math.min(Math.max(fromMin, dayStart), dayEnd - durationMin);
+  return { startMin, endMin: startMin + durationMin };
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

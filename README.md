@@ -317,8 +317,9 @@ events from the Agenda, re-authorize with the write scope:
 tuiboard calendar-setup google --write
 ```
 
-**Create** — in the Agenda zone, press **`n`** (or **click an empty time slot**)
-to open the new-event modal: type a title, press Enter, pick the target calendar
+**Create** — in the Agenda zone, press **`n`** to open the new-event modal (a
+click on an empty slot no longer does: with nothing armed it only reminds you
+what to press): type a title, press Enter, pick the target calendar
 with `j`/`k`, Enter to create. Only calendars you can write to (owner/writer)
 show in the picker. Append tokens to the title to set the **time** and **date**:
 
@@ -457,9 +458,10 @@ session (until the next terminal resize).
 
 | Key | Action |
 |---|---|
+| `j` / `k` | One cursor over the **To place** tray (the day's tasks that have no hour yet) and then the blocks |
 | `[` / `]` | Previous / next day — shows that day's tasks **and** calendar events (works from any zone, single-pane included; does nothing when the Agenda is off or hidden with `F2`) |
 | `\` | Jump back to today |
-| `c` | Arm mode: click a task, then click a slot to schedule (works from any zone). With no room for the Agenda beside the board (100-149 columns) it takes the screen for the placement and gives it back when arm mode ends |
+| `c` | Arm the task under the cursor. With no hour yet it is placed in the first free half hour (from now today, from 09:00 on other days, clear of blocks and events), so `j`/`k`, `+`/`-` and `Enter` apply at once and the mouse is optional. It is also **arm mode**: click a task, then click a slot (works from any zone). With no room for the Agenda beside the board (100-149 columns) it takes the screen for the placement and gives it back when arm mode ends |
 | `j` / `k` | While armed: nudge the block ±15 min |
 | `+` / `-` | While armed: resize the block's end ±15 min |
 | `Enter` | While armed: keep the placement and go back to where `c` was pressed (if you armed by clicking a block, you stay in the Agenda). Otherwise: toggle done on the task under the cursor, like everywhere else |
@@ -467,6 +469,13 @@ session (until the next terminal resize).
 | `Esc` | While armed: undo the placement and go back to where `c` was pressed |
 
 A placed task stays armed, so it can be sized and moved straight away.
+
+The **To place** tray sits at the top of the Agenda whenever the viewed day has
+tasks scheduled but not yet placed on the clock. It is part of the Agenda's
+cursor, so every task key (`Enter`, `m`, `t`, `s`, `b`, `.`, `c`…) works on it, in
+single-pane too, where the board is not on screen to pick from. The bottom bar
+shows the keys that apply to what you are doing: the Agenda's own, and, once a
+block is armed, how to move, resize, keep or undo it.
 
 ### Agents (agents zone)
 

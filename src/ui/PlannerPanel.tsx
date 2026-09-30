@@ -76,7 +76,9 @@ export function PlannerPanel(props: { store: TuiStore }) {
         width: isZoomed() ? undefined : 42,
         minWidth: isZoomed() ? undefined : 42,
         flexGrow: isZoomed() ? 1 : 0,
-        marginRight: 1,
+        // The gap is for a neighbour. Alone on screen there is none, and a
+        // margin would only pull this panel's edge off the other panes'.
+        marginRight: isZoomed() ? 0 : 1,
         border: true,
         borderStyle: "rounded",
         // Today/Tomorrow identity: a soft pale yellow. Brighter when focused,

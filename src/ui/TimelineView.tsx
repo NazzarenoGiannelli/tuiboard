@@ -339,7 +339,9 @@ export function TimelineView(props: TimelineViewProps) {
         width: props.width,
         minWidth: props.width,
         flexGrow: props.width ? 0 : 1,
-        marginLeft: 1,
+        // A fixed width means it sits beside the board and needs the gap; a
+        // full-width Agenda is alone on screen and lines up with the others.
+        marginLeft: props.width ? 1 : 0,
         border: true,
         borderStyle: "rounded",
         // Arm mode paints the border warm so the special scheduling mode is

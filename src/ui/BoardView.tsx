@@ -365,7 +365,9 @@ function ColumnView(props: ColumnViewProps) {
         // No explicit height — Yoga stretches us along the row's cross
         // axis, so the column always fills the full board height. Same
         // contract as the Today/Tomorrow planner panel next door.
-        marginRight: COL_GAP,
+        // The gap separates columns side by side; the one zoomed column is
+        // alone and lines up with the other panes.
+        marginRight: props.zoomed ? 0 : COL_GAP,
         border: true,
         borderStyle: "rounded",
         borderColor: props.active ? T.borderActive : T.border,

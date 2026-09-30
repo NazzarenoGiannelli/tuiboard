@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to it: a scan of the same 172 files went from 4.1 s to 6 ms, and the first
   one from 5 GB of memory to 0.4 GB, with identical results. A last line that is
   still being written is picked up on the next scan.
+- **Single-pane: every pane has the same edges.** With one zone on screen, the
+  Planner and the board column stopped a cell short on the right, the Agenda
+  started a cell late on the left, and Agents alone used the full width, so
+  flipping between zones made the borders jump. The gap between panes exists to
+  separate neighbours; a pane alone on screen no longer carries it. At 80
+  columns all four now draw from column 2 to column 79. The side-by-side layout
+  is unchanged.
 
 ### Added
 - **`TUIBOARD_PERF`: a performance log for slow sessions.** Set it to a file path

@@ -22,9 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Release content tooling** (`demo/`, not published): `bun run demo:shots` renders pictures and
   clips of every zone (the terminal in an acrylic window on the brand gradient, or bare for a web
   page with `--site`); the Agents pane is fed invented sessions from the four harnesses, never the
-  real ones. `bun run demo:film` builds a 41 second launch film cut to a beat grid
-  (`demo/promo/`), with a synthesised placeholder track, `beatgrid.py` to measure a real one, and
-  `build.py --grid` to stretch the film between the track's landmarks.
+  real ones. `bun run demo:film` builds a 50 second launch film (`demo/promo/`): the real app resized from 182
+  to 64 columns, paced by content against a cue sheet, with `beatgrid.py` to measure a track and a
+  synthesised placeholder track.
 
 ## [0.15.0] - 2026-09-30
 

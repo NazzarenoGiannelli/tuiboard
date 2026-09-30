@@ -2,8 +2,8 @@
 
     python demo/promo/beatgrid.py track.mp3            # prints a report and writes track.grid.json
 
-The film is authored in beats against a 120 BPM plan (intro, drop, break, second drop, final hit).
-A real track will not keep that plan to the bar, so this finds the same landmarks in the track:
+The film is paced by content, with a few moments placed on the music (the drop, the last hit).
+This finds those landmarks in a track:
 
   bpm, t0      tempo, and the time (s) of a beat on the grid
   drop1        first time the kick comes in
@@ -11,8 +11,8 @@ A real track will not keep that plan to the bar, so this finds the same landmark
   drop2        the kick is back
   final        the last big hit (end of the last groove)
 
-`build.py --grid track.grid.json` then stretches each stretch of the film between those
-landmarks, so the drops, the break and the end card land on the music's own.
+Use them to re-time the CUES in build.py (the film's cue sheet, in seconds) to a new track:
+which moment lands on the drop, where the break is, where the last hit falls.
 Needs numpy and ffmpeg; no other audio library.
 """
 

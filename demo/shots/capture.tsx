@@ -347,12 +347,13 @@ const tray: Scene = async () => {
 
 
 // ── The launch film ──────────────────────────────────────────────────────────
-// One session of the real app, resized the way a person drags a window edge. Every frame carries
-// `at`, a position in beats (120 BPM, one bar = 4 beats); demo/promo/build.py turns beats into
-// seconds against the music, so the same frames fit any track whose tempo it can measure.
+// One session of the real app, resized the way a person drags a window edge. Frames are tagged
+// with the `seg` (segment) they belong to, in order; demo/promo/build.py holds the cue sheet that
+// says when each segment's frames appear, so the pacing is decided there, not here.
 
 const SINGLE = { cols: 64, rows: 44 };
 const wide = { cols: 182, rows: 42 };
+const SHRINK_STEPS = 19;
 
 /** Resize the terminal and let the app refit its zones, as app.tsx does on a resize. */
 async function resizeTo(s: Stage, cols: number, rows: number) {
@@ -365,104 +366,117 @@ async function resizeTo(s: Stage, cols: number, rows: number) {
 
 const promo: Scene = async () => {
   const s = await stage("promo", wide.cols, wide.rows, (st) => st.setActiveZone("planner"));
-  const at = (beat: number) => s.frame(undefined, 1, { at: beat });
-  const press = async (beat: number, key: string, mods: { shift?: boolean } = {}) => {
+  const mark = (seg: string) => s.frame(undefined, 1, { seg });
+  const press = async (seg: string, key: string, mods: { shift?: boolean } = {}) => {
     await s.key(key, mods);
-    await at(beat);
+    await mark(seg);
   };
   const zone = (z: "planner" | "board" | "timeline" | "agents") => s.store.setActiveZone(z);
+  const walkTo = async (seg: string, text: string) => {
+    for (let i = 0; i < 40; i++) {
+      const at = s.lines().find((l) => l.includes("▶"));
+      if (at?.includes(text)) return;
+      await press(seg, "j");
+    }
+    throw new Error(`the cursor never reached "${text}"`);
+  };
 
-  // 8-12 the dashboard, on the planner
-  await at(8);
-  for (const b of [9, 10, 11]) await press(b, "j");
-  // 12-16 the board
-  await press(12, "tab", { shift: true });
-  for (const b of [13, 14]) await press(b, "j");
-  await press(15, "l");
-  // 16-20 the Agenda
-  await press(16, "tab", { shift: true });
-  for (const b of [17, 18, 19]) await press(b, "j");
-  // 20-24 the agents
-  await press(20, "tab", { shift: true });
-  for (const b of [21, 22, 23]) await press(b, "j");
-  // 24-32 zoom the agents list to a full screen of cards
-  await press(24, "z");
-  for (const b of [25, 26, 27, 28, 29, 30]) await press(b, "j");
-  await press(31, "z"); // back to the four zones
+  // the zone tour on the wide dashboard
+  await mark("tour_planner");
+  for (let i = 0; i < 2; i++) await press("tour_planner", "j");
+  await press("tour_board", "tab", { shift: true });
+  await press("tour_board", "j");
+  await press("tour_board", "l");
+  await press("tour_agenda", "tab", { shift: true });
+  await press("tour_agenda", "j");
+  await press("tour_agenda", "j");
+  await press("tour_agents", "tab", { shift: true });
+  await press("tour_agents", "j");
+  await press("tour_agents", "j");
+  // zoom the agents list to a full screen of cards, then back
+  await press("zoom", "z");
+  for (let i = 0; i < 3; i++) await press("zoom", "j");
+  await press("unzoom", "z");
   zone("timeline");
   await s.settle();
-  await at(31.5);
+  await mark("unzoom");
 
-  // 32-38 the window shrinks, frame by frame: what the app really does at each width
-  const steps = 25;
-  for (let i = 0; i <= steps; i++) {
-    const p = i / steps;
-    const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; // ease in-out
-    const cols = Math.round(wide.cols + (SINGLE.cols - wide.cols) * e);
-    const rows = Math.round(wide.rows + (SINGLE.rows - wide.rows) * e);
-    await resizeTo(s, cols, rows);
-    await at(32 + p * 6);
+  // the window shrinks, frame by frame: what the app really does at each width
+  for (let i = 0; i <= SHRINK_STEPS; i++) {
+    const p = i / SHRINK_STEPS;
+    const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    await resizeTo(s, Math.round(wide.cols + (SINGLE.cols - wide.cols) * e), Math.round(wide.rows + (SINGLE.rows - wide.rows) * e));
+    await mark("shrink");
   }
   await resizeTo(s, SINGLE.cols, SINGLE.rows);
-  await at(38);
-  await press(39, "j");
-
-  // 40-48 one pane at a time: Shift-Tab around the ring, a beat each
-  zone("timeline");
-  for (let b = 40; b < 48; b++) await press(b, "tab", { shift: true });
-
-  // 48-56 drag: select, arm, carry, stretch, keep
   zone("timeline");
   await s.settle();
-  await at(48);
+  await mark("single");
+
+  // one pane at a time: Shift-Tab around the ring
+  for (let i = 0; i < 4; i++) await press("ring", "tab", { shift: true });
+
+  // drag: select, arm, carry, stretch, keep
+  zone("timeline");
+  await s.settle();
+  await mark("drag");
   const grid = (text: string) => s.find(text, 9);
   const head = grid("Deep work");
   await s.t.mockMouse.click(head.x + 4, head.y);
-  await at(48.5);
+  await mark("drag");
   await s.t.mockMouse.doubleClick(head.x + 4, head.y);
-  await at(49.5);
+  await mark("drag");
   const body = grid("Deep work");
   await s.t.mockMouse.pressDown(body.x + 4, body.y + 1);
   for (let k = 1; k <= 3; k++) {
     await s.t.mockMouse.emitMouseEvent("drag", body.x + 4, body.y + 1 + k);
-    await at(49.5 + k * 0.8);
+    await mark("drag");
   }
   await s.t.mockMouse.release(body.x + 4, body.y + 4);
-  await at(52.4);
+  await mark("drag");
   const edge = grid("━ ↕");
   await s.t.mockMouse.pressDown(edge.x + 4, edge.y);
   for (let k = 1; k <= 2; k++) {
     await s.t.mockMouse.emitMouseEvent("drag", edge.x + 4, edge.y + k);
-    await at(52.4 + k * 0.8);
+    await mark("drag");
   }
   await s.t.mockMouse.release(edge.x + 4, edge.y + 2);
-  await at(54.2);
+  await mark("drag");
   const keep = grid("━ ↕");
   await s.t.mockMouse.doubleClick(keep.x + 10, keep.y);
-  await at(55);
+  await mark("drag");
 
-  // 56-62 the tray: arm a task with no hour, click a slot, nudge, keep
+  // the tray: arm a task with no hour, click a slot, nudge, keep
+  await mark("tray");
   const row = s.find("Write the release notes");
   await s.t.mockMouse.doubleClick(row.x + 4, row.y);
-  await at(57);
+  await mark("tray");
   const slot = s.find("08 ─");
   await s.t.mockMouse.click(slot.x + 10, slot.y);
-  await at(58.2);
-  await press(59, "j");
-  await press(59.6, "j");
-  await press(60.2, "+");
-  await press(60.8, "return");
+  await mark("tray");
+  await press("tray", "j");
+  await press("tray", "j");
+  await press("tray", "+");
+  await press("tray", "return");
 
-  // 62-70 every harness in one list
+  // triage on Today / Tomorrow: t pulls a late task in, Enter ticks, m sends to tomorrow
+  zone("planner");
+  await s.settle();
+  await mark("tri_start");
+  await walkTo("tri_walk1", "Reply to Priya");
+  await press("tri_t", "t");
+  await walkTo("tri_walk2", "Standup");
+  await press("tri_enter", "return");
+  await walkTo("tri_walk3", "Migrate billing to the new");
+  await press("tri_m", "m");
+
+  // every harness in one list
   zone("agents");
   await s.settle();
-  await at(62);
-  await press(63, "j");
-  await press(64, "f");
-  await press(65.5, "f");
-  await press(67, "f");
-  await press(68.5, "f");
-  await press(70, "f");
+  await mark("filter");
+  await press("filter", "j");
+  for (let i = 0; i < 4; i++) await press("filter", "f"); // cc, cx, oc, pi
+  await press("filter", "f"); // all again
 };
 
 function firstRef(store: Store, title: string) {

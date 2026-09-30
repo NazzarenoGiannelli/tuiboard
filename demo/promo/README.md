@@ -1,45 +1,56 @@
 # The launch film
 
-A 41 second, 1920x1080, 30 fps film of the real app, cut to music. Everything on screen is the
+A 50 second, 1920x1080, 30 fps film of the real app, cut to a track. Everything on screen is the
 invented demo environment (`../seed.ts`): the boards, and the agent sessions (`../shots/agents.ts`).
 
 ```bash
-bun run demo:film                                   # capture, placeholder track, build
-bun run demo:film -- --audio track.mp3              # with your own music (see below)
-python demo/promo/build.py --preview 9 36 50 66     # stills at those beats, to look at
+bun run demo:film                                   # capture, then build
+python demo/promo/build.py --preview 8 16 30 46     # stills at those seconds, to look at
 ```
 
 Output: `demo/promo/out/tuiboard-launch.mp4` (git-ignored; review before it goes anywhere).
+The track is `demo/promo/out/future-launch.mp3` (made on Suno, not in the repo); without it the
+build falls back to the synthesised `music.wav` and its cues need re-timing.
 
 ## How it is made
 
 - **Frames are the real app.** The `promo` scene in `../shots/capture.tsx` drives one session of
   tuiboard headless: the four-zone dashboard, `Shift-Tab` around the zones, `z` to zoom, then the
-  terminal is resized from 182 to 64 columns in 25 steps (each step is the app's own layout at that
-  width, including zones dropping out) and the single-pane zones, a drag, the tray and the agent
-  filter are driven with real keys and the mock mouse. Each frame carries `at`, a position in
-  **beats**.
-- **`build.py` composes** the gradient backdrop, the acrylic window (it follows the terminal's size
-  and camera), the type and the end card, and turns beats into seconds with `t = t0 + beat * 60 / bpm`.
-- **`music.py`** synthesises the placeholder track (120 BPM, 20 bars) from nothing but numpy.
-  It is a stand-in and a timing reference.
+  terminal is resized from 182 to 64 columns in 20 steps (each step is the app's own layout at that
+  width, zones dropping out as it narrows), and the single-pane zones, a drag, the tray, the Today
+  triage keys and the agent filter are driven with real keys and the mock mouse. Frames come out in
+  named **segments** (`tour_planner`, `drag`, `filter`...).
+- **`build.py` holds the cue sheet** (`CUES`, in seconds): when each segment's frames appear. It also
+  composes the gradient backdrop, the acrylic window (it follows the terminal's size), the type and
+  the end card, whose wordmark is the one the boot splash prints (`src/ui/splash.ts`).
 
-The plan, in beats (a bar is 4): 0-8 intro, 8 the drop and the window, 8-28 the zone tour, 24-31 zoom,
-28-32 the break, 32 second drop and the window shrinking to a single pane, 40-48 the single-pane
-ring, 48 drag, 56 tray, 62 agents, 72 final hit and the end card, 83 the end.
+## Pacing
 
-## With a real track (Suno and the like)
+The film is paced by what it is saying, not by a grid:
 
-`music-brief.md` has a prompt. Then:
+- a UI change of state is quick (a cursor step, a zone switch, a drag step), because a person is doing it;
+- when there is something to take in (a zone, a finished block, a filtered list) it stays long enough to read;
+- the brisk part is where it means something: the ring of single-pane zones, the quick scroll in triage;
+- a few moments are placed on the music: the drop (15.4 s) takes the window from wide to a single pane
+  in under a second, the last kick (45.9 s) brings the URL in;
+- nothing pulses and nothing flashes.
+
+Timeline: 0-6 typed headline, 6.6 the window arrives, 7.7-13.4 the zone tour, 13.8-15.2 `z` zoom, 15.4 the
+drop and the shrink, 17-18.7 the ring, 19.3-24.6 drag, 25.3-29.4 tray, 30.2-34.9 triage, 35.9-40.8 agents,
+41.3 the window leaves, 42.5-47 the end card, fade at 47.9.
+
+## Another track
+
+`music-brief.md` has a Suno prompt. Measure a track with
 
 ```bash
-python demo/promo/beatgrid.py track.mp3      # tempo, beat phase, and where the sections start
+python demo/promo/beatgrid.py track.mp3
 ```
 
-It prints the BPM, the time of the beat grid, the drops, the break and the final hit, plus an energy
-table per bar so the landmarks can be checked by eye. The film then takes the track's own tempo and
-phase (`--bpm`, `--t0`), and where the track's structure differs from the plan it is stretched between
-landmarks so the drops and the end card land on the music's.
+which prints the tempo, where the beats fall, the first drop and the last hit, and an energy table per
+bar. Then move `DROP`, `SHRINK` and the times in `CUES` in `build.py` to match, and set `DURATION`.
+
+`music.py` synthesises a 120 BPM placeholder from nothing but numpy (a stand-in and a timing reference).
 
 ## Loudness
 

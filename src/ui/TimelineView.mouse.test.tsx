@@ -522,3 +522,20 @@ describe("the fill is the box", () => {
     expect(f[head]![right + 2]).toBe(false);
   });
 });
+
+describe("the grid's rules are as wide as the lane, not cut off", () => {
+  it("no hour rule or dotted row carries a truncation ellipsis", async () => {
+    const m = await mount();
+    const grid = m.frame().filter((l) => /^\s*│\s+(\d\d )?[─·]/.test(l));
+    expect(grid.length).toBeGreaterThan(10);
+    for (const l of grid) expect(l).not.toMatch(/\.\.\.|…/);
+  });
+
+  it("the rules end exactly at the lane's edge, the same column as a box's right-hand corner", async () => {
+    const m = await mount();
+    const lines = m.frame();
+    const rule = lines.find((l) => l.includes("08 ─"))!;
+    const dots = lines.find((l) => /^\s*│\s+·/.test(l))!;
+    expect(dots.lastIndexOf("·")).toBe(rule.lastIndexOf("─"));
+  });
+});

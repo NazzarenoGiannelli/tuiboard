@@ -913,6 +913,10 @@ function hourPrefix(rowIndex: number): string {
 function RowContent(props: RowContentProps) {
   const r = props.row;
   const prefix = props.skipPrefix ? "" : hourPrefix(props.rowIndex);
+  // The rules are drawn exactly as wide as the lane. They used to be 120 cells and
+  // left to be cut off, and the terminal cut them in the middle with an ellipsis: a
+  // white "..." in every line of the grid.
+  const laneW = props.laneWidth ?? 200;
 
   if (r.kind === "now") {
     return (
@@ -921,7 +925,7 @@ function RowContent(props: RowContentProps) {
           {"━━ "}
           {formatHm(r.nowMin ?? 0)}{" "}
         </span>
-        <span style={{ fg: T.overdue }}>{"━".repeat(120)}</span>
+        <span style={{ fg: T.overdue }}>{"━".repeat(Math.max(0, laneW - 9))}</span>
       </>
     );
   }
@@ -932,7 +936,7 @@ function RowContent(props: RowContentProps) {
     return (
       <>
         <span style={{ fg: T.textDim }}>{label} </span>
-        <span style={{ fg: T.border }}>{"─".repeat(120)}</span>
+        <span style={{ fg: T.border }}>{"─".repeat(Math.max(0, laneW - 3))}</span>
       </>
     );
   }
@@ -945,7 +949,7 @@ function RowContent(props: RowContentProps) {
     return (
       <>
         <span style={{ fg: T.textDim }}>{prefix}</span>
-        <span style={{ fg: T.border }}>{(isHourRow ? "─" : "·").repeat(120)}</span>
+        <span style={{ fg: T.border }}>{(isHourRow ? "─" : "·").repeat(Math.max(0, laneW - prefix.length))}</span>
       </>
     );
   }

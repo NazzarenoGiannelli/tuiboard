@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **No more "..." in the middle of every grid line.** The Agenda's hour rules, dotted rows and
+  the "now" line were drawn 120 cells wide and left to be cut off, and the terminal cut them in
+  the middle with an ellipsis: a white blob in each row of the grid. They are now drawn exactly as
+  wide as the lane.
+
+### Added
+- **A demo environment** (`demo/`, not published): three invented boards for a made-up team,
+  always dated today, covering overdue, today with and without an hour, blocks that nest,
+  overlap and touch, tomorrow, coming days, due dates, done and an undated backlog. `bun run
+  demo` seeds and opens tuiboard on it. `demo/shots/` renders the app headless on those boards
+  into images and video.
+
 ## [0.15.0] - 2026-09-30
 
 ### Added

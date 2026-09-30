@@ -18,3 +18,6 @@ build/
 demo/data/
 demo/out/
 demo/promo/out/
+
+__pycache__/
+*.pyc

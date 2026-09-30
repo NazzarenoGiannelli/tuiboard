@@ -8,7 +8,7 @@
  * writes every frame as JSON — each cell with its real colours — under demo/out/frames/.
  * render.py turns those into pictures and video. The desktop is never touched.
  *
- * The clock is frozen at 09:41 today so the "now" line sits between two blocks and every run
+ * The clock is frozen at 09:41 today (freeze.ts) so the "now" line sits between two blocks and every run
  * makes the same pictures. Boards are re-seeded first: the pictures never show anything
  * but the invented demo.
  */
@@ -18,24 +18,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { testRender } from "@opentui/solid";
 
-// ── Freeze the clock (before anything reads it) ──────────────────────────────
-const RealDate = Date;
-const NOW = (() => {
-  const d = new RealDate();
-  d.setHours(9, 41, 0, 0);
-  return d.getTime();
-})();
-(globalThis as any).Date = class extends RealDate {
-  constructor(...args: any[]) {
-    if (args.length === 0) super(NOW);
-    else super(...(args as [any]));
-  }
-  static now() {
-    return NOW;
-  }
-};
-
+// The clock is frozen by ./freeze, which has to be evaluated before everything below.
+import { NOW } from "./freeze";
 import { seedDemo } from "../seed";
+import { createDemoAgentAdapter } from "./agents";
+import { AGENT_ADAPTERS } from "~/store/agent-adapters";
 import { handleKey } from "~/input/handleKey";
 import { createTuiStore } from "~/store/index";
 import { buildPlannerItems } from "~/store/planner-panel";
@@ -48,6 +35,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const OUT = join(here, "..", "out", "frames");
 
 type Store = ReturnType<typeof createTuiStore>;
+
+/** Every hold is in 12 fps ticks, stretched by this so a clip has time to be read. */
+const PACE = 1.5;
+
+/** The Agenda needs height: from the tray down to the afternoon, so a block can be carried and stretched in view. */
+const AGENDA_ROWS = 46;
 
 /** What a scene needs to drive the app. */
 interface Stage {
@@ -66,7 +59,12 @@ interface Stage {
 async function stage(scene: string, cols: number, rows: number, setup: (s: Store) => void): Promise<Stage> {
   seedDemo();
   process.env.TUIBOARD_CONFIG = join(here, "..", "config.yaml");
-  const store = createTuiStore({ config: loadConfig() });
+  const config = loadConfig();
+  // The Agents zone is on for the pictures, but fed invented sessions: the real ones on a
+  // machine carry client names and unreleased work.
+  config.zones.agents = "on";
+  AGENT_ADAPTERS.splice(0, AGENT_ADAPTERS.length, createDemoAgentAdapter(NOW));
+  const store = createTuiStore({ config });
   store.applyResponsiveFits(
     { planner: cols >= 100, timeline: cols >= 150, agents: cols >= 120 },
     { narrow: cols < 100 },
@@ -140,7 +138,7 @@ async function stage(scene: string, cols: number, rows: number, setup: (s: Store
         cols: f.cols,
         rows: f.rows,
         caption: caption ?? null,
-        hold,
+        hold: Math.max(1, Math.round(hold * PACE)),
         lines: f.lines.map((l: any) =>
           l.spans.map((s: any) => ({ t: s.text, w: s.width, fg: col(s.fg), bg: col(s.bg), a: s.attributes })),
         ),
@@ -165,18 +163,137 @@ const hero: Scene = async () => {
   await s.frame();
 };
 
-/** A narrow, vertical terminal: one pane at a time, the Agenda with its tray and boxes. */
-const single: Scene = async () => {
-  const s = await stage("single", 64, 36, (st) => {
-    st.setActiveZone("timeline");
-  });
+/** Single-pane stills: a narrow, vertical terminal shows one zone at a time. */
+const pane = (scene: string, zone: "board" | "planner" | "timeline" | "agents", setup?: (s: Stage) => Promise<void>, rows = 36): Scene => async () => {
+  const s = await stage(scene, 64, rows, (st) => st.setActiveZone(zone));
+  await setup?.(s);
   await s.frame();
+};
+const agenda = pane("agenda", "timeline", undefined, AGENDA_ROWS);
+const board = pane("board", "board", async (s) => {
+  await s.key("j");
+  await s.key("j");
+}, 32);
+const today = pane("today", "planner", async (s) => {
+  for (let i = 0; i < 4; i++) await s.key("j");
+});
+const agents = pane("agents", "agents", async (s) => {
+  await s.key("j");
+}, 32);
+
+/** The four zones in turn, on a wide terminal: Shift-Tab walks the ring. */
+const zones: Scene = async () => {
+  const s = await stage("zones", 182, 42, (st) => st.setActiveZone("planner"));
+  const walk = async (caption: string, keys: string[]) => {
+    await s.frame(caption, 8);
+    for (const k of keys) {
+      await s.key(k);
+      await s.frame(caption, 4);
+    }
+  };
+  await walk("Today / Tomorrow: what needs you right now", ["j", "j", "j"]);
+  await s.key("tab", { shift: true });
+  await walk("Your boards: plain markdown files you own", ["j", "j", "l"]);
+  await s.key("tab", { shift: true });
+  await walk("The Agenda: your day on a ruler", ["j", "j", "j"]);
+  await s.key("tab", { shift: true });
+  await walk("Agents: every coding session in one list", ["j", "j", "j"]);
+  await s.frame("Claude Code · Codex · OpenCode · Pi", 14);
+};
+
+/** Walk the cursor (the `▶` mark) down to the task whose line contains `text`, a frame per step. */
+async function goTo(s: Stage, text: string, caption: string) {
+  for (let i = 0; i < 40; i++) {
+    const at = s.lines().find((l) => l.includes("▶"));
+    if (at?.includes(text)) return;
+    await s.key("j");
+    await s.frame(caption, 1);
+  }
+  throw new Error(`the cursor never reached "${text}"`);
+}
+
+/** Today / Tomorrow on a narrow terminal: pull a late task to today, tick one off, push one to tomorrow. */
+const planner: Scene = async () => {
+  const s = await stage("planner", 64, 36, (st) => st.setActiveZone("planner"));
+  await s.frame("Everything that is due, in one list", 12);
+  await goTo(s, "Reply to Priya", "j / k walk the list");
+  await s.frame("j / k walk the list", 6);
+  await s.key("t");
+  await s.frame("t pulls a late task into today", 16);
+  await goTo(s, "Standup", "j / k walk the list");
+  await s.key("return");
+  await s.frame("Enter ticks a task off", 16);
+  await goTo(s, "Write the release notes", "j / k walk the list");
+  await s.frame("j / k walk the list", 6);
+  await s.key("m");
+  await s.frame("m sends it to tomorrow", 10);
+  await goTo(s, "Write the release notes", "…where it waits under Tomorrow");
+  await s.frame("…where it waits under Tomorrow", 16);
+};
+
+/** Many tasks, one key: mark with Space, act on all of them. */
+const multi: Scene = async () => {
+  const s = await stage("multi", 64, 36, (st) => st.setActiveZone("planner"));
+  await s.frame("Late tasks pile up", 10);
+  await s.key("j");
+  for (let i = 0; i < 3; i++) {
+    await s.key("space");
+    await s.frame("Space marks tasks, in any order", 5);
+    await s.key("j");
+  }
+  await s.frame("Space marks tasks, in any order", 8);
+  await s.key("t");
+  await s.frame("One key acts on all of them: t = today", 14);
+};
+
+/** Boards on a narrow terminal: move around, grab a card and carry it to another column. */
+const grab: Scene = async () => {
+  const s = await stage("grab", 64, 36, (st) => st.setActiveZone("board"));
+  await s.frame("Your board, one column at a time", 10);
+  await s.key("j");
+  await s.key("j");
+  await s.frame("j / k pick a card", 6);
+  await s.key("g");
+  await s.frame("g grabs it", 8);
+  await s.key("l");
+  await s.frame("h / l carry it across columns", 10);
+  await s.key("g");
+  await s.frame("g drops it", 14);
+};
+
+/** The Agenda's days: next day, the day after, and back to today. */
+const days: Scene = async () => {
+  const s = await stage("days", 64, AGENDA_ROWS, (st) => st.setActiveZone("timeline"));
+  await s.frame("Today", 10);
+  await s.key("]");
+  await s.frame("] goes to tomorrow", 14);
+  await s.key("]");
+  await s.frame("…and the day after", 12);
+  await s.key("\\");
+  await s.frame("\\ jumps back to today", 14);
+};
+
+/** The Agents list: four harnesses, one filter key. */
+const filter: Scene = async () => {
+  const s = await stage("filter", 64, 36, (st) => st.setActiveZone("agents"));
+  await s.frame("Every agent session on the machine", 10);
+  for (let i = 0; i < 3; i++) {
+    await s.key("j");
+    await s.frame("j / k move through them", 4);
+  }
+  for (const [label, n] of [["Claude Code", 1], ["Codex", 1], ["OpenCode", 1], ["Pi", 1]] as const) {
+    for (let i = 0; i < n; i++) await s.key("f");
+    await s.frame(`f filters by harness: ${label}`, 12);
+  }
+  await s.key("f");
+  await s.frame("…and back to all of them", 10);
 };
 
 /** Drag and resize: arm a block with two clicks, carry it, stretch it, let go. */
 const drag: Scene = async () => {
-  const s = await stage("drag", 64, 36, (st) => st.setActiveZone("timeline"));
-  const at = (text: string) => s.find(text);
+  const s = await stage("drag", 64, AGENDA_ROWS, (st) => st.setActiveZone("timeline"));
+  // From the grid down: the armed block is also named on the status line at the top.
+  const at = (text: string) => s.find(text, 9);
   // Select, then arm, the deep-work block.
   const head = at("Deep work");
   await s.frame("Click a block to select it");
@@ -187,19 +304,19 @@ const drag: Scene = async () => {
   // Carry it down, row by row.
   const body = at("Deep work");
   await s.t.mockMouse.pressDown(body.x + 4, body.y + 1);
-  for (let k = 1; k <= 5; k++) {
+  for (let k = 1; k <= 3; k++) {
     await s.t.mockMouse.emitMouseEvent("drag", body.x + 4, body.y + 1 + k);
-    await s.frame("Hold and drag to move it", k === 5 ? 6 : 2);
+    await s.frame("Hold and drag to move it", k === 3 ? 6 : 3);
   }
-  await s.t.mockMouse.release(body.x + 4, body.y + 6);
+  await s.t.mockMouse.release(body.x + 4, body.y + 4);
   // Stretch it with the handle.
   const edge = at("━ ↕");
   await s.t.mockMouse.pressDown(edge.x + 4, edge.y);
-  for (let k = 1; k <= 4; k++) {
+  for (let k = 1; k <= 3; k++) {
     await s.t.mockMouse.emitMouseEvent("drag", edge.x + 4, edge.y + k);
-    await s.frame("Drag the bottom edge to change its length", k === 4 ? 6 : 2);
+    await s.frame("Drag the bottom edge to change its length", k === 3 ? 6 : 3);
   }
-  await s.t.mockMouse.release(edge.x + 4, edge.y + 4);
+  await s.t.mockMouse.release(edge.x + 4, edge.y + 3);
   // Two clicks keep it where it is.
   const keep = at("━ ↕");
   await s.t.mockMouse.doubleClick(keep.x + 10, keep.y);
@@ -208,7 +325,7 @@ const drag: Scene = async () => {
 
 /** From the tray to the clock: arm a task that has no hour, choose where it goes, nudge it. */
 const tray: Scene = async () => {
-  const s = await stage("tray", 64, 36, (st) => st.setActiveZone("timeline"));
+  const s = await stage("tray", 64, AGENDA_ROWS, (st) => st.setActiveZone("timeline"));
   await s.frame("Today's tasks that have no hour wait in the tray", 10);
   const row = s.find("Write the release notes");
   await s.t.mockMouse.doubleClick(row.x + 4, row.y);
@@ -239,7 +356,7 @@ function firstRef(store: Store, title: string) {
   return undefined;
 }
 
-const SCENES: Record<string, Scene> = { hero, single, drag, tray };
+const SCENES: Record<string, Scene> = { hero, agenda, board, today, agents, zones, planner, multi, grab, days, filter, drag, tray };
 
 const wanted = process.argv.slice(2);
 const names = wanted.length ? wanted : Object.keys(SCENES);

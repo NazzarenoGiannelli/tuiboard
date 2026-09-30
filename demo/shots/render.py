@@ -55,7 +55,7 @@ UI = find_font("segoeuisb.ttf", "segoeui.ttf")
 
 # Terminal look (Windows Terminal, dark, acrylic).
 TINT = (12, 14, 22)
-TINT_ALPHA = 0.80
+TINT_ALPHA = 0.88  # a hint of the gradient through the glass, still easy to read
 TEXT_DEFAULT = (204, 204, 204)
 
 
@@ -201,17 +201,32 @@ def draw_terminal(frame, m, back, origin):
     back.alpha_composite(layer, (ox, oy))
 
 
-def wallpaper(w, h, seed=7):
-    """A soft, dark, colourful backdrop: what the acrylic blurs."""
-    rnd = random.Random(seed)
-    img = Image.new("RGB", (w, h), (10, 12, 20))
-    d = ImageDraw.Draw(img)
-    blobs = [((0.15, 0.2), (40, 70, 160), 0.55), ((0.85, 0.15), (130, 50, 140), 0.5),
-             ((0.7, 0.9), (30, 120, 130), 0.55), ((0.1, 0.9), (150, 80, 50), 0.4)]
-    for (px, py), col, rad in blobs:
-        rr = int(min(w, h) * rad)
-        d.ellipse((px * w - rr, py * h - rr, px * w + rr, py * h + rr), fill=col)
-    return img.filter(ImageFilter.GaussianBlur(int(min(w, h) * 0.12)))
+# The backdrop is the brand: pale yellow, cyan and a deep ink blue, the colours of the landing
+# page and of the UI itself. Three stops on a diagonal, nothing else.
+STOPS = [
+    (0.00, (236, 246, 176)),  # pale yellow  (#eaf6ad, a little softer)
+    (0.46, (104, 178, 212)),  # cyan         (#7eb6d6, a little deeper)
+    (1.00, (14, 38, 58)),     # deep ink blue
+]
+
+
+def wallpaper(w, h):
+    """The soft three-tone gradient the acrylic blurs."""
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+    # diagonal: top-left -> bottom-right, measured so a tall canvas and a wide one both run corner to corner
+    t = (xs / w * 0.55 + ys / h * 0.45)
+    t = (t - t.min()) / (t.max() - t.min())
+    out = np.zeros((h, w, 3), np.float32)
+    for (t0, c0), (t1, c1) in zip(STOPS, STOPS[1:]):
+        k = np.clip((t - t0) / (t1 - t0), 0, 1)
+        k = k * k * (3 - 2 * k)  # smoothstep: soft joins
+        m = (t >= t0) & (t <= t1 + 1e-6)
+        for i in range(3):
+            out[..., i] = np.where(m, c0[i] + (c1[i] - c0[i]) * k, out[..., i])
+    # a faint warm glow in the yellow corner and a cool one opposite keep it from looking flat
+    g = np.exp(-(((xs - 0.05 * w) ** 2 + (ys - 0.05 * h) ** 2) / (2 * (0.35 * min(w, h)) ** 2)))[..., None]
+    out = out * (1 - 0.25 * g) + np.array([250, 252, 210], np.float32) * 0.25 * g
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
 
 
 def compose(frame, m, canvas, caption=None, title="tuiboard"):

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-09-30
+
 ### Fixed
 - **Confirming a move in the Agenda no longer throws you to the board.** Click a
   block, click its new slot, press Enter: the placement was kept, but a block
@@ -572,6 +574,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.14.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.3
 [0.14.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.2
 [0.14.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.1
 [0.14.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.0

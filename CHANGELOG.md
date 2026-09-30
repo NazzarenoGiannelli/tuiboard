@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **tuiboard no longer freezes under a busy Claude Code history.** The Agents
+  list read and parsed *every* Claude Code transcript from the start on every
+  scan, and a scan ran whenever any transcript changed, which a live session
+  does several times a minute. With 172 transcripts (2.4 GB) each scan blocked
+  the UI for about 4 s and allocated gigabytes, so the next one was already
+  due: 100% of a core, 3-5 GB of memory, a second or two of delay on every key.
+  Each transcript is now read once and afterwards only for the bytes appended
+  to it: a scan of the same 172 files went from 4.1 s to 6 ms, and the first
+  one from 5 GB of memory to 0.4 GB, with identical results. A last line that is
+  still being written is picked up on the next scan.
+
 ### Added
 - **`TUIBOARD_PERF`: a performance log for slow sessions.** Set it to a file path
   (or `1`) and tuiboard writes JSON lines: a `sample` every 5 s (CPU, memory,

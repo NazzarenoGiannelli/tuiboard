@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
   classifyStatus,
+  createTranscriptReader,
   cwdFromSlug,
   parseTranscript,
   type LivePidRecord,
@@ -149,5 +150,115 @@ describe("parseTranscript", () => {
     const result = parseTranscript(lines);
     expect(result.firstHumanUser).toBeUndefined();
     expect(result.lastUser).toBe("<task-notification>noisy</task-notification>");
+  });
+});
+
+describe("createTranscriptReader", () => {
+  const user = (text: string) =>
+    JSON.stringify({ type: "user", gitBranch: "main", message: { role: "user", content: text } });
+  const assistant = (text: string, tools = 0) =>
+    JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        model: "claude-opus-5",
+        content: [{ type: "text", text }, ...Array.from({ length: tools }, () => ({ type: "tool_use" }))],
+      },
+    });
+  const A = [user("first è prompt"), assistant("hello", 2)].join("\n") + "\n";
+  const B = [user("second"), assistant("bye è", 1)].join("\n") + "\n";
+
+  /** A fake disk that records every byte range that gets read. */
+  function fakeDisk(initial: string) {
+    let content = Buffer.from(initial, "utf-8");
+    const reads: Array<[number, number]> = [];
+    return {
+      set: (text: string) => (content = Buffer.from(text, "utf-8")),
+      size: () => content.length,
+      reads,
+      io: {
+        readRange(_path: string, start: number, end: number) {
+          reads.push([start, end]);
+          return content.subarray(start, end);
+        },
+      },
+    };
+  }
+
+  it("parses a file the same way parseTranscript does", () => {
+    const disk = fakeDisk(A + B);
+    const reader = createTranscriptReader(disk.io);
+    expect(reader.read("t.jsonl", disk.size(), 1)).toEqual(parseTranscript(A + B));
+  });
+
+  it("does not read a file that has not changed", () => {
+    const disk = fakeDisk(A);
+    const reader = createTranscriptReader(disk.io);
+    const first = reader.read("t.jsonl", disk.size(), 1);
+    expect(reader.read("t.jsonl", disk.size(), 1)).toEqual(first);
+    expect(disk.reads).toHaveLength(1);
+  });
+
+  it("reads only what was appended", () => {
+    const disk = fakeDisk(A);
+    const reader = createTranscriptReader(disk.io);
+    reader.read("t.jsonl", disk.size(), 1);
+    const firstEnd = disk.size();
+    disk.set(A + B);
+    const after = reader.read("t.jsonl", disk.size(), 2);
+    expect(disk.reads[1]).toEqual([firstEnd, disk.size()]);
+    expect(after).toEqual(parseTranscript(A + B));
+    expect(after.messageCount).toBe(4);
+    expect(after.toolCount).toBe(3);
+  });
+
+  it("leaves a half-written last line for the next scan", () => {
+    const partial = user("cut in half").slice(0, 30);
+    const disk = fakeDisk(A + partial);
+    const reader = createTranscriptReader(disk.io);
+    expect(reader.read("t.jsonl", disk.size(), 1)).toEqual(parseTranscript(A));
+
+    const full = user("cut in half") + "\n";
+    disk.set(A + full);
+    const done = reader.read("t.jsonl", disk.size(), 2);
+    // The second read starts where the last whole line ended, so the half line is read again.
+    expect(disk.reads[1]![0]).toBe(Buffer.byteLength(A));
+    expect(done).toEqual(parseTranscript(A + full));
+  });
+
+  it("starts over when the file gets shorter", () => {
+    const disk = fakeDisk(A + B);
+    const reader = createTranscriptReader(disk.io);
+    reader.read("t.jsonl", disk.size(), 1);
+    disk.set(B);
+    expect(reader.read("t.jsonl", disk.size(), 2)).toEqual(parseTranscript(B));
+  });
+
+  it("gives the same answer whatever the chunk size, multi-byte characters included", () => {
+    const whole = parseTranscript(A + B);
+    for (const chunk of [1, 3, 7, 64, 100_000]) {
+      const disk = fakeDisk(A + B);
+      const reader = createTranscriptReader(disk.io, chunk);
+      expect(reader.read("t.jsonl", disk.size(), 1)).toEqual(whole);
+    }
+  });
+
+  it("returns an empty result, and forgets the file, when it cannot be read", () => {
+    const reader = createTranscriptReader({
+      readRange() {
+        throw new Error("EBUSY");
+      },
+    });
+    expect(reader.read("t.jsonl", 10, 1)).toEqual({ messageCount: 0, toolCount: 0 });
+    reader.prune(new Set());
+  });
+
+  it("prune drops files that are gone, so a new file at the same path starts clean", () => {
+    const disk = fakeDisk(A);
+    const reader = createTranscriptReader(disk.io);
+    reader.read("t.jsonl", disk.size(), 1);
+    reader.prune(new Set());
+    disk.set(B);
+    expect(reader.read("t.jsonl", disk.size(), 2)).toEqual(parseTranscript(B));
   });
 });

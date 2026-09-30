@@ -5,10 +5,12 @@
  *   ~/.claude/projects/<slug>/<sessionId>.jsonl  — transcripts
  *   ~/.claude/sessions/<sessionId>.json          — live PID records
  *
- * Eager initial scan (1-2s for ~80 sessions) is acceptable startup cost.
+ * A transcript is read once and then only for what was appended since: a busy
+ * machine has hundreds of them, hundreds of MB each, and any live session
+ * rewrites its own several times a minute (see createTranscriptReader).
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -115,30 +117,27 @@ function looksSyntheticUser(text: string): boolean {
   return false;
 }
 
-/**
- * Lightweight pass over a jsonl transcript. Defensive: malformed lines
- * are skipped silently because the format is internal to Claude Code
- * and may drift between versions.
- */
-export function parseTranscript(content: string): TranscriptParseResult {
-  let customTitle: string | undefined;
-  let aiTitle: string | undefined;
-  let firstHumanUser: string | undefined;
-  let lastUser: string | undefined;
-  let lastAssistant: string | undefined;
-  let gitBranch: string | undefined;
-  let model: string | undefined;
-  let messageCount = 0;
-  let toolCount = 0;
+/** Running totals for one transcript, so it can be fed in pieces. */
+export type TranscriptState = TranscriptParseResult;
 
-  const recordUserText = (text: string) => {
-    lastUser = text;
-    if (firstHumanUser === undefined && !looksSyntheticUser(text)) {
-      firstHumanUser = text;
+export function newTranscriptState(): TranscriptState {
+  return { messageCount: 0, toolCount: 0 };
+}
+
+/**
+ * Lightweight pass over jsonl transcript lines, folded into `s`. Defensive:
+ * malformed lines are skipped silently because the format is internal to
+ * Claude Code and may drift between versions. `text` is whole lines.
+ */
+export function feedTranscript(s: TranscriptState, text: string): void {
+  const recordUserText = (t: string) => {
+    s.lastUser = t;
+    if (s.firstHumanUser === undefined && !looksSyntheticUser(t)) {
+      s.firstHumanUser = t;
     }
   };
 
-  for (const line of content.split("\n")) {
+  for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     let obj: any;
     try {
@@ -146,20 +145,20 @@ export function parseTranscript(content: string): TranscriptParseResult {
     } catch {
       continue;
     }
-    if (obj.gitBranch) gitBranch = obj.gitBranch;
+    if (obj.gitBranch) s.gitBranch = obj.gitBranch;
     const t = obj.type;
     if (t === "custom-title") {
-      customTitle = obj.customTitle ?? obj.title ?? customTitle;
+      s.customTitle = obj.customTitle ?? obj.title ?? s.customTitle;
       continue;
     }
     if (t === "ai-title") {
-      aiTitle = obj.aiTitle ?? obj.title ?? aiTitle;
+      s.aiTitle = obj.aiTitle ?? obj.title ?? s.aiTitle;
       continue;
     }
     const msg = obj.message ?? {};
     const role = msg.role;
     if (role === "user") {
-      messageCount++;
+      s.messageCount++;
       const content = msg.content;
       if (typeof content === "string") {
         recordUserText(content);
@@ -176,34 +175,121 @@ export function parseTranscript(content: string): TranscriptParseResult {
         }
       }
     } else if (role === "assistant") {
-      messageCount++;
-      if (typeof msg.model === "string" && !msg.model.startsWith("<")) model = msg.model;
+      s.messageCount++;
+      if (typeof msg.model === "string" && !msg.model.startsWith("<")) s.model = msg.model;
       const content = msg.content;
       if (Array.isArray(content)) {
         for (const part of content) {
           if (!part || typeof part !== "object") continue;
           if (part.type === "text" && typeof part.text === "string") {
-            lastAssistant = part.text;
+            s.lastAssistant = part.text;
           } else if (part.type === "tool_use") {
-            toolCount++;
+            s.toolCount++;
           }
         }
       }
     }
   }
+}
 
+export function parseTranscript(content: string): TranscriptParseResult {
+  const s = newTranscriptState();
+  feedTranscript(s, content);
+  return s;
+}
+
+// ─── Reading transcripts without re-reading them ────────────────────────────
+
+const READ_CHUNK = 4 * 1024 * 1024;
+
+export interface TranscriptIO {
+  readRange(path: string, start: number, end: number): Buffer;
+}
+
+const fsIo: TranscriptIO = {
+  readRange(path, start, end) {
+    const fd = openSync(path, "r");
+    try {
+      const buf = Buffer.allocUnsafe(end - start);
+      let got = 0;
+      while (got < buf.length) {
+        const n = readSync(fd, buf, got, buf.length - got, start + got);
+        if (n === 0) break;
+        got += n;
+      }
+      return got === buf.length ? buf : buf.subarray(0, got);
+    } finally {
+      closeSync(fd);
+    }
+  },
+};
+
+interface CachedTranscript {
+  size: number;
+  mtimeMs: number;
+  /** Bytes already folded into `state` — always the end of a whole line. */
+  offset: number;
+  state: TranscriptState;
+}
+
+/**
+ * Parse each transcript once, then only what was appended to it.
+ *
+ * Transcripts are append-only jsonl, and every scan used to read and parse all
+ * of them from the start: with 170 sessions and 2.4 GB on disk that blocked the
+ * event loop for seconds, and since a live Claude session rewrites its own
+ * transcript several times a minute, every scan triggered the next — the UI
+ * spent its life parsing (profiled: 65% of the time, 4.4 s per scan).
+ *
+ * An unchanged file (same size and mtime) costs nothing; a grown one costs its
+ * new bytes; a shrunk or replaced one is parsed again from the start. A last
+ * line still being written (no newline yet) is left for the next scan.
+ */
+export function createTranscriptReader(io: TranscriptIO = fsIo, chunk: number = READ_CHUNK) {
+  const cache = new Map<string, CachedTranscript>();
   return {
-    customTitle,
-    aiTitle,
-    firstHumanUser,
-    lastUser,
-    lastAssistant,
-    messageCount,
-    toolCount,
-    gitBranch,
-    model,
+    read(path: string, size: number, mtimeMs: number): TranscriptParseResult {
+      let c = cache.get(path);
+      if (c && c.size === size && c.mtimeMs === mtimeMs) return { ...c.state };
+      if (!c || size < c.offset) {
+        c = { size: 0, mtimeMs: 0, offset: 0, state: newTranscriptState() };
+        cache.set(path, c);
+      }
+      try {
+        let pos = c.offset;
+        let carry: Buffer = Buffer.alloc(0);
+        while (pos < size) {
+          const end = Math.min(size, pos + chunk);
+          const piece = io.readRange(path, pos, end);
+          const buf = carry.length ? Buffer.concat([carry, piece]) : piece;
+          pos = end;
+          // Cut at a newline in the bytes, not in the text: a chunk boundary
+          // can fall inside a multi-byte character.
+          const nl = buf.lastIndexOf(0x0a);
+          if (nl === -1) {
+            carry = buf;
+            continue;
+          }
+          feedTranscript(c.state, buf.subarray(0, nl + 1).toString("utf-8"));
+          c.offset += nl + 1;
+          carry = buf.subarray(nl + 1);
+        }
+        c.size = size;
+        c.mtimeMs = mtimeMs;
+        return { ...c.state };
+      } catch {
+        cache.delete(path);
+        return { messageCount: 0, toolCount: 0 };
+      }
+    },
+    /** Forget transcripts that are gone. */
+    prune(seen: Set<string>): void {
+      for (const p of cache.keys()) if (!seen.has(p)) cache.delete(p);
+    },
   };
 }
+
+const transcripts = createTranscriptReader();
 
 // ─── Discovery ──────────────────────────────────────────────────────────────
 
@@ -257,6 +343,7 @@ interface JsonlEntry {
   sessionId: string;
   path: string;
   mtimeMs: number;
+  size: number;
 }
 
 function discoverJsonlFiles(): JsonlEntry[] {
@@ -295,6 +382,7 @@ function discoverJsonlFiles(): JsonlEntry[] {
           sessionId: f.slice(0, -".jsonl".length),
           path,
           mtimeMs: stat.mtimeMs,
+          size: stat.size,
         });
       } catch {
         continue;
@@ -311,7 +399,7 @@ function buildSession(
 ): AgentSession {
   let parsed: TranscriptParseResult;
   try {
-    parsed = parseTranscript(readFileSync(jsonl.path, "utf-8"));
+    parsed = transcripts.read(jsonl.path, jsonl.size, jsonl.mtimeMs);
   } catch {
     parsed = { messageCount: 0, toolCount: 0 };
   }
@@ -356,8 +444,9 @@ export const claudeCodeAdapter: AgentAdapter = {
   watchPaths: () => [PROJECTS_DIR, SESSIONS_DIR],
   discover(now) {
     const live = discoverLivePids();
-    return discoverJsonlFiles().map((j) =>
-      buildSession(j, live.get(j.sessionId), now),
-    );
+    const files = discoverJsonlFiles();
+    const sessions = files.map((j) => buildSession(j, live.get(j.sessionId), now));
+    transcripts.prune(new Set(files.map((j) => j.path)));
+    return sessions;
   },
 };

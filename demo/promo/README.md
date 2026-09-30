@@ -24,9 +24,12 @@ turns it into `film-audio.wav`. Without the mp3 the film falls back to the synth
   the cells in view are drawn, at whatever scale the camera has, so extreme close-ups stay sharp. It opens
   on three close-ups with a shallow depth of field and a slow roll, pulls back to reveal the window (the
   backdrop lights from deep blue to the brand gradient as it does), holds for a tour, follows the window as
-  it narrows, then drifts towards what each feature is about. Key caps show the keys.
+  it narrows, then drifts gently towards what each feature is about. From the pull-back on, each state of
+  the terminal is drawn once, as a sprite, and every frame is a continuous sub-pixel warp of it (redrawing
+  the text at a new size every frame made it re-settle and look jerky).
 - **`build.py` holds the cue sheet** (`CUES`, in seconds), the captions and the kickers. Type is
-  JetBrains Mono for titles and tooltips and a sans for the small subtitles; the end card uses the wordmark
+  bold throughout: JetBrains Mono for titles and tooltips (tight leading and tracking on two-line titles) and
+  a bold sans for the small subtitles; the end card uses the wordmark
   the boot splash prints (`src/ui/splash.ts`).
 
 ## Pacing

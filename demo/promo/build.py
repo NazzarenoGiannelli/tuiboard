@@ -169,8 +169,12 @@ def mono(size, bold=True):
     return font(R.MONO_BOLD if bold and R.MONO_BOLD else R.MONO, size)
 
 
+SANS_BOLD = R.find_font("segoeuib.ttf", "segoeuisb.ttf", "segoeui.ttf")
+
+
 def sans(size):
-    return font(R.UI, size)
+    """The sans for small subtitles, bold so it stands off the background."""
+    return font(SANS_BOLD, size)
 
 
 # ── Frames and their times ───────────────────────────────────────────────────
@@ -208,10 +212,6 @@ def frame_index(t):
         else:
             break
     return lo
-
-
-def key_events():
-    return [(ft, f["keys"]) for ft, f in FRAMES if f.get("keys")]
 
 
 # ── Backdrop ─────────────────────────────────────────────────────────────────
@@ -436,6 +436,95 @@ def render_view(t, idx, pose, win_alpha=1.0, dark=0.0):
     return arr
 
 
+# ── The sprite engine: a window drawn once, then only transformed ───────────
+# Redrawing the terminal for every frame at a slightly different size makes its text re-settle
+# from frame to frame (integer font sizes, pixel-rounded positions). So once the camera is far
+# enough back that the whole window is in view, each state of the terminal is drawn ONCE, as a
+# sprite at a fixed scale, and every frame is a continuous sub-pixel affine warp of it.
+SW = 15.0  # above this many pixels per cell the close-up (region) engine draws instead
+BODY = (19, 26, 36)  # the acrylic over the backdrop, flattened (the real thing is 88% tint)
+_SPRITES = {}
+
+
+def sprite_ppc(idx):
+    """The scale to draw a state's sprite at: the largest the camera uses while it is on screen."""
+    ft, f = FRAMES[idx]
+    nxt = FRAMES[idx + 1][0] if idx + 1 < len(FRAMES) else DURATION
+    t0 = PULLBACK[0] if idx == 0 else ft
+    ppcs = [camera(t0 + (nxt - t0) * i / 6, f)[0]["ppc"] for i in range(7)]
+    return min(max(max(ppcs), 6.0), SW + 1.0) * 1.03
+
+
+def make_sprite(idx, P):
+    f = FRAMES[idx][1]
+    cols, rows = f["cols"], f["rows"]
+    m = metrics(max(6, int(math.ceil(P / 0.6))))
+    cellh = P * (m.ch / m.cw)
+    u = P / UNIT
+    pad, bar, mg = 12 * u, 38 * u, int(round(70 * u))
+    win_w, win_h = int(round(cols * P + 2 * pad)), int(round(rows * cellh + bar + pad))
+    Wt, Ht = win_w + 2 * mg, win_h + 2 * mg
+    sh = Image.new("L", (Wt, Ht), 0)
+    ImageDraw.Draw(sh).rounded_rectangle((mg, mg + 14 * u, mg + win_w, mg + win_h + 14 * u), radius=14 * u, fill=150)
+    sh = sh.filter(ImageFilter.GaussianBlur(26 * u))
+    m2 = Image.new("L", (Wt * 2, Ht * 2), 0)  # the body's mask, drawn at 2x for smooth corners
+    ImageDraw.Draw(m2).rounded_rectangle((2 * mg, 2 * mg, 2 * (mg + win_w), 2 * (mg + win_h)), radius=24 * u, fill=255)
+    mask = m2.resize((Wt, Ht), Image.LANCZOS)
+    rgba = Image.new("RGBA", (Wt, Ht), (0, 0, 0, 0))
+    rgba.paste(Image.new("RGBA", (Wt, Ht), (0, 0, 0, 255)), (0, 0), sh)
+    rgba.paste(Image.new("RGBA", (Wt, Ht), BODY + (255,)), (0, 0), mask)
+    layer = Image.new("RGBA", (cols * m.cw, rows * m.ch), (0, 0, 0, 0))
+    R.draw_terminal(f, m, layer, (0, 0))
+    term = layer.resize((round(cols * P), round(rows * cellh)), Image.LANCZOS)
+    rgba.alpha_composite(term, (int(round(mg + pad)), int(round(mg + bar))))
+    ov = Image.new("RGBA", (Wt, Ht), (0, 0, 0, 0))
+    d = ImageDraw.Draw(ov)
+    x0, y0, x1, y1 = mg, mg, mg + win_w, mg + win_h
+    d.rounded_rectangle((x0 + 10 * u, y0 + 7 * u, x0 + 200 * u, y0 + bar), radius=8 * u, fill=(255, 255, 255, 30))
+    d.text((x0 + 26 * u, y0 + bar / 2 + u), "tuiboard", font=chrome_font(max(5, int(15 * u))), fill=(235, 235, 240, 255), anchor="lm")
+    bx, yc, w = x1 - 12 * u, y0 + bar / 2, max(1, round(u))
+    d.line((bx - 26 * u, yc - 6 * u, bx - 14 * u, yc + 6 * u), fill=(220, 220, 225, 255), width=w)
+    d.line((bx - 26 * u, yc + 6 * u, bx - 14 * u, yc - 6 * u), fill=(220, 220, 225, 255), width=w)
+    d.rectangle((bx - 70 * u, yc - 6 * u, bx - 58 * u, yc + 6 * u), outline=(220, 220, 225, 255), width=w)
+    d.line((bx - 112 * u, yc, bx - 100 * u, yc), fill=(220, 220, 225, 255), width=w)
+    d.rounded_rectangle((x0, y0, x1, y1), radius=12 * u, outline=(255, 255, 255, 38), width=max(1, round(u * 0.8)))
+    rgba.alpha_composite(ov)
+    arr = np.asarray(rgba).astype(np.float32)
+    a = arr[..., 3:4] / 255.0
+    arr[..., :3] *= a
+    arr[..., 3:4] = a
+    return {"arr": arr, "P": P, "mg": mg, "pad": pad, "bar": bar, "cellh": cellh}
+
+
+def get_sprite(idx):
+    P = sprite_ppc(idx)
+    key = (idx, round(P, 2))
+    sp = _SPRITES.get(key)
+    if sp is None:
+        if len(_SPRITES) > 14:
+            _SPRITES.clear()
+        sp = _SPRITES[key] = make_sprite(idx, P)
+    return sp
+
+
+def render_view_sprite(t, idx, pose, win_alpha=1.0, dark=0.0):
+    sp = get_sprite(idx)
+    bg = np.asarray(backdrop((W, H), round(t * 2) / 2, int(round(dark * 100)))).astype(np.float32)
+    if win_alpha <= 0.001:
+        return bg.astype(np.uint8)
+    s = pose["ppc"] / sp["P"]
+    sx0 = sp["mg"] + sp["pad"] + pose["wx"] * sp["P"]
+    sy0 = sp["mg"] + sp["bar"] + pose["wy"] * sp["cellh"]
+    M = np.array([[s, 0, pose["ax"] - s * sx0], [0, s, pose["ay"] - s * sy0], [0, 0, 1.0]])
+    if abs(pose["theta"]) > 0.02:
+        rc = np.vstack([cv2.getRotationMatrix2D((W / 2, H / 2), pose["theta"], 1.0), [0, 0, 1.0]])
+        M = rc @ M
+    warped = cv2.warpAffine(sp["arr"], M[:2], (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
+    a = warped[..., 3:4] * win_alpha
+    out = warped[..., :3] * win_alpha + bg * (1 - a)
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
 @lru_cache(maxsize=1)
 def pixel_grid():
     ys, xs = np.mgrid[0:H, 0:W].astype(np.float32)
@@ -542,6 +631,15 @@ def draw_caption(ov, t):
     d.text((W / 2, y0 + 80), sub, font=fs, fill=with_alpha(YEL, k), anchor="mm")
 
 
+def tracked(d, xy, text, fnt, fill, tracking):
+    """Left-aligned text, vertically centred on y, letters pulled together by `tracking` pixels."""
+    x, y = xy
+    for ch in text:
+        d.text((x, y), ch, font=fnt, fill=fill, anchor="lm")
+        x += fnt.getlength(ch) + tracking
+    return x
+
+
 def draw_kicker(ov, t):
     k = next((c for c in KICKERS if c[0] <= t < c[1]), None)
     if not k:
@@ -549,25 +647,27 @@ def draw_kicker(ov, t):
     a, b, lines, sub, sub_mono = k
     out = 1 - ramp(t, b - 0.30, b)
     d = ImageDraw.Draw(ov)
-    ft = mono(86)
-    y = H / 2 - 110
+    ft = mono(90)
+    pitch = 90                      # tight: the two lines of a title read as one block
+    block = (len(lines) - 1) * pitch + 84
+    y = H / 2 - block / 2
     for i, line in enumerate(lines):
         la = a + 0.12 * i
         v = ramp(t, la, la + 0.35) * out
         if v <= 0.01:
             continue
         x = 140 - (1 - ramp(t, la, la + 0.45)) * 70
-        d.text((x, y + i * 112), line, font=ft, fill=with_alpha(K1 if i == 0 else K2, v), anchor="lm")
-    yy = y + len(lines) * 112 + 14
+        tracked(d, (x, y + i * pitch), line, ft, with_alpha(K1 if i == 0 else K2, v), -3)
+    yy = y + (len(lines) - 1) * pitch + 84
     v = ramp(t, a + 0.35, a + 0.75) * out
     if v <= 0.01:
         return
     x = 140 - (1 - ramp(t, a + 0.35, a + 0.85)) * 50
     if sub:
-        d.text((x, yy), sub, font=mono(27, False) if sub_mono else sans(30), fill=with_alpha(KSUB, v), anchor="lm")
+        d.text((x, yy), sub, font=mono(27) if sub_mono else sans(30), fill=with_alpha(KSUB, v), anchor="lm")
         return
     active = next((i for i, (lo, hi) in enumerate(FILTER_TAGS) if lo <= t < hi), None)
-    fx = mono(27, False)
+    fx = mono(27)
     cx = x
     for n, (code, name, col) in enumerate(HARNESS):
         label = f"{code}  {name}"
@@ -578,37 +678,6 @@ def draw_kicker(ov, t):
         cx += w + 14
         if cx > 860 and code != "pi":
             cx, yy = x, yy + 66
-
-
-KEYS = []
-
-
-def draw_keycaps(ov, t):
-    """The key or gesture behind the change that just happened, in a cap that fades after a moment."""
-    ev = None
-    for ft, label in KEYS:
-        if ft <= t:
-            ev = (ft, label)
-        else:
-            break
-    if not ev or t - ev[0] > 0.85:
-        return
-    ft, label = ev
-    k = ramp(t - ft, 0.0, 0.08) * (1 - ramp(t - ft, 0.65, 0.85))
-    if k <= 0.01 or not (6.6 < t < 30.3):
-        return
-    text = label.replace("Shift+Tab", "Shift + Tab")
-    d = ImageDraw.Draw(ov)
-    fnt = mono(34)
-    w = d.textlength(text, font=fnt) + 56
-    h = 66
-    pop = 1 + 0.10 * math.exp(-(t - ft) * 16)
-    single = t >= 13.8
-    x0, y0 = (140, H - 210) if single else (90, H - 100)
-    w2, h2 = w * pop, h * pop
-    d.rounded_rectangle((x0, y0 - (h2 - h) / 2, x0 + w2, y0 + h2 - (h2 - h) / 2), radius=14,
-                        fill=(10, 13, 20, int(225 * k)), outline=with_alpha(CYA, k), width=2)
-    d.text((x0 + w2 / 2, y0 + h / 2), text, font=fnt, fill=with_alpha(WHITE, k), anchor="mm")
 
 
 # The wordmark the boot splash prints (src/ui/splash.ts): FIGlet "Rectangles", a yellow ramp.
@@ -665,7 +734,7 @@ def draw_endcard(ov, t):
     d.text((cx - w / 2 + 35, y + 41), "$", font=fc, fill=with_alpha(YEL, a), anchor="lm")
     d.text((cx - w / 2 + 35 + fc.getlength("$ "), y + 41), "bun install -g tuiboard", font=fc, fill=with_alpha(WHITE, a), anchor="lm")
     a = ramp(t, *END["url"])
-    d.text((cx, y + 82 + 56), "github.com/NazzarenoGiannelli/tuiboard", font=mono(28, False), fill=with_alpha(DIM, a), anchor="mm")
+    d.text((cx, y + 82 + 56), "github.com/NazzarenoGiannelli/tuiboard", font=mono(28), fill=with_alpha(DIM, a), anchor="mm")
     a = ramp(t, *END["foot"])
     d.text((cx, y + 82 + 104), "Plain markdown. MIT. Linux · macOS · Windows.", font=sans(24), fill=with_alpha(CYA, a * 0.8), anchor="mm")
 
@@ -685,7 +754,19 @@ def view_at(t, dark):
                 b = render_view(t, idx, shot_pose(s, max(t, s[0])), dark=dark)
                 arr = cv2.addWeighted(a, 1 - k, b, k, 0)
                 return optics(arr, ex, cut=0.8 * math.sin(k * math.pi))
-    arr = render_view(t, idx, pose, win_alpha=ex["win_alpha"], dark=dark)
+    wa = ex["win_alpha"]
+    ppc = pose["ppc"]
+    if t < PULLBACK[1] + 0.05 and ppc > SW - 3:
+        # the hand-over from the close-up engine to the sprite, as the camera pulls back
+        k = clamp((SW - ppc) / 3)
+        a = render_view(t, idx, pose, win_alpha=wa, dark=dark)
+        if k <= 0:
+            arr = a
+        else:
+            b = render_view_sprite(t, idx, pose, win_alpha=wa, dark=dark)
+            arr = cv2.addWeighted(a, 1 - k, b, k, 0)
+    else:
+        arr = render_view_sprite(t, idx, pose, win_alpha=wa, dark=dark)
     return optics(arr, ex)
 
 
@@ -702,7 +783,6 @@ def render_frame(f):
     draw_intro(ov, t)
     draw_caption(ov, t)
     draw_kicker(ov, t)
-    draw_keycaps(ov, t)
     draw_endcard(ov, t)
     canvas.alpha_composite(ov)
     out = canvas.convert("RGB")
@@ -712,9 +792,7 @@ def render_frame(f):
 
 
 def _init():
-    global KEYS
     load_frames()
-    KEYS = key_events()
 
 
 def _work(f):
@@ -722,7 +800,6 @@ def _work(f):
 
 
 def main():
-    global KEYS
     ap = argparse.ArgumentParser()
     audio = HERE / "out" / "film-audio.wav"
     ap.add_argument("--audio", default=str(audio))

@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page with `--site`); the Agents pane is fed invented sessions from the four harnesses, never the
   real ones. `bun run demo:film` builds a 36 second launch film (`demo/promo/`): a virtual camera on the real
   app, from extreme close-ups with a shallow depth of field to the whole window, then narrowed to
-  a single pane with key caps for every key and gesture; paced by content against a cue sheet, with
+  a single pane; paced by content against a cue sheet, with
   `edit_audio.py` fitting the music, `beatgrid.py` to measure a track and a synthesised placeholder.
 
 ## [0.15.0] - 2026-09-30

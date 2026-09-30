@@ -205,17 +205,30 @@ export function TimelineView(props: TimelineViewProps) {
   });
 
   // Scroll-to-cursor when navigation moves the cursor entry off-screen.
+  // Keep the block under the cursor on screen — all of it, with a row of context,
+  // not just its first row: a block at the end of the day used to end up with only
+  // its first quarter of an hour showing at the bottom edge. `scrollChildIntoView`
+  // moves only as far as needed, so a block that is already in view does not make
+  // the grid jump.
+  const revealBlock = (entry: TimelineEntry) => {
+    try {
+      scrollBoxRef?.scrollChildIntoView(rowIdFor(Math.min(TOTAL_ROWS - 1, entry.endRow + 1)));
+      scrollBoxRef?.scrollChildIntoView(rowIdFor(Math.max(0, entry.startRow - 1)));
+    } catch {
+      // Child not yet mounted on first frame — harmless.
+    }
+  };
   createEffect(() => {
     const c = cursor() - tray().length;
     if (!isActive() || !scrollBoxRef) return;
-    const entry = entries()[c];
-    if (!entry) return;
+    if (!entries()[c]) return;
+    // Decide at the moment of scrolling, not when the cursor changed: a click sets
+    // the zone (which parks the cursor on row 0) and then the clicked row, and
+    // scrolling for each of those in turn sent the grid to the first block of the
+    // day before settling on the clicked one, which then sat at the bottom edge.
     setTimeout(() => {
-      try {
-        scrollBoxRef?.scrollChildIntoView(rowIdFor(entry.startRow));
-      } catch {
-        // Child not yet mounted on first frame — harmless.
-      }
+      const now = entries()[cursor() - tray().length];
+      if (now) revealBlock(now);
     }, 0);
   });
 
@@ -334,11 +347,9 @@ export function TimelineView(props: TimelineViewProps) {
     }
   };
 
-  /** The pointer moved with the button down after a press on the armed block. */
-  const onBlockDrag = (event: MouseEventLike) => {
-    const d = drag;
-    if (!d) return;
-    const steps = event.y - d.startY;
+  /** Carry the grabbed block to where the pointer is (`y`), in 15-minute steps. */
+  const applyDrag = (d: Drag, y: number) => {
+    const steps = y - d.startY;
     if (steps !== 0) d.moved = true;
     const cur = props.store.getTask(d.ref)?.timeBlock;
     if (!cur) return;
@@ -357,13 +368,22 @@ export function TimelineView(props: TimelineViewProps) {
     props.store.flashBanner("info", `${d.mode === "move" ? "✋" : "↕"} ${formatHm(next.startMin)}-${formatHm(next.endMin)}`);
   };
 
+  /** The pointer moved with the button down after a press on the armed block. */
+  const onBlockDrag = (event: MouseEventLike) => {
+    if (drag) applyDrag(drag, event.y);
+  };
+
   /** The button came up (or a drag ended) on a row of the grid. */
   const onBlockRelease = (rowIndex: number, event: MouseEventLike) => {
     const d = drag;
+    if (!d) return;
     drag = undefined;
+    // The release carries the pointer's last position, and the drag events alone
+    // can stop a row short of it: apply it too.
+    applyDrag(d, event.y);
     // A press that never dragged is a plain click: the block goes to that row.
     // On the handle a plain click does nothing; dragging is how it resizes.
-    if (d && !d.moved && d.mode === "move" && armedRef()) placeArmedAt(rowIndex, event);
+    if (!d.moved && d.mode === "move" && armedRef()) placeArmedAt(rowIndex, event);
   };
 
   /**
@@ -498,7 +518,7 @@ export function TimelineView(props: TimelineViewProps) {
     >
       {/* One line says what is armed; the keys that apply are on the bottom bar. */}
       <Show when={armedTask()}>
-        <text wrapMode="none" truncate>
+        <text selectable={false} wrapMode="none" truncate>
           <span style={{ fg: T.warmActive, attributes: ATTR.bold }}>{"◉ "}</span>
           <span style={{ fg: T.warm, attributes: ATTR.bold }}>
             {armedEntry()
@@ -509,14 +529,14 @@ export function TimelineView(props: TimelineViewProps) {
         </text>
       </Show>
       <Show when={armMode() && !armedTask()}>
-        <text wrapMode="none">
+        <text selectable={false} wrapMode="none">
           <span style={{ fg: T.warmActive, attributes: ATTR.bold }}>{"◉ ARM MODE "}</span>
           <span style={{ fg: T.textDim }}>{"click a task, then a slot"}</span>
         </text>
       </Show>
       {/* A selected calendar event shows its own action hint. */}
       <Show when={selectedCal()}>
-        <text wrapMode="none">
+        <text selectable={false} wrapMode="none">
           <span style={{ fg: T.warm, attributes: ATTR.bold }}>
             {"📅 "}{tailTruncate(selectedCal()!.title, 28)}{" "}
           </span>
@@ -529,7 +549,7 @@ export function TimelineView(props: TimelineViewProps) {
           arming or with an event selected) so the [ ] day-switch is
           discoverable. Off-today, the "\ today" reset is highlighted. */}
       <Show when={!armMode() && !armedTask() && !selectedCal()}>
-        <text wrapMode="none">
+        <text selectable={false} wrapMode="none">
           <span style={{ fg: T.warm }}>{"◷ "}</span>
           <span style={{ fg: T.textDim }}>{"[ ] change day · "}</span>
           <span style={{ fg: isToday() ? T.textDim : T.warm }}>{"\\ today"}</span>
@@ -545,7 +565,7 @@ export function TimelineView(props: TimelineViewProps) {
         />
       </Show>
       <Show when={!armedTask() && rowMap().overflow > 0}>
-        <text wrapMode="none">
+        <text selectable={false} wrapMode="none">
           <span style={{ fg: T.bannerWarn }}>
             {`⚠ ${rowMap().overflow} block${rowMap().overflow === 1 ? "" : "s"} hidden by 3-way overlap`}
           </span>
@@ -556,19 +576,19 @@ export function TimelineView(props: TimelineViewProps) {
           Calendar's top band) — they have no time slot to sit in. Display only. */}
       <Show when={allDayEvents().length > 0}>
         <box style={{ flexDirection: "row", height: 1 }}>
-          <text wrapMode="none" style={{ flexShrink: 0 }}>
+          <text selectable={false} wrapMode="none" style={{ flexShrink: 0 }}>
             <span style={{ fg: T.textDim }}>{"▦ "}</span>
           </text>
           <For each={allDayEvents().slice(0, 8)}>
             {(e) => (
-              <text wrapMode="none" truncate style={{ flexShrink: 1, marginRight: 1 }}>
+              <text selectable={false} wrapMode="none" truncate style={{ flexShrink: 1, marginRight: 1 }}>
                 <span style={{ fg: e.color }}>{"●"}</span>
                 <span style={{ fg: T.text }}>{" " + tailTruncate(e.title, 18)}</span>
               </text>
             )}
           </For>
           <Show when={allDayEvents().length > 8}>
-            <text wrapMode="none" style={{ flexShrink: 0 }}>
+            <text selectable={false} wrapMode="none" style={{ flexShrink: 0 }}>
               <span style={{ fg: T.textDim }}>{`+${allDayEvents().length - 8}`}</span>
             </text>
           </Show>
@@ -753,7 +773,7 @@ function TimelineRow(props: TimelineRowProps) {
           onMouseUp={onRelease}
           onMouseDragEnd={onRelease}
         >
-          <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
+          <text selectable={false} wrapMode="none" truncate style={{ flexGrow: 1 }}>
             <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={innerW()} armed={leftOwnsArmed()} />
           </text>
         </box>
@@ -785,11 +805,11 @@ function TimelineRow(props: TimelineRowProps) {
           onMouseUp={onRelease}
           onMouseDragEnd={onRelease}
         >
-          <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
+          <text selectable={false} wrapMode="none" truncate style={{ flexGrow: 1 }}>
             <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={splitLeftW()} armed={leftOwnsArmed()} />
           </text>
         </box>
-        <text style={{ width: 1, flexShrink: 0 }} wrapMode="none">
+        <text selectable={false} style={{ width: 1, flexShrink: 0 }} wrapMode="none">
           <span style={{ fg: T.border }}>{"╎"}</span>
         </text>
         <box
@@ -808,7 +828,7 @@ function TimelineRow(props: TimelineRowProps) {
           }}
           onMouseDown={cellMouseDown(right().entry)}
         >
-          <text wrapMode="none" truncate style={{ flexGrow: 1 }}>
+          <text selectable={false} wrapMode="none" truncate style={{ flexGrow: 1 }}>
             {/* Right lane skips the 3-char hour prefix that's already on the row. */}
             <RowContent row={right()} rowIndex={props.rowIndex} laneWidth={splitRightW()} skipPrefix />
           </text>
@@ -1086,7 +1106,7 @@ function TrayList(props: {
     props.armedRef.taskIndex === r.taskIndex;
   return (
     <box style={{ flexDirection: "column" }}>
-      <text wrapMode="none">
+      <text selectable={false} wrapMode="none">
         <span style={{ fg: T.warm }}>{"▤ "}</span>
         <span style={{ fg: T.textDim }}>
           {`To place · ${n()}`}
@@ -1106,7 +1126,7 @@ function TrayList(props: {
             }}
             onMouseDown={() => props.onClickItem(index)}
           >
-            <text wrapMode="none" truncate>
+            <text selectable={false} wrapMode="none" truncate>
               <span style={{ fg: isArmed(item.ref) ? T.warmActive : T.textDim }}>
                 {isArmed(item.ref) ? "◉ " : "  "}
               </span>

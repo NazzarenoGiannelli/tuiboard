@@ -41,7 +41,8 @@ afterEach(() => {
 const ALPHA = () => ({ boardPath: path, columnIndex: 0, taskIndex: 0 });
 const BETA = () => ({ boardPath: path, columnIndex: 0, taskIndex: 1 });
 
-async function mount() {
+async function mount(opts: { board?: string; height?: number } = {}) {
+  if (opts.board) writeFileSync(path, opts.board);
   const store = createTuiStore({
     config: {
       root: process.cwd(),
@@ -67,7 +68,7 @@ async function mount() {
         <TimelineView store={store} width={56} />
       </box>
     ),
-    { width: 60, height: 60 },
+    { width: 60, height: opts.height ?? 60 },
   );
   renders.push(t);
   await t.renderOnce();
@@ -208,6 +209,29 @@ describe("dragging", () => {
   });
 });
 
+describe("dragging never selects text", () => {
+  it("dragging an armed block past another block's text leaves no terminal text selection", async () => {
+    const { t, find, settle, store } = await mount();
+    store.armTimeline(ALPHA());
+    await settle();
+    const head = find("┤ 09:30-10:30");
+    const other = find("┤ 14:00-15:00");
+    // From inside Alpha down across the screen, over Gamma's title and time.
+    await t.mockMouse.drag(head.x + 2, head.y + 1, other.x + 6, other.y + 1);
+    await settle();
+    expect(t.renderer.hasSelection).toBe(false);
+  });
+
+  it("nor does a plain drag over the grid with nothing armed", async () => {
+    const { t, find, settle } = await mount();
+    const head = find("┤ 09:30-10:30");
+    const other = find("┤ 14:00-15:00");
+    await t.mockMouse.drag(head.x + 2, head.y, other.x + 6, other.y + 1);
+    await settle();
+    expect(t.renderer.hasSelection).toBe(false);
+  });
+});
+
 describe("the tray", () => {
   it("one click on a tray row selects it and arms nothing", async () => {
     const { t, store, find, settle } = await mount();
@@ -243,5 +267,55 @@ describe("a click on an empty slot with nothing armed", () => {
     expect(store.state.ui.modal).toBeUndefined();
     expect(block()).toEqual({ startMin: hm(9, 30), endMin: hm(10, 30) });
     expect(store.state.ui.banner?.text).toContain("n adds an event");
+  });
+});
+
+describe("the grid follows the selected block, all of it, without jumping", () => {
+  const tomorrow = () => isoAddDays(isoToday(), 1);
+  const lateBoard = () =>
+    `## Todo
+
+- [ ] Mattina ⌚ 08:00-09:00 ⏳ ${tomorrow()}
+- [ ] Sera ⌚ 18:00-19:00 ⏳ ${tomorrow()}
+- [ ] Tardi ⌚ 20:00-21:00 ⏳ ${tomorrow()}
+`;
+  const SERA = 1;
+  const TARDI = 2;
+  const later = () => new Promise((r) => setTimeout(r, 25));
+
+  /** Select a block the way a click does: set the zone (which parks the cursor on row 0), then the row. */
+  async function select(m: Awaited<ReturnType<typeof mount>>, taskIndex: number) {
+    m.store.setActiveZone("timeline");
+    m.store.setCursor(0, m.store.agendaIndexOf({ boardPath: path, columnIndex: 0, taskIndex }) ?? 0);
+    await later();
+    await m.t.renderOnce();
+    await m.t.renderOnce();
+  }
+
+  it("a block at the end of the day is shown whole: its start, its title and the rule that closes it", async () => {
+    const m = await mount({ board: lateBoard(), height: 26 });
+    await select(m, TARDI);
+    const lines = m.frame();
+    const head = lines.findIndex((l) => l.includes("┤ 20:00-21:00"));
+    expect(head).toBeGreaterThan(-1);
+    expect(lines[head + 1]).toContain("Tardi");
+    expect(lines.slice(head + 1, head + 6).some((l) => l.includes("╰"))).toBe(true);
+  });
+
+  it("selecting the block in between does not send the grid to the first block of the day", async () => {
+    const m = await mount({ board: lateBoard(), height: 26 });
+    await select(m, SERA);
+    const lines = m.frame();
+    expect(lines.some((l) => l.includes("┤ 18:00-19:00"))).toBe(true);
+    expect(lines.some((l) => l.includes("╰"))).toBe(true);
+  });
+
+  it("a block already in view does not move the grid", async () => {
+    const m = await mount({ board: lateBoard(), height: 60 });
+    const before = m.frame().findIndex((l) => l.includes("07 ─"));
+    await select(m, SERA);
+    await select(m, 0);
+    await select(m, SERA);
+    expect(m.frame().findIndex((l) => l.includes("07 ─"))).toBe(before);
   });
 });

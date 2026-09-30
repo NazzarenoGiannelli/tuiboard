@@ -43,6 +43,7 @@ import {
   createSignal,
   onCleanup,
   onMount,
+  untrack,
 } from "solid-js";
 
 import { googleTokenCanWrite } from "~/store/calendar";
@@ -69,6 +70,7 @@ import {
   boardColor,
 } from "~/ui/glyphs";
 import type { TuiStore } from "~/store/index";
+import { perfNote } from "~/perf";
 import { clickIntent, createClickTracker } from "~/ui/agenda-click";
 import { useTerminalDimensions } from "@opentui/solid";
 import { boxBody, boxBottom, boxTop, type Seg } from "~/ui/block-box";
@@ -83,6 +85,8 @@ interface MouseEventLike {
   x: number;
   y: number;
   modifiers?: { shift?: boolean; alt?: boolean; ctrl?: boolean };
+  /** Set on the events OpenTUI sends while a drag is in progress. */
+  source?: unknown;
 }
 
 /**
@@ -228,12 +232,16 @@ export function TimelineView(props: TimelineViewProps) {
   createEffect(() => {
     const c = cursor() - tray().length;
     if (!isActive() || !scrollBoxRef) return;
-    if (!entries()[c]) return;
+    // Only the cursor and the tray decide when to scroll. Reading the entries here
+    // subscribed the effect to every change of a block, so carrying one with the
+    // mouse scrolled the grid under the pointer at each step.
+    if (!untrack(() => entries()[c])) return;
     // Decide at the moment of scrolling, not when the cursor changed: a click sets
     // the zone (which parks the cursor on row 0) and then the clicked row, and
     // scrolling for each of those in turn sent the grid to the first block of the
     // day before settling on the clicked one, which then sat at the bottom edge.
     setTimeout(() => {
+      if (drag) return; // never scroll under a block that is being carried
       const now = entries()[cursor() - tray().length];
       if (now) revealBlock(now);
     }, 0);
@@ -337,6 +345,7 @@ export function TimelineView(props: TimelineViewProps) {
     if (idx >= 0) props.store.setCursor(0, tray().length + idx);
 
     if (intent === "grab") {
+      perfNote("mouse", { ev: "grab", y: event.y, row: rowIndex, mode: rowIndex === handleRowOf(entry) ? "resize" : "move" });
       drag = {
         mode: rowIndex === handleRowOf(entry) ? "resize" : "move",
         ref: entry.ref,
@@ -377,13 +386,34 @@ export function TimelineView(props: TimelineViewProps) {
 
   /** The pointer moved with the button down after a press on the armed block. */
   const onBlockDrag = (event: MouseEventLike) => {
-    if (drag) applyDrag(drag, event.y);
+    if (drag) {
+      perfNote("mouse", { ev: "drag", y: event.y, startY: drag.startY });
+      applyDrag(drag, event.y);
+    }
+  };
+
+  /**
+   * A second way to hear the pointer move, for the times the drag events do not
+   * arrive: OpenTUI sends the drag to the element the press landed on, and a block
+   * that is carried makes its rows be rebuilt under it. The "over" events go to
+   * whatever is under the pointer now, with `source` set while a drag is going.
+   * Both are absolute (rows from where the press was), so hearing both is harmless.
+   */
+  const onBlockOver = (event: MouseEventLike) => {
+    const d = drag;
+    // No `source`: the pointer merely came over this row (OpenTUI sends one of
+    // those right after the press, before the first drag event), so it says
+    // nothing about the drag.
+    if (!d || !event.source) return;
+    perfNote("mouse", { ev: "over", y: event.y, startY: d.startY });
+    applyDrag(d, event.y);
   };
 
   /** The button came up (or a drag ended) on a row of the grid. */
   const onBlockRelease = (rowIndex: number, event: MouseEventLike) => {
     const d = drag;
     if (!d) return;
+    perfNote("mouse", { ev: "release", y: event.y, startY: d.startY, moved: d.moved });
     drag = undefined;
     // The release carries the pointer's last position, and the drag events alone
     // can stop a row short of it: apply it too.
@@ -636,6 +666,7 @@ export function TimelineView(props: TimelineViewProps) {
                 onBlockClick={onBlockClick}
                 onEmptyRowClick={onEmptyRowClick}
                 onBlockDrag={onBlockDrag}
+                onBlockOver={onBlockOver}
                 onBlockRelease={onBlockRelease}
               />
             </box>
@@ -689,6 +720,8 @@ interface TimelineRowProps {
   onEmptyRowClick: (rowIndex: number, event: MouseEventLike) => void;
   /** The pointer moved with the button down, after a press on the armed block. */
   onBlockDrag: (event: MouseEventLike) => void;
+  /** The pointer came over this row (with `source` set while dragging). */
+  onBlockOver: (event: MouseEventLike) => void;
   /** The button came up (or the drag ended) on a row of the grid. */
   onBlockRelease: (rowIndex: number, event: MouseEventLike) => void;
 }
@@ -699,8 +732,9 @@ function TimelineRow(props: TimelineRowProps) {
 
   // NOW marker: always full width.
   const isNow = () => left().kind === "now";
-  // Right lane occupied → split row horizontally.
-  const isSplit = () => right().kind !== "empty";
+  // Right lane occupied, or the row is inside a group of overlapping blocks → split
+  // the row horizontally, so a block keeps the same width on every row it covers.
+  const isSplit = () => right().kind !== "empty" || !!props.pair.split;
 
   // The closing rule belongs to its block but is not part of its fill: no
   // cursor, armed or selection tint on it.
@@ -756,6 +790,7 @@ function TimelineRow(props: TimelineRowProps) {
 
   /** Drag and release travel with the press, so they are wired wherever a press is. */
   const onDrag = (event: MouseEventLike) => props.onBlockDrag(event);
+  const onOver = (event: MouseEventLike) => props.onBlockOver(event);
   const onRelease = (event: MouseEventLike) => props.onBlockRelease(props.rowIndex, event);
 
   return (
@@ -777,8 +812,10 @@ function TimelineRow(props: TimelineRowProps) {
           }}
           onMouseDown={cellMouseDown(left().entry)}
           onMouseDrag={onDrag}
+          onMouseOver={onOver}
           onMouseUp={onRelease}
           onMouseDragEnd={onRelease}
+          onMouseDrop={onRelease}
         >
           <text selectable={false} wrapMode="none" truncate style={{ flexGrow: 1 }}>
             <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={innerW()} armed={leftOwnsArmed()} />
@@ -796,9 +833,11 @@ function TimelineRow(props: TimelineRowProps) {
         <box
           style={{
             flexDirection: "row",
-            flexGrow: 1,
-            flexShrink: 1,
-            flexBasis: 0,
+            // Exact widths, the ones the boxes are drawn to: two lanes sharing the
+            // space by flex rounded differently from splitLeftW / splitRightW and
+            // cut the right lane's closing corner off.
+            width: splitLeftW(),
+            flexShrink: 0,
             backgroundColor: laneBg(
               leftIsCursor(),
               leftIsArmed(),
@@ -809,8 +848,10 @@ function TimelineRow(props: TimelineRowProps) {
           }}
           onMouseDown={cellMouseDown(left().entry)}
           onMouseDrag={onDrag}
+          onMouseOver={onOver}
           onMouseUp={onRelease}
           onMouseDragEnd={onRelease}
+          onMouseDrop={onRelease}
         >
           <text selectable={false} wrapMode="none" truncate style={{ flexGrow: 1 }}>
             <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={splitLeftW()} armed={leftOwnsArmed()} />
@@ -822,9 +863,8 @@ function TimelineRow(props: TimelineRowProps) {
         <box
           style={{
             flexDirection: "row",
-            flexGrow: 1,
-            flexShrink: 1,
-            flexBasis: 0,
+            width: splitRightW(),
+            flexShrink: 0,
             backgroundColor: laneBg(
               rightIsCursor(),
               rightIsArmed(),
@@ -834,6 +874,11 @@ function TimelineRow(props: TimelineRowProps) {
             ),
           }}
           onMouseDown={cellMouseDown(right().entry)}
+          onMouseDrag={onDrag}
+          onMouseOver={onOver}
+          onMouseUp={onRelease}
+          onMouseDragEnd={onRelease}
+          onMouseDrop={onRelease}
         >
           <text selectable={false} wrapMode="none" truncate style={{ flexGrow: 1 }}>
             {/* Right lane skips the 3-char hour prefix that's already on the row. */}
@@ -894,11 +939,13 @@ function RowContent(props: RowContentProps) {
   if (r.kind === "empty") {
     // 15-min sub-row: dotted '···' fill so the grid is visually
     // continuous. Reads as 'tick mark every 15 min' without competing
-    // with block content (which paints on top with a solid bg color).
+    // with block content (which paints on top with a solid bg color). On an hour
+    // row, in a lane the hour label does not live in, it is the hour rule.
+    const isHourRow = (props.rowIndex * MINS_PER_ROW) % 60 === 0;
     return (
       <>
         <span style={{ fg: T.textDim }}>{prefix}</span>
-        <span style={{ fg: T.border }}>{"·".repeat(120)}</span>
+        <span style={{ fg: T.border }}>{(isHourRow ? "─" : "·").repeat(120)}</span>
       </>
     );
   }

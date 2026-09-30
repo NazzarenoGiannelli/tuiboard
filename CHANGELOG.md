@@ -65,6 +65,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bunfig.toml` that registers it for `bun test`.
 
 ### Fixed
+- **Overlapping blocks keep one width from their top edge to their bottom edge.** The
+  grid drew a row as two lanes only where a second block was present, so a block was a
+  full lane wide on the rows where it was alone and half that where a neighbour joined:
+  a box inside another, or two that overlapped in part, changed width down their height
+  and could not close. A group of overlapping blocks is now two lanes wide from its first
+  row to its last closing rule, each block keeps its lane, the lanes have exact widths
+  (the right one lost its closing corner to a rounding difference), and the hour rule
+  continues across an empty lane. A third block overlapping two others is still hidden
+  behind the "hidden by 3-way overlap" warning.
+- **Carrying a block no longer scrolls the grid under the pointer.** The scroll-to-the-
+  cursor effect also listened to every change of a block, so each step of a drag could
+  scroll the grid while the pointer moved. It now looks only at the cursor, and never
+  while a block is being carried. The drag also listens to the "pointer over" events,
+  which go to whatever is under the pointer now, as a second way to hear it move.
 - **Dragging a block no longer selects text.** Pressing and dragging across another
   block's text started the terminal's own text selection, painting what you passed
   over as selected. The Agenda's text is not selectable now, and a drag carries the
@@ -138,7 +152,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`TUIBOARD_PERF`: a performance log for slow sessions.** Set it to a file path
-  (or `1`) and tuiboard writes JSON lines: a `sample` every 5 s (CPU, memory,
+  (or `1`) and tuiboard writes JSON lines (and `note` lines, e.g. the mouse events of a
+  drag in the Agenda): a `sample` every 5 s (CPU, memory,
   worst event-loop lag, keys), a `lag` line when the loop was blocked for 150 ms
   or more with the last keys pressed before it, and a `slow-key` line when a key
   handler took 30 ms or more. Off by default: no timers run and nothing is

@@ -10,6 +10,8 @@
  *   lag        the event loop was blocked for `ms` (>= 150 ms), with the last
  *              keys pressed and how long before the lag they arrived
  *   slow-key   a key handler itself took >= 30 ms
+ *   note       something code left on purpose to trace what the terminal delivers
+ *              (the Agenda writes the press, drag, over and release of a carried block)
  *
  * "Lag" is how late a 100 ms timer fires: while JavaScript is busy nothing
  * else runs, so it is exactly the delay a keypress would have felt. Reading a
@@ -21,6 +23,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 export type PerfSink = (line: string) => void;
+
+/** The running recorder, if the log is on, so code far from app.tsx can leave a note. */
+let active: { note(kind: string, data: Record<string, unknown>): void } | undefined;
+
+/**
+ * Leave a note in the performance log (a no-op unless TUIBOARD_PERF is set). For
+ * tracing what the terminal actually delivers, e.g. the mouse events of a drag.
+ */
+export function perfNote(kind: string, data: Record<string, unknown> = {}): void {
+  active?.note(kind, data);
+}
 
 export interface PerfThresholds {
   /** A key handler slower than this is logged as `slow-key`. */
@@ -84,6 +97,10 @@ export class PerfRecorder {
     this.windowMaxLag = 0;
   }
 
+  note(kind: string, data: Record<string, unknown>): void {
+    this.emit({ type: "note", kind, ...data });
+  }
+
   start(info: Record<string, unknown>): void {
     this.emit({ type: "start", ...info });
   }
@@ -120,6 +137,7 @@ export function startPerfLog(version: string, env: NodeJS.ProcessEnv = process.e
       }
     });
     rec.start({ version, pid: process.pid, runtime: `bun ${Bun.version}`, log: path });
+    active = rec;
 
     const TICK = 100;
     let last = performance.now();

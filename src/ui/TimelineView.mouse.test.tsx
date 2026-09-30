@@ -209,6 +209,60 @@ describe("dragging", () => {
   });
 });
 
+describe("dragging follows the pointer live, not just on release", () => {
+  async function armed() {
+    const m = await mount();
+    m.store.armTimeline(ALPHA());
+    await m.settle();
+    return m;
+  }
+
+  it("the block moves while the button is still down, row by row", async () => {
+    const { t, block, find, settle } = await armed();
+    const head = find("┤ 09:30-10:30");
+    const x = head.x + 2;
+    await t.mockMouse.pressDown(x, head.y + 1);
+    await settle();
+    await t.mockMouse.emitMouseEvent("drag", x, head.y + 2);
+    await settle();
+    expect(block()).toEqual({ startMin: hm(9, 45), endMin: hm(10, 45) }); // one row down, button still down
+    await t.mockMouse.emitMouseEvent("drag", x, head.y + 4);
+    await settle();
+    expect(block()).toEqual({ startMin: hm(10, 15), endMin: hm(11, 15) }); // three rows in total
+    await t.mockMouse.emitMouseEvent("drag", x, head.y + 1);
+    await settle();
+    expect(block()).toEqual({ startMin: hm(9, 30), endMin: hm(10, 30) }); // and back
+    await t.mockMouse.release(x, head.y + 1);
+  });
+
+  it("events that arrive in a burst, with no render between them, are not lost", async () => {
+    const { t, block, find, settle } = await armed();
+    const head = find("┤ 09:30-10:30");
+    const x = head.x + 2;
+    await t.mockMouse.pressDown(x, head.y + 1);
+    // A real terminal reports every cell the pointer crosses, several per frame.
+    await t.mockMouse.emitMouseEvent("drag", x, head.y + 2);
+    await t.mockMouse.emitMouseEvent("drag", x, head.y + 3);
+    await t.mockMouse.emitMouseEvent("drag", x, head.y + 4);
+    await t.mockMouse.emitMouseEvent("drag", x, head.y + 5);
+    await settle();
+    expect(block()).toEqual({ startMin: hm(10, 30), endMin: hm(11, 30) }); // four rows, before release
+    await t.mockMouse.release(x, head.y + 5);
+  });
+
+  it("the handle resizes live too", async () => {
+    const { t, block, find, settle } = await armed();
+    const edge = find("━ ↕");
+    const x = edge.x + 4;
+    await t.mockMouse.pressDown(x, edge.y);
+    await settle();
+    await t.mockMouse.emitMouseEvent("drag", x, edge.y + 2);
+    await settle();
+    expect(block()).toEqual({ startMin: hm(9, 30), endMin: hm(11) }); // two rows longer, before release
+    await t.mockMouse.release(x, edge.y + 2);
+  });
+});
+
 describe("dragging never selects text", () => {
   it("dragging an armed block past another block's text leaves no terminal text selection", async () => {
     const { t, find, settle, store } = await mount();
@@ -373,5 +427,64 @@ describe("blocks are boxes, on the ruler", () => {
     expect(text).toContain("09:00-10:00");
     expect(text).toContain("09:30-10:30");
     expect(text.match(/╯/g)!.length).toBeGreaterThanOrEqual(2); // each lane closes with its own corner
+  });
+});
+
+describe("overlapping blocks keep one width from top edge to bottom edge", () => {
+  const tomorrow = () => isoAddDays(isoToday(), 1);
+
+  /** Every line from `from` to `to` (inclusive) has one of `glyphs` at `col`. */
+  const wall = (lines: string[], from: number, to: number, col: number, glyphs: string) => {
+    for (let i = from; i <= to; i++) {
+      const ch = [...lines[i]!][col];
+      if (!ch || !glyphs.includes(ch)) return false;
+    }
+    return true;
+  };
+
+  it("a block inside another: both are closed boxes, each as wide on every row as on its first", async () => {
+    const m = await mount({
+      height: 40,
+      board: `## Todo\n\n- [ ] Esterno ⌚ 08:45-10:45 ⏳ ${tomorrow()}\n- [ ] Interno ⌚ 09:30-10:30 ⏳ ${tomorrow()}\n`,
+    });
+    const lines = m.frame();
+    const outer = lines.findIndex((l) => l.includes("╭─┤ 08:45-10:45"));
+    const inner = lines.findIndex((l) => l.includes("╭─┤ 09:30-10:30"));
+    expect(outer).toBeGreaterThan(-1);
+    expect(inner).toBeGreaterThan(-1);
+
+    // The outer box closes at its own right-hand corner, on every row down to its bottom edge.
+    const outerCorner = [...lines[outer]!].indexOf("╮");
+    const outerBottom = lines.findIndex((l, i) => i > outer && [...l][outerCorner] === "╯");
+    expect(outerBottom).toBeGreaterThan(inner);
+    expect(wall(lines, outer + 1, outerBottom - 1, outerCorner, "│")).toBe(true);
+
+    // The inner box is a box of its own in the right lane, closed on both corners.
+    const innerCorner = [...lines[inner]!].lastIndexOf("╮");
+    expect(innerCorner).toBeGreaterThan(outerCorner);
+    const innerBottom = lines.findIndex((l, i) => i > inner && [...l][innerCorner] === "╯");
+    expect(innerBottom).toBeGreaterThan(inner);
+    expect(wall(lines, inner + 1, innerBottom - 1, innerCorner, "│")).toBe(true);
+  });
+
+  it("a partial overlap: each box is the same width on all its rows", async () => {
+    const m = await mount({
+      height: 40,
+      board: `## Todo\n\n- [ ] Uno ⌚ 13:30-14:00 ⏳ ${tomorrow()}\n- [ ] Due ⌚ 13:45-14:15 ⏳ ${tomorrow()}\n`,
+    });
+    // Scroll the grid to them.
+    m.store.setActiveZone("timeline");
+    m.store.setCursor(0, 0);
+    await new Promise((r) => setTimeout(r, 25));
+    await m.settle();
+    const lines = m.frame();
+    const uno = lines.findIndex((l) => l.includes("╭─┤ 13:30-14:00"));
+    const due = lines.findIndex((l) => l.includes("╭─┤ 13:45-14:15"));
+    expect(uno).toBeGreaterThan(-1);
+    expect(due).toBeGreaterThan(-1);
+    const unoCorner = [...lines[uno]!].indexOf("╮");
+    expect([...lines[uno + 2]!][unoCorner]).toBe("╯"); // its bottom edge is two rows down, same column
+    const dueCorner = [...lines[due]!].lastIndexOf("╮");
+    expect([...lines[due + 2]!][dueCorner]).toBe("╯");
   });
 });

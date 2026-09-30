@@ -448,6 +448,62 @@ describe("the grid is a ruler: a block closes on the row of its end time", () =>
     expect(rows[rowOf(H(11))]!.left.joined).toBe(false); // c has a gap before it
   });
 
+  describe("a group of overlapping blocks is two lanes wide from its first row to its last rule", () => {
+    const splitRows = (...tasks: Task[]) => {
+      const { rows } = buildRowMap(buildTimelineEntries([board(...tasks)], DAY), -1);
+      return (from: number, to: number) => rows.slice(rowOf(from), rowOf(to) + 1).map((r) => !!r.split);
+    };
+
+    it("a block inside another: both rows of the group are split, including where only one lane is used", () => {
+      const at2 = splitRows(at("outer", H(8, 45), H(10, 45)), at("inner", H(9, 30), H(10, 30)));
+      // 08:45 (only the outer is there) through the outer's closing rule at 10:45.
+      expect(at2(H(8, 45), H(10, 45)).every(Boolean)).toBe(true);
+      expect(at2(H(8), H(8, 30)).some(Boolean)).toBe(false); // before the group
+      expect(at2(H(11), H(12)).some(Boolean)).toBe(false); // after it
+    });
+
+    it("the block keeps its lane for its whole height", () => {
+      const entries = buildTimelineEntries(
+        [board(at("outer", H(8, 45), H(10, 45)), at("inner", H(9, 30), H(10, 30)))],
+        DAY,
+      );
+      const { rows } = buildRowMap(entries, -1);
+      for (let r = rowOf(H(8, 45)); r < rowOf(H(10, 45)); r++) {
+        expect(rows[r]!.left.entry && (rows[r]!.left.entry as any).task.displayTitle).toBe("outer");
+      }
+      for (let r = rowOf(H(9, 30)); r < rowOf(H(10, 30)); r++) {
+        expect((rows[r]!.right.entry as any).task.displayTitle).toBe("inner");
+      }
+    });
+
+    it("blocks that only touch, with nothing concurrent, stay full width", () => {
+      const s2 = splitRows(at("a", H(9), H(9, 30)), at("b", H(9, 30), H(10)));
+      expect(s2(H(9), H(10)).some(Boolean)).toBe(false);
+    });
+
+    it("a block that starts where a two-lane group ends is drawn in the group's two lanes", () => {
+      const s3 = splitRows(
+        at("a", H(13, 30), H(14)),
+        at("b", H(13, 45), H(14, 15)),
+        at("c", H(14, 15), H(14, 45)),
+      );
+      expect(s3(H(13, 30), H(14, 45)).every(Boolean)).toBe(true);
+      expect(s3(H(15), H(16)).some(Boolean)).toBe(false);
+    });
+
+    it("two separate groups do not bleed into the gap between them", () => {
+      const s4 = splitRows(
+        at("a", H(9), H(10)),
+        at("b", H(9, 30), H(10, 30)),
+        at("c", H(12), H(13)),
+        at("d", H(12, 30), H(13, 30)),
+      );
+      expect(s4(H(9), H(10, 30)).every(Boolean)).toBe(true);
+      expect(s4(H(10, 45), H(11, 45)).some(Boolean)).toBe(false);
+      expect(s4(H(12), H(13, 30)).every(Boolean)).toBe(true);
+    });
+  });
+
   it("a block that runs to the bottom of the day has no row left for a rule", () => {
     const entries = buildTimelineEntries([board(at("x", H(22), H(23)))], DAY);
     const { rows } = buildRowMap(entries, -1);

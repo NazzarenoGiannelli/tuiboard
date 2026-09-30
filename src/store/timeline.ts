@@ -114,6 +114,14 @@ export interface RowMapEntry {
 export interface RowMapPair {
   left: RowMapEntry;
   right: RowMapEntry;
+  /**
+   * The row belongs to a group of overlapping blocks, so it is drawn as two lanes
+   * even where only one of them is occupied. A block keeps its lane, and so its
+   * width, from its top edge to its bottom edge: without this a box was a full
+   * lane wide on the rows where it was alone and half that where a neighbour
+   * joined, and could not close properly.
+   */
+  split?: boolean;
 }
 
 export interface BuildRowMapResult {
@@ -259,6 +267,8 @@ export function buildRowMap(
   // block yet, so any startRow is admissible.
   const laneEndRow: [number, number] = [-1, -1];
   let overflow = 0;
+  /** Where each block went, to work out the groups of overlapping ones afterwards. */
+  const placed: Array<{ start: number; end: number; lane: 0 | 1 }> = [];
 
   for (const entry of entries) {
     const start = Math.max(0, entry.startRow);
@@ -273,6 +283,7 @@ export function buildRowMap(
       continue;
     }
 
+    placed.push({ start, end, lane });
     const target = lane === 0 ? left : right;
     const joined = laneEndRow[lane] === start;
     laneEndRow[lane] = end;
@@ -300,7 +311,33 @@ export function buildRowMap(
     }
   }
 
-  const rows: RowMapPair[] = left.map((l, i) => ({ left: l, right: right[i]! }));
+  // Groups of overlapping blocks: one that starts before the group's last row ends
+  // belongs to it, and so does one that starts exactly where it ends when the group
+  // is already two lanes wide (it would otherwise start on a half-width row). A
+  // group that used the second lane is two lanes wide from its first row to the
+  // row of its last closing rule.
+  const split: boolean[] = new Array(TOTAL_ROWS).fill(false);
+  let gStart = -1;
+  let gEnd = -1;
+  let gTwoLanes = false;
+  const closeGroup = () => {
+    if (!gTwoLanes) return;
+    for (let r = gStart; r <= Math.min(gEnd, TOTAL_ROWS - 1); r++) split[r] = true;
+  };
+  for (const p of placed) {
+    if (gStart >= 0 && (p.start < gEnd || (p.start === gEnd && gTwoLanes))) {
+      gEnd = Math.max(gEnd, p.end);
+      if (p.lane === 1) gTwoLanes = true;
+    } else {
+      closeGroup();
+      gStart = p.start;
+      gEnd = p.end;
+      gTwoLanes = p.lane === 1;
+    }
+  }
+  closeGroup();
+
+  const rows: RowMapPair[] = left.map((l, i) => ({ left: l, right: right[i]!, split: split[i] }));
   return { rows, overflow };
 }
 

@@ -736,27 +736,21 @@ function TimelineRow(props: TimelineRowProps) {
   // the row horizontally, so a block keeps the same width on every row it covers.
   const isSplit = () => right().kind !== "empty" || !!props.pair.split;
 
-  // The closing rule belongs to its block but is not part of its fill: no
-  // cursor, armed or selection tint on it.
   const leftIsCursor = () =>
     !!props.cursorEntry &&
     left().entry !== undefined &&
-    left().kind !== "edge" &&
     left().entry === props.cursorEntry;
   const rightIsCursor = () =>
     !!props.cursorEntry &&
     right().entry !== undefined &&
-    right().kind !== "edge" &&
     right().entry === props.cursorEntry;
 
   const leftIsBlock = () => isBlockKind(left().kind);
   const rightIsBlock = () => isBlockKind(right().kind);
 
-  /** This lane's row belongs to the armed block, its closing rule included. */
-  const leftOwnsArmed = () => !!props.armedEntry && left().entry === props.armedEntry;
-  const leftIsArmed = () => leftOwnsArmed() && left().kind !== "edge";
-  const rightIsArmed = () =>
-    !!props.armedEntry && right().entry === props.armedEntry && right().kind !== "edge";
+  const leftIsArmed = () => !!props.armedEntry && left().entry === props.armedEntry;
+  const rightIsArmed = () => !!props.armedEntry && right().entry === props.armedEntry;
+  const leftOwnsArmed = leftIsArmed;
 
   const isSelectedCal = (e: TimelineEntry | undefined) =>
     !!props.selectedCalKey &&
@@ -802,7 +796,7 @@ function TimelineRow(props: TimelineRowProps) {
           style={{
             flexDirection: "row",
             height: 1,
-            backgroundColor: laneBg(
+            backgroundColor: leftIsBlock() ? undefined : laneBg(
               leftIsCursor(),
               leftIsArmed(),
               leftIsSelCal(),
@@ -818,7 +812,7 @@ function TimelineRow(props: TimelineRowProps) {
           onMouseDrop={onRelease}
         >
           <text selectable={false} wrapMode="none" truncate style={{ flexGrow: 1 }}>
-            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={innerW()} armed={leftOwnsArmed()} />
+            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={innerW()} armed={leftOwnsArmed()} bg={laneBg(leftIsCursor(), leftIsArmed(), leftIsSelCal(), leftIsBlock(), leftIsDone())} />
           </text>
         </box>
       }
@@ -838,7 +832,7 @@ function TimelineRow(props: TimelineRowProps) {
             // cut the right lane's closing corner off.
             width: splitLeftW(),
             flexShrink: 0,
-            backgroundColor: laneBg(
+            backgroundColor: leftIsBlock() ? undefined : laneBg(
               leftIsCursor(),
               leftIsArmed(),
               leftIsSelCal(),
@@ -854,7 +848,7 @@ function TimelineRow(props: TimelineRowProps) {
           onMouseDrop={onRelease}
         >
           <text selectable={false} wrapMode="none" truncate style={{ flexGrow: 1 }}>
-            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={splitLeftW()} armed={leftOwnsArmed()} />
+            <RowContent row={left()} rowIndex={props.rowIndex} laneWidth={splitLeftW()} armed={leftOwnsArmed()} bg={laneBg(leftIsCursor(), leftIsArmed(), leftIsSelCal(), leftIsBlock(), leftIsDone())} />
           </text>
         </box>
         <text selectable={false} style={{ width: 1, flexShrink: 0 }} wrapMode="none">
@@ -865,7 +859,7 @@ function TimelineRow(props: TimelineRowProps) {
             flexDirection: "row",
             width: splitRightW(),
             flexShrink: 0,
-            backgroundColor: laneBg(
+            backgroundColor: rightIsBlock() ? undefined : laneBg(
               rightIsCursor(),
               rightIsArmed(),
               rightIsSelCal(),
@@ -882,7 +876,7 @@ function TimelineRow(props: TimelineRowProps) {
         >
           <text selectable={false} wrapMode="none" truncate style={{ flexGrow: 1 }}>
             {/* Right lane skips the 3-char hour prefix that's already on the row. */}
-            <RowContent row={right()} rowIndex={props.rowIndex} laneWidth={splitRightW()} skipPrefix />
+            <RowContent row={right()} rowIndex={props.rowIndex} laneWidth={splitRightW()} skipPrefix armed={rightIsArmed()} bg={laneBg(rightIsCursor(), rightIsArmed(), rightIsSelCal(), rightIsBlock(), rightIsDone())} />
           </text>
         </box>
       </box>
@@ -899,6 +893,12 @@ interface RowContentProps {
   laneWidth?: number;
   /** The armed block: its bottom edge becomes a handle to drag. */
   armed?: boolean;
+  /**
+   * Fill of the block's box. Painted by the box's own cells, not by the lane, so it
+   * covers exactly the box — its top and bottom edges included, and not the hour
+   * gutter beside it.
+   */
+  bg?: string;
 }
 
 /**
@@ -990,7 +990,7 @@ function RowContent(props: RowContentProps) {
         <span style={{ fg: T.textDim }}>{prefix}</span>
         <For each={segs()}>
           {(seg) => (
-            <span style={{ fg: fgOf(seg.role), attributes: seg.role === "label" ? ATTR.bold : undefined }}>
+            <span style={{ fg: fgOf(seg.role), bg: props.bg, attributes: seg.role === "label" ? ATTR.bold : undefined }}>
               {seg.text}
             </span>
           )}
@@ -1022,8 +1022,9 @@ function nowRowId(rows: RowMapPair[]): string | undefined {
   return undefined;
 }
 
+/** A row of a block's box: its top edge, body, and the bottom edge that closes it. */
 function isBlockKind(k: RowMapEntry["kind"]): boolean {
-  return k === "head" || k === "body" || k === "fill";
+  return k === "head" || k === "body" || k === "fill" || k === "edge";
 }
 
 /**

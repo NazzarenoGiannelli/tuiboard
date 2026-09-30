@@ -488,3 +488,37 @@ describe("overlapping blocks keep one width from top edge to bottom edge", () =>
     expect([...lines[due + 2]!][dueCorner]).toBe("╯");
   });
 });
+
+describe("the fill is the box", () => {
+  /** The background of each cell of each screen line; transparent cells are `false`. */
+  function fills(m: Awaited<ReturnType<typeof mount>>): boolean[][] {
+    return m.t.captureSpans().lines.map((line) => {
+      const cells: boolean[] = [];
+      for (const span of line.spans as Array<{ text: string; bg?: unknown }>) {
+        const filled = !!span.bg && !String(span.bg).endsWith(", 0.00)");
+        for (const _ of span.text) cells.push(filled);
+      }
+      return cells;
+    });
+  }
+
+  it("covers the top edge, the body and the bottom edge, and only the box's columns", async () => {
+    const m = await mount();
+    const lines = m.frame();
+    const head = lines.findIndex((l) => l.includes("╭─┤ 09:30-10:30 ├"));
+    const edge = lines.findIndex((l, i) => i > head && l.includes("╰"));
+    const f = fills(m);
+    const inside = lines[head]!.indexOf("╭") + 4; // a cell well inside the box
+    const gutter = lines[head]!.indexOf("╭") - 2; // the hour gutter beside it
+
+    for (let row = head; row <= edge; row++) expect(f[row]![inside]).toBe(true);
+    // Nothing above the top edge or below the bottom edge.
+    expect(f[head - 1]![inside]).toBe(false);
+    expect(f[edge + 1]![inside]).toBe(false);
+    // The gutter stays clear on every row of the block.
+    for (let row = head; row <= edge; row++) expect(f[row]![gutter]).toBe(false);
+    // And the fill does not spill past the box on the right.
+    const right = lines[head]!.lastIndexOf("╮");
+    expect(f[head]![right + 2]).toBe(false);
+  });
+});

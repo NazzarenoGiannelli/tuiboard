@@ -65,6 +65,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bunfig.toml` that registers it for `bun test`.
 
 ### Fixed
+- **A block's fill is its box.** The fill painted the whole lane, hour gutter included, from the
+  top of the row that carries the top edge to the bottom of its last body row, and left the row
+  that carries the bottom edge bare, so it read as shifted up against the outline. The box's own
+  cells now carry the fill: the top edge, the body and the bottom edge, and only the box's
+  columns, so the hour gutter beside it stays clear and the outline sits evenly inside the fill.
 - **Overlapping blocks keep one width from their top edge to their bottom edge.** The
   grid drew a row as two lanes only where a second block was present, so a block was a
   full lane wide on the rows where it was alone and half that where a neighbour joined:

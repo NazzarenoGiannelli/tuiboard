@@ -17,3 +17,4 @@ build/
 # Generated demo boards and the images and videos made from them
 demo/data/
 demo/out/
+demo/promo/out/

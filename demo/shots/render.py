@@ -350,6 +350,50 @@ def render_scene(name, fps):
     print(f"  gif    {gif.relative_to(OUT.parent)}")
 
 
+def bare(frame, m):
+    """The terminal alone: opaque, tightly cropped, no window chrome and no caption.
+
+    For a page that frames it itself (the landing page has its own window bars)."""
+    pad = 16 * SS  # the page's own frame supplies the rest of the margin
+    w, h = frame["cols"] * m.cw + 2 * pad, frame["rows"] * m.ch + 2 * pad
+    back = Image.new("RGBA", (w, h), TINT + (255,))
+    draw_terminal(frame, m, back, (pad, pad))
+    out = back.convert("RGB").resize((w // SS, h // SS), Image.LANCZOS)
+    # H.264 wants even sides
+    return out.crop((0, 0, out.width - out.width % 2, out.height - out.height % 2))
+
+
+def render_site(name, fps):
+    """demo/out/site/<scene>.png, and for a sequence <scene>.mp4 too."""
+    frames = load(name)
+    if not frames:
+        print(f"no frames for {name}")
+        return
+    m = Metrics(19 if frames[0]["cols"] > 100 else 25)
+    site = OUT / "site"
+    site.mkdir(parents=True, exist_ok=True)
+    bare(frames[-1], m).save(site / f"{name}.png", optimize=True)
+    print(f"  site   out/site/{name}.png")
+    if len(frames) < 3:
+        return
+    ff = shutil.which("ffmpeg")
+    tmp = site / f"_{name}"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    n = 0
+    for fr in frames:
+        img = bare(fr, m)
+        for _ in range(int(fr.get("hold") or 1)):
+            img.save(tmp / f"{n:04d}.png")
+            n += 1
+    if ff:
+        subprocess.run([ff, "-y", "-loglevel", "error", "-framerate", str(fps), "-i", str(tmp / "%04d.png"),
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20", "-movflags", "+faststart", "-an",
+                        str(site / f"{name}.mp4")], check=True)
+        print(f"  site   out/site/{name}.mp4  ({n} frames @ {fps} fps)")
+    shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     fps = 12
@@ -358,4 +402,4 @@ if __name__ == "__main__":
     scenes = args or sorted(p.name for p in FRAMES.iterdir() if p.is_dir())
     for s in scenes:
         print(s)
-        render_scene(s, fps)
+        (render_site if "--site" in sys.argv else render_scene)(s, fps)

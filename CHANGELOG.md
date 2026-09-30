@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overlap and touch, tomorrow, coming days, due dates, done and an undated backlog. `bun run
   demo` seeds and opens tuiboard on it. `demo/shots/` renders the app headless on those boards
   into images and video.
+- **Release content tooling** (`demo/`, not published): `bun run demo:shots` renders pictures and
+  clips of every zone (the terminal in an acrylic window on the brand gradient, or bare for a web
+  page with `--site`); the Agents pane is fed invented sessions from the four harnesses, never the
+  real ones. `bun run demo:film` builds a 41 second launch film cut to a beat grid
+  (`demo/promo/`), with a synthesised placeholder track, `beatgrid.py` to measure a real one, and
+  `build.py --grid` to stretch the film between the track's landmarks.
 
 ## [0.15.0] - 2026-09-30
 

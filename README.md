@@ -2,8 +2,9 @@
 
 A terminal **kanban** board on plain markdown files, with three optional panels
 you switch on or off: a **Today/Tomorrow planner** across all your boards, a
-**24-hour agenda** with a read-only Google / Microsoft 365 calendar overlay, and
-a **live view of your coding-agent sessions** (Claude Code, Codex, OpenCode, Pi).
+**24-hour agenda** you drag and resize time blocks on, with a Google / Microsoft 365
+calendar overlay, and a **live view of your coding-agent sessions** (Claude Code,
+Codex, OpenCode, Pi).
 Run it as a pure kanban, or any mix
 of the four. The board is always on; the rest is opt-in (see [Zones](#zones)).
 
@@ -12,7 +13,26 @@ Built with [OpenTUI](https://opentui.com) + SolidJS on Bun. Cross-platform
 the Obsidian Tasks-plugin emoji vocabulary, so they open and edit fine in
 any markdown editor.
 
-![tuiboard — kanban board, Today/Tomorrow panel, 24h agenda with calendar overlay, and live coding-agent sessions in one terminal dashboard](docs/screenshot.png)
+![tuiboard: the Today/Tomorrow planner, kanban columns, a live agents strip with Claude Code, Codex, OpenCode and Pi sessions, and the 24-hour agenda, all in one terminal](docs/media/dashboard.png)
+
+*The whole dashboard. Everything on screen, here and below, is tuiboard's own headless renderer
+on an invented demo board: `bun run demo` opens it, `bun run demo:shots` regenerates these
+pictures.*
+
+## A short tour
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="docs/media/drag.gif" alt="A time block is armed with a double click, dragged down the ruler and stretched by its bottom edge" /><br /><b>Drag and resize</b><br />Double-click a block, drag it, stretch its edge.</td>
+<td width="50%" align="center"><img src="docs/media/tray.gif" alt="A task with no hour is armed from the To place tray, placed with a click and nudged with the keyboard" /><br /><b>From the tray to the clock</b><br />Tasks with no hour wait in a "To place" tray.</td>
+</tr>
+<tr>
+<td width="50%" align="center"><img src="docs/media/filter.gif" alt="A list of agent sessions filtered to Claude Code, Codex, OpenCode and Pi in turn" /><br /><b>Every agent, one list</b><br /><code>f</code> filters by harness: <code>cc</code> <code>cx</code> <code>oc</code> <code>pi</code>.</td>
+<td width="50%" align="center"><img src="docs/media/multi.gif" alt="Three late tasks are marked with Space, then one key moves them all to today" /><br /><b>One key, many tasks</b><br /><code>Space</code> marks, then <code>t</code> / <code>m</code> / <code>s</code> act on all.</td>
+</tr>
+</table>
+
+<p align="center"><img src="docs/media/zones.gif" alt="Shift-Tab walks the four zones: planner, board, agenda, agents" /><br /><sub><code>Shift-Tab</code> walks the four zones.</sub></p>
 
 ## Install
 
@@ -674,6 +694,15 @@ Uninstall: `omarchy plugin remove nazz.tuiboard`.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
+- **v0.15** — the Agenda, rebuilt to work with: a ruler of 15-minute rows with
+  blocks drawn as boxes (overlaps get lanes, touching blocks share an edge),
+  drag to move and resize, a "To place" tray for the day's tasks that have no
+  hour, placing from the keyboard (`c`, then `j`/`k`), one click selects and
+  two arm, a bottom bar that follows what you are doing, and a test suite that
+  drives the real keyboard and mouse.
+- **v0.14** — a status file viewer (`i`), overdue tasks painted by how late
+  they are, `docs/agent-interface.md` for agents driving `tuiboard summary` and
+  `tuiboard task`, and fewer round trips when time blocking in arm mode.
 - **v0.13** — tuiboard + herdr: live agent state from herdr (waiting for you,
   working, done, idle) with herdr's status symbols, `H` to jump to a session
   in herdr or resume it in its project's workspace, sessions sorted by most

@@ -52,6 +52,7 @@
     "demo": "bun demo/run.ts",
     "demo:seed": "bun demo/seed.ts",
     "demo:shots": "bun demo/shots/make.ts",
+    "demo:film": "bun demo/promo/film.ts",
     "agents:check": "bun run src/scripts/agents-check.ts",
     "agents:open": "bun run src/scripts/agents-open.ts",
     "summary": "bun run src/cli/summary.ts",

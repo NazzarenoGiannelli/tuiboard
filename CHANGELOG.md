@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-09-30
+
 ### Changed
 - **A task that changes day loses its time block, everywhere.** Shift+T already
   did it for overdue tasks (#79); now `t`, `m`, the Schedule modal (`s`), clearing
@@ -584,6 +586,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.14.4]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.4
 [0.14.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.3
 [0.14.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.2
 [0.14.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.1

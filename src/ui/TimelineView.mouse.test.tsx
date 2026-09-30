@@ -319,3 +319,59 @@ describe("the grid follows the selected block, all of it, without jumping", () =
     expect(m.frame().findIndex((l) => l.includes("07 ─"))).toBe(before);
   });
 });
+
+describe("blocks are boxes, on the ruler", () => {
+  const tomorrow = () => isoAddDays(isoToday(), 1);
+
+  it("the top edge is on the row of the start, the bottom edge on the row of the end, both with the time set in", async () => {
+    const m = await mount();
+    const lines = m.frame();
+    const head = lines.findIndex((l) => l.includes("╭─┤ 09:30-10:30 ├"));
+    expect(head).toBeGreaterThan(-1);
+    expect(lines[head + 1]).toContain("│ Alpha");
+    expect(lines[head + 4]).toContain("╰"); // 09:30 + four quarters: the rule on the 10:30 row
+    // The hour label stays in the gutter of the row a box covers (10:00 is under it).
+    expect(lines[head + 2]).toMatch(/^.{1,3}10 /);
+  });
+
+  it("the corners land exactly on the lane's edge: the same column as the end of an hour rule", async () => {
+    const m = await mount();
+    const lines = m.frame();
+    const rule = lines.find((l) => l.includes("07 ─"))!;
+    const laneEnd = rule.lastIndexOf("─");
+    const head = lines.find((l) => l.includes("╭─┤ 09:30-10:30 ├"))!;
+    const foot = lines.find((l) => l.includes("╰") && l.includes("╯"))!;
+    expect(head.lastIndexOf("╮")).toBe(laneEnd);
+    expect(foot.lastIndexOf("╯")).toBe(laneEnd);
+  });
+
+  it("a quarter of an hour is one row, the title set into the top edge", async () => {
+    const m = await mount({ board: `## Todo\n\n- [ ] Breve ⌚ 08:00-08:15 ⏳ ${tomorrow()}\n` });
+    const lines = m.frame();
+    const head = lines.findIndex((l) => l.includes("╭─┤ 08:00-08:15 Breve ├"));
+    expect(head).toBeGreaterThan(-1);
+    expect(lines[head + 1]).toContain("╰"); // and the next row already closes it
+  });
+
+  it("two blocks that touch share the line between them", async () => {
+    const m = await mount({
+      board: `## Todo\n\n- [ ] Uno ⌚ 09:00-09:30 ⏳ ${tomorrow()}\n- [ ] Due ⌚ 09:30-10:00 ⏳ ${tomorrow()}\n`,
+    });
+    const lines = m.frame();
+    const shared = lines.findIndex((l) => l.includes("├─┤ 09:30-10:00 ├"));
+    expect(shared).toBeGreaterThan(-1);
+    expect(lines[shared - 1]).toContain("│ Uno"); // the first box's body is right above
+    // Inside the panel (its own bottom border also has a ╯), only the second box closes.
+    expect(lines.filter((l) => l.trimStart().startsWith("│") && l.includes("╯")).length).toBe(1);
+  });
+
+  it("overlapping blocks each get a box in their own lane", async () => {
+    const m = await mount({
+      board: `## Todo\n\n- [ ] Uno ⌚ 09:00-10:00 ⏳ ${tomorrow()}\n- [ ] Due ⌚ 09:30-10:30 ⏳ ${tomorrow()}\n`,
+    });
+    const text = m.frame().join("\n");
+    expect(text).toContain("09:00-10:00");
+    expect(text).toContain("09:30-10:30");
+    expect(text.match(/╯/g)!.length).toBeGreaterThanOrEqual(2); // each lane closes with its own corner
+  });
+});

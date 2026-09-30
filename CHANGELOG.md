@@ -65,16 +65,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `bunfig.toml` that registers it for `bun test`.
 
 ### Fixed
-- **The Agenda grid reads like a ruler.** Rows are instants, not cells: the hour
-  line `10 ───` is 10:00, and a block started on its row but stopped one row short
-  of its end, so every block looked a quarter of an hour too short at the bottom,
-  a 15-minute block looked like 30, and the hour labels vanished under any block
-  that covered them. A block now runs from the row of its start to a closing rule
-  on the row of its end (`╰───` at 09:30 for a 09:00-09:30 block), a quarter of an
-  hour is one row with the title beside the time, and the hour stays written in
-  the gutter on every row that starts one, blocks or not. Back-to-back blocks share
-  the rule: the second block's first row is where the first one ends. The armed
-  block's handle sits on its closing rule.
+- **Dragging a block no longer selects text.** Pressing and dragging across another
+  block's text started the terminal's own text selection, painting what you passed
+  over as selected. The Agenda's text is not selectable now, and a drag carries the
+  block to the pointer's last position, including the one that arrives with the
+  release.
+- **The grid follows the selected block, all of it.** A click parked the cursor on the
+  first row for an instant and the grid scrolled to the first block of the day before
+  settling on the clicked one, which then sat at the bottom edge with only its first
+  quarter of an hour showing. The scroll now reads the cursor when it fires and shows
+  the whole block with a row of context; a block already in view does not move the
+  grid.
+- **The Agenda grid reads like a ruler, and blocks are boxes on it.** Rows are
+  instants, not cells: the hour line `10 ───` is 10:00, and a block started on its
+  row but stopped one row short of its end, so every block looked a quarter of an
+  hour too short at the bottom, a 15-minute block looked like 30, and the hour labels
+  vanished under any block that covered them. A block is now a rounded box whose top
+  edge is on the row of its start, with the time set into the edge
+  (`╭─┤ 09:00-09:30 ├──╮`), and whose bottom edge is on the row of its end, so its
+  physical edges line up with the grid's lines. A quarter of an hour is one row with
+  the title beside the time; back-to-back blocks share the line between them
+  (`├─┤ … ├──┤`); the hour stays written in the gutter on every row that starts one,
+  blocks or not. The armed block's bottom edge is its handle (`╰━ ↕ ━━╯`). The boxes
+  are sized to the lane, so the corners land on its edge, in single-pane and beside
+  the board alike.
 - **You can click a row covered by the block itself.** Clicking inside the armed
   block's own body did nothing, so a quarter-hour nudge by mouse was impossible
   whenever the time you wanted was under the task. It now puts the start on the

@@ -98,6 +98,11 @@ export interface RowMapEntry {
   entry?: TimelineEntry;
   /** Now-marker minute (only for "now"). */
   nowMin?: number;
+  /**
+   * Head rows only: the block starts on the row where the one above ends in the
+   * same lane, so the line between them is shared (drawn with T-junction corners).
+   */
+  joined?: boolean;
 }
 
 /**
@@ -269,9 +274,10 @@ export function buildRowMap(
     }
 
     const target = lane === 0 ? left : right;
+    const joined = laneEndRow[lane] === start;
     laneEndRow[lane] = end;
     for (let r = start; r < end; r++) {
-      if (r === start) target[r] = { kind: "head", entry };
+      if (r === start) target[r] = { kind: "head", entry, joined };
       else if (r === start + 1) target[r] = { kind: "body", entry };
       else target[r] = { kind: "fill", entry };
     }

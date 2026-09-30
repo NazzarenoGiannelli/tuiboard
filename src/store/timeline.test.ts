@@ -437,6 +437,17 @@ describe("the grid is a ruler: a block closes on the row of its end time", () =>
     expect(rows[rowOf(H(10))]!.left.kind).toBe("edge"); // and only b closes
   });
 
+  it("a head is marked joined only when it starts where the block above ends", () => {
+    const entries = buildTimelineEntries(
+      [board(at("a", H(9), H(9, 30)), at("b", H(9, 30), H(10)), at("c", H(11), H(11, 30)))],
+      DAY,
+    );
+    const { rows } = buildRowMap(entries, -1);
+    expect(rows[rowOf(H(9))]!.left.joined).toBe(false); // first block of the day
+    expect(rows[rowOf(H(9, 30))]!.left.joined).toBe(true); // b starts where a ends
+    expect(rows[rowOf(H(11))]!.left.joined).toBe(false); // c has a gap before it
+  });
+
   it("a block that runs to the bottom of the day has no row left for a rule", () => {
     const entries = buildTimelineEntries([board(at("x", H(22), H(23)))], DAY);
     const { rows } = buildRowMap(entries, -1);

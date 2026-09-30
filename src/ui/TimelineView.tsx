@@ -70,6 +70,8 @@ import {
 } from "~/ui/glyphs";
 import type { TuiStore } from "~/store/index";
 import { clickIntent, createClickTracker } from "~/ui/agenda-click";
+import { useTerminalDimensions } from "@opentui/solid";
+import { boxBody, boxBottom, boxTop, type Seg } from "~/ui/block-box";
 import type { Task } from "~/types";
 
 interface ScrollBoxLike {
@@ -103,6 +105,11 @@ const MIN_BLOCK_MIN = 15;
 const DEFAULT_BLOCK_MIN = 30;
 
 export function TimelineView(props: TimelineViewProps) {
+  // The boxes close at the lane's right-hand edge, so the lane's width has to be
+  // known: a fixed width when the Agenda sits beside the board, otherwise the
+  // terminal's minus the app padding (2), the border (2) and the padding (2).
+  const dims = useTerminalDimensions();
+  const laneInner = () => (props.width ? props.width - 4 : Math.max(24, dims().width - 6));
   const isActive = () => props.store.state.ui.activeZone === "timeline";
   const cursor = () => props.store.state.ui.row;
   const armedRef = () => props.store.state.ui.armedTimelineRef;
@@ -625,7 +632,7 @@ export function TimelineView(props: TimelineViewProps) {
                 cursorEntry={isActive() ? cursorEntry() : undefined}
                 armedEntry={armedEntry()}
                 selectedCalKey={selectedCalKey()}
-                innerWidth={props.width ? props.width - 4 : undefined}
+                innerWidth={laneInner()}
                 onBlockClick={onBlockClick}
                 onEmptyRowClick={onEmptyRowClick}
                 onBlockDrag={onBlockDrag}
@@ -895,120 +902,52 @@ function RowContent(props: RowContentProps) {
       </>
     );
   }
-  if (r.kind === "head" && r.entry) {
+  if ((r.kind === "head" || r.kind === "body" || r.kind === "fill" || r.kind === "edge") && r.entry) {
     const e = r.entry;
-    if (e.kind === "calendar") {
-      // Read-only calendar event: time + 📅, in the calendar's own color.
-      return (
-        <>
-          <span style={{ fg: T.textDim }}>{prefix}</span>
-          <span style={{ fg: e.color, attributes: ATTR.bold }}>
-            {"┤ "}{formatHm(e.startMin)}{"-"}{formatHm(e.endMin)}{" "}
-          </span>
-          <span style={{ fg: e.color }}>{"📅 "}</span>
-          <Show when={e.endRow - e.startRow === 1}>
-            <span style={{ fg: e.color }}>
-              {tailTruncate(e.title, Math.max(4, (props.laneWidth ?? 200) - 3 - 17))}
+    // A box as wide as the lane, less the gutter: its corners land on the lane's
+    // edges. The top edge is on the row of the block's start and the bottom edge on
+    // the row of its end, so both line up with the grid's lines.
+    const w = Math.max(8, (props.laneWidth ?? 200) - (props.skipPrefix ? 0 : 3));
+    const isCal = e.kind === "calendar";
+    const color = isCal ? e.color : boardColor(e.boardIndex);
+    const oneRow = e.endRow - e.startRow === 1;
+    const title = isCal ? e.title : e.task.displayTitle;
+    const done = !isCal && e.task.done;
+    // Armed can change after the row was built (the rows are kept when only the
+    // armed block changes), so the segments are derived, not computed once.
+    const segs = createMemo((): Seg[] => {
+    if (r.kind === "head") {
+      const time = `${formatHm(e.startMin)}-${formatHm(e.endMin)}`;
+      const who = !isCal && e.task.assignee ? ` @${e.task.assignee}` : "";
+      const prio = !isCal && e.task.priority !== "none" ? " 🔺" : "";
+      const mark = isCal ? " 📅" : "";
+      // A quarter of an hour is one row: the title rides in the top edge, there
+      // is no body row to put it on.
+      return boxTop(`${time}${who}${prio}${mark}${oneRow ? " " + title : ""}`, w, !!r.joined);
+    }
+    if (r.kind === "body") return boxBody(title, w, done ? "✓ " : "");
+    if (r.kind === "fill") return boxBody("", w);
+    return boxBottom(w, !!props.armed);
+    });
+    const lit = () => !!props.armed;
+    const fgOf = (role: Seg["role"]) =>
+      role === "border" || role === "label"
+        ? lit() ? T.warmActive : color
+        : role === "handle"
+          ? done && r.kind === "body" ? T.done : T.warmActive
+          : role === "text"
+            ? isCal ? color : done ? T.done : T.text
+            : undefined;
+    return (
+      <>
+        <span style={{ fg: T.textDim }}>{prefix}</span>
+        <For each={segs()}>
+          {(seg) => (
+            <span style={{ fg: fgOf(seg.role), attributes: seg.role === "label" ? ATTR.bold : undefined }}>
+              {seg.text}
             </span>
-          </Show>
-        </>
-      );
-    }
-    const bColor = boardColor(e.boardIndex);
-    const priorityGlyph = e.task.priority !== "none" ? "🔺 " : "";
-    return (
-      <>
-        <span style={{ fg: T.textDim }}>{prefix}</span>
-        <span style={{ fg: bColor, attributes: ATTR.bold }}>
-          {"┤ "}
-          {formatHm(e.startMin)}
-          {"-"}
-          {formatHm(e.endMin)}{" "}
-        </span>
-        <Show when={e.task.assignee}>
-          <span style={{ fg: T.assignee }}>
-            {"@"}
-            {e.task.assignee}{" "}
-          </span>
-        </Show>
-        <Show when={priorityGlyph}>
-          <span style={{ fg: PRIORITY_COLOR[e.task.priority] }}>
-            {priorityGlyph}
-          </span>
-        </Show>
-        {/* A quarter of an hour is one row: the title rides on it, there is no
-            second row to put it on. */}
-        <Show when={e.endRow - e.startRow === 1}>
-          <span style={{ fg: e.task.done ? T.done : T.text }}>
-            {tailTruncate(
-              e.task.displayTitle,
-              Math.max(4, (props.laneWidth ?? 200) - 3 - 15 - (e.task.assignee ? e.task.assignee.length + 2 : 0) - (priorityGlyph ? 3 : 0)),
-            )}
-          </span>
-        </Show>
-      </>
-    );
-  }
-  if (r.kind === "body" && r.entry) {
-    const e = r.entry;
-    const avail = props.laneWidth ?? 200;
-    if (e.kind === "calendar") {
-      const budget = Math.max(6, avail - (props.skipPrefix ? 0 : 3) - 2);
-      return (
-        <>
-          <span style={{ fg: T.textDim }}>{prefix}</span>
-          <span style={{ fg: e.color }}>{"│ "}</span>
-          <span style={{ fg: e.color }}>{tailTruncate(e.title, budget)}</span>
-        </>
-      );
-    }
-    const bColor = boardColor(e.boardIndex);
-    // Tail-truncate so the START of the title stays readable (the head/tail
-    // ellipsis OpenTUI does otherwise chops the middle). Budget = lane width
-    // minus the prefix, the "│ " gutter, and the done check.
-    const budget = Math.max(
-      6,
-      avail - (props.skipPrefix ? 0 : 3) - 2 - (e.task.done ? 2 : 0),
-    );
-    return (
-      <>
-        <span style={{ fg: T.textDim }}>{prefix}</span>
-        <span style={{ fg: bColor }}>{"│ "}</span>
-        <Show when={e.task.done}>
-          <span style={{ fg: T.done }}>{"✓ "}</span>
-        </Show>
-        <span style={{ fg: e.task.done ? T.done : T.text }}>
-          {tailTruncate(e.task.displayTitle, budget)}
-        </span>
-      </>
-    );
-  }
-  if (r.kind === "fill" && r.entry) {
-    const e = r.entry;
-    const color = e.kind === "calendar" ? e.color : boardColor(e.boardIndex);
-    return (
-      <>
-        <span style={{ fg: T.textDim }}>{prefix}</span>
-        <span style={{ fg: color }}>{"│"}</span>
-      </>
-    );
-  }
-  if (r.kind === "edge" && r.entry) {
-    // The rule that closes the block, on the row of its end time. Armed, it is
-    // also the handle: drag it to change the duration.
-    const e = r.entry;
-    const color = e.kind === "calendar" ? e.color : boardColor(e.boardIndex);
-    return (
-      <>
-        <span style={{ fg: T.textDim }}>{prefix}</span>
-        <span style={{ fg: props.armed ? T.warmActive : color }}>{"╰"}</span>
-        <Show
-          when={props.armed}
-          fallback={<span style={{ fg: color }}>{"─".repeat(120)}</span>}
-        >
-          <span style={{ fg: T.warmActive, attributes: ATTR.bold }}>{"━ ↕ "}</span>
-          <span style={{ fg: T.warmActive }}>{"━".repeat(120)}</span>
-        </Show>
+          )}
+        </For>
       </>
     );
   }

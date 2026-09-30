@@ -470,11 +470,14 @@ session (until the next terminal resize).
 
 A placed task stays armed, so it can be sized and moved straight away.
 
-The grid is a **ruler**: each row is an instant, the hour line `10 ───` is 10:00,
-and a block runs from the row of its start to a closing rule on the row of its end
-(`╰───` at 09:30 for a 09:00-09:30 block). A quarter of an hour is one row, with the
-title beside the time; back-to-back blocks share the rule; the hour stays written
-in the gutter on every row that starts one, even under a block.
+The grid is a **ruler**, and blocks are **boxes** drawn on it: each row is an instant, the
+hour line `10 ───` is 10:00, and a block's rounded border starts on the row of its
+first minute — with the time set into the top edge, `╭─┤ 09:00-09:30 ├──╮` — and
+closes on the row of its end, so its physical edges sit on the grid's lines. A quarter
+of an hour is one row, with the title beside the time; back-to-back blocks share the
+line between them (`├─┤ 09:30-10:00 ├──┤`); the hour stays written in the gutter on
+every row that starts one, even under a block. While a block is armed, its bottom edge
+is the handle (`╰━ ↕ ━━╯`) you drag to change its length.
 
 **Mouse: one click selects, two arm; once armed, click anywhere to place and click
 twice to let go.** With nothing armed, clicking a block or a tray row moves the

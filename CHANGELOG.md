@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-30
+
 ### Added
 - **Drag to move and resize.** While a block is armed, dragging its body moves it
   and dragging its bottom edge changes its length; the edge shows a handle
@@ -744,6 +746,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.15.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.15.0
 [0.14.5]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.5
 [0.14.4]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.4
 [0.14.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.3

@@ -1205,6 +1205,18 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   }
 
   /**
+   * Can the user be in this zone right now? Enabled, and either drawn
+   * (side-by-side layouts) or wanted (single-pane, where whatever is active is
+   * the one thing on screen). "Does not fit" never counts against a zone in
+   * single-pane: at 60 columns the Agenda does not fit beside anything, and it
+   * is still one Shift-Tab away, so its keys must work when it is there.
+   * The one rule behind Shift-Tab, `[` / `]` / `\` and the like.
+   */
+  function isZoneReachable(zone: ActiveZone): boolean {
+    return enabledZones[zone] && (singlePane() ? desiredVisible[zone] : state.ui.visibleZones[zone]);
+  }
+
+  /**
    * Next zone, wrapping.
    *
    * Reachability is decided by what the user enabled and wants — never by what
@@ -1214,9 +1226,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
    * and Shift-Tab do nothing.
    */
   function cycleActiveZone(): void {
-    const reachable = ZONE_ORDER.filter(
-      (z) => enabledZones[z] && (singlePane() ? desiredVisible[z] : state.ui.visibleZones[z]),
-    );
+    const reachable = ZONE_ORDER.filter(isZoneReachable);
     if (reachable.length <= 1) return;
     const currentIdx = reachable.indexOf(state.ui.activeZone);
     const nextIdx = (currentIdx + 1) % reachable.length;
@@ -1407,6 +1417,23 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     setState("ui", "armMode", on);
   }
 
+  /** True when arm mode zoomed the Agenda in because it had no room of its own. */
+  let armZoomed = false;
+
+  /**
+   * Bring the Agenda on screen for arm mode. With no room beside the board
+   * (100-149 columns) it takes the whole screen for the placement, so the
+   * user is never left on a zone that is not drawn; `leaveArmMode` puts the
+   * screen back. The caller has checked the Agenda is enabled.
+   */
+  function revealAgendaForArm(): void {
+    setZoneVisible("timeline", true);
+    if (!singlePane() && !state.ui.visibleZones.timeline) {
+      setState("ui", "zoomed", true);
+      armZoomed = true;
+    }
+  }
+
   /** Start arm mode from the cursor, remembering where it started. */
   function startArmMode(ref: TaskRef): void {
     const ui = state.ui;
@@ -1433,6 +1460,10 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     armTimeline(undefined);
     setArmMode(false);
     setState("ui", "armOrigin", undefined);
+    if (armZoomed) {
+      armZoomed = false;
+      setState("ui", "zoomed", false);
+    }
     return origin;
   }
 
@@ -1952,6 +1983,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     toggleZoneDesired,
     applyResponsiveFits,
     cycleActiveZone,
+    isZoneReachable,
     singlePane,
     stepPane,
     currentPane,
@@ -1962,6 +1994,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     armTimeline,
     setArmMode,
     startArmMode,
+    revealAgendaForArm,
     leaveArmMode,
     agendaDate,
     shiftAgendaDay,

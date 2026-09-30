@@ -445,7 +445,7 @@ session (until the next terminal resize).
 | `h j k l` / arrows | Move cursor inside the active zone |
 | `Tab` | Cycle to next board |
 | `1`..`9` | Jump to board N |
-| `v` | Toggle Today/Tomorrow planner panel focus |
+| `v` | Toggle Today/Tomorrow planner panel focus (says so, and stays put, when the planner is off or hidden) |
 | `Shift-Tab` | Cycle active zone (planner → board → timeline → agents) |
 | `+` | New board — create one, or adopt markdown files you already have (also the `+` chip in the top bar) |
 | `h` / `l` | In single-pane, walk the ring: planner → each column → agenda → agents, wrapping |
@@ -457,9 +457,9 @@ session (until the next terminal resize).
 
 | Key | Action |
 |---|---|
-| `[` / `]` | Previous / next day — shows that day's tasks **and** calendar events (works from any zone) |
+| `[` / `]` | Previous / next day — shows that day's tasks **and** calendar events (works from any zone, single-pane included; does nothing when the Agenda is off or hidden with `F2`) |
 | `\` | Jump back to today |
-| `c` | Arm mode: click a task, then click a slot to schedule (works from any zone) |
+| `c` | Arm mode: click a task, then click a slot to schedule (works from any zone). With no room for the Agenda beside the board (100-149 columns) it takes the screen for the placement and gives it back when arm mode ends |
 | `j` / `k` | While armed: nudge the block ±15 min |
 | `+` / `-` | While armed: resize the block's end ±15 min |
 | `Enter` | While armed: keep the placement and go back to where `c` was pressed (if you armed by clicking a block, you stay in the Agenda). Otherwise: toggle done on the task under the cursor, like everywhere else |

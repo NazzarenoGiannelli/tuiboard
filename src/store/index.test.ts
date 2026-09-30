@@ -365,7 +365,8 @@ describe("Shift+T — overdue to today (#79)", () => {
     try {
       expect(store.resetAllOverdueToToday()).toEqual({ tasks: 2, blocks: 1 });
       const task = (i: number) => store.getTask({ boardPath: path, columnIndex: 0, taskIndex: i })!;
-      expect(task(0)).toMatchObject({ scheduled: isoToday(), timeBlock: undefined });
+      expect(task(0).scheduled).toBe(isoToday());
+      expect(task(0).timeBlock).toBeUndefined();
       expect(task(1).scheduled).toBe(isoToday());
       // Already today: untouched, block and all.
       expect(task(2).timeBlock).toEqual({ startMin: 840, endMin: 900 });
@@ -516,7 +517,8 @@ describe("moving a task to another day drops its time block", () => {
       const ref = refAt(path, 0);
       expect(store.getTask(ref)!.timeBlock).toEqual(START);
       expect(store.setScheduled(ref, "2026-09-21")).toBe(true);
-      expect(store.getTask(ref)).toMatchObject({ scheduled: "2026-09-21", timeBlock: undefined });
+      expect(store.getTask(ref).scheduled).toBe("2026-09-21");
+      expect(store.getTask(ref).timeBlock).toBeUndefined();
     });
   });
 
@@ -531,7 +533,8 @@ describe("moving a task to another day drops its time block", () => {
   it("clearing the date drops the block too", () => {
     withBoard((store, path) => {
       expect(store.setScheduled(refAt(path, 0), undefined)).toBe(true);
-      expect(store.getTask(refAt(path, 0))).toMatchObject({ scheduled: undefined, timeBlock: undefined });
+      expect(store.getTask(refAt(path, 0)).scheduled).toBe(undefined);
+      expect(store.getTask(refAt(path, 0)).timeBlock).toBeUndefined();
     });
   });
 
@@ -555,8 +558,10 @@ describe("moving a task to another day drops its time block", () => {
       store.toggleMark(refAt(path, 0));
       store.toggleMark(refAt(path, 1));
       expect(store.scheduleMarkedOr(refAt(path, 2), "2026-09-21", "tomorrow")).toBe(2);
-      expect(store.getTask(refAt(path, 0))).toMatchObject({ scheduled: "2026-09-21", timeBlock: undefined });
-      expect(store.getTask(refAt(path, 1))).toMatchObject({ scheduled: "2026-09-21", timeBlock: undefined });
+      expect(store.getTask(refAt(path, 0)).scheduled).toBe("2026-09-21");
+      expect(store.getTask(refAt(path, 0)).timeBlock).toBeUndefined();
+      expect(store.getTask(refAt(path, 1)).scheduled).toBe("2026-09-21");
+      expect(store.getTask(refAt(path, 1)).timeBlock).toBeUndefined();
       expect(store.getTask(refAt(path, 2))!.scheduled).toBe("2026-09-20"); // marked ones only
     });
   });

@@ -248,7 +248,17 @@ export function handleKey(
 
   // Switch in/out of planner panel with `v`
   if (key.name === "v") {
-    store.setActiveZone(ui.activeZone === "planner" ? "board" : "planner");
+    if (ui.activeZone === "planner") {
+      store.setActiveZone("board");
+    } else if (store.isZoneReachable("planner")) {
+      store.setActiveZone("planner");
+    } else {
+      // Never move the focus to a zone that is not there.
+      store.flashBanner(
+        "info",
+        ui.enabledZones.planner ? "The planner is hidden — F1 shows it" : "The planner is off (zones.planner)",
+      );
+    }
     return;
   }
 
@@ -304,10 +314,13 @@ export function handleKey(
   // Agenda day navigation works from ANY zone — these keys only ever affect
   // the Agenda, so there's no need to be focused there first. `[` previous
   // day, `]` next day, `\` back to today. Pressing one also moves focus to
-  // the Agenda so you can keep paging/navigating. Guarded on the zone being
-  // visible — never steal focus to a hidden zone (F2 can hide it).
+  // the Agenda so you can keep paging/navigating. Guarded on the Agenda being
+  // reachable — never steal focus to a zone that is not there (F2 can hide it,
+  // and a mid-width terminal has no room for it). Reachable, not "visible": in
+  // single-pane the Agenda does not fit beside anything and is still one
+  // Shift-Tab away, so its keys have to work there.
   if (
-    ui.visibleZones.timeline &&
+    store.isZoneReachable("timeline") &&
     (key.name === "[" ||
       key.sequence === "[" ||
       key.name === "]" ||
@@ -831,8 +844,12 @@ function dispatchTaskAction(
       store.flashBanner("info", "Arm mode off");
       return true;
     }
+    if (!store.state.ui.enabledZones.timeline) {
+      store.flashBanner("info", "The Agenda is off (zones.agenda) — nothing to place a task on");
+      return true;
+    }
     store.startArmMode(ref);
-    store.setZoneVisible("timeline", true);
+    store.revealAgendaForArm();
     store.setActiveZone("timeline");
     const t = store.getTask(ref);
     store.flashBanner(

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`[`, `]` and `\` work in single-pane.** They moved the Agenda's day only when
+  it was drawn, and the Agenda is drawn beside the board from 150 columns up, so
+  in a narrow single-pane terminal, where it is one Shift-Tab away but drawn
+  alone, the three keys did nothing. They now ask the same question Shift-Tab
+  does — is this zone reachable? — so they work wherever the Agenda is, and
+  still stay out when it is off or hidden with `F2`.
+- **`c` (arm mode) no longer leaves the focus on a zone that is not drawn.** At
+  100-149 columns there is no room for the Agenda beside the board, and arming a
+  task moved the focus to it anyway: keys acted on something invisible. The
+  Agenda now takes the screen for the placement and gives it back when arm mode
+  ends (a zoom you chose with `z` is left alone). With the Agenda switched off,
+  `c` says so instead of arming.
+- **`v` no longer jumps to a planner that is off or hidden.** It says why and
+  stays where it is.
+
+### Changed
+- **The keyboard is tested in every layout.** A new suite drives the real key
+  handler in wide, mid-width, narrow (single-pane) and zoomed layouts built the
+  way the app builds them: day navigation, Shift-Tab, `h`/`l`, `z`, `v`, F1-F3,
+  task actions from board, planner and Agenda, arm mode, multi-select, dialogs
+  and boards. It needs OpenTUI's Solid preload, so the repo now has a
+  `bunfig.toml` that registers it for `bun test`.
+
 ## [0.14.5] - 2026-09-30
 
 ### Fixed

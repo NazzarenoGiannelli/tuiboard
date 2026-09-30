@@ -1,0 +1,4 @@
+# OpenTUI's Solid JSX runtime has to be registered before any .tsx is parsed. The app does it with
+# `bun --preload` (bin/tuiboard.ts); tests that import the key handler need the same.
+[test]
+preload = ["./node_modules/@opentui/solid/scripts/preload.ts"]

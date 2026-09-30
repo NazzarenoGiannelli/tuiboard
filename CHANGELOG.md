@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-09-30
+
+### Changed
+- **Enter marks a task done from the Agenda.** The README already said Enter
+  toggles done in board, planner *and* timeline, but in the Agenda it jumped to
+  the task's card instead, so there was no key to tick a block off from where
+  you plan the day. Enter now toggles done there like everywhere else (a block
+  armed with `c` still keeps Enter for "keep the placement"). The jump to the
+  card moved to `g`, "go to", which the Agenda did not use.
+
 ## [0.14.1] - 2026-09-28
 
 ### Changed
@@ -555,6 +565,7 @@ First public release on npm. This entry captures the full feature set at launch.
 
 Built with [OpenTUI](https://opentui.com) + SolidJS on Bun.
 
+[0.14.2]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.2
 [0.14.1]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.1
 [0.14.0]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.14.0
 [0.13.3]: https://github.com/NazzarenoGiannelli/tuiboard/releases/tag/v0.13.3

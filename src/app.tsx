@@ -25,11 +25,13 @@ import { createEffect, createMemo } from "solid-js";
 import { createCliRenderer } from "@opentui/core";
 import { render, useKeyboard, useTerminalDimensions } from "@opentui/solid";
 
+import pkg from "../package.json";
 import { quitApp, registerRenderer } from "~/app-exit";
 
 import { parseArgs, type ViewKind } from "~/cli/args";
 import { loadConfig } from "~/config/loader";
 import { handleKey } from "~/input/handleKey";
+import { perfKeyName, startPerfLog } from "~/perf";
 import {
   createTuiStore,
   type TuiStore,
@@ -76,6 +78,8 @@ process.on("warning", (w: Error) => {
 
 const config = loadConfig();
 const store = createTuiStore({ config });
+// Opt-in diagnostics (TUIBOARD_PERF): no timers, no cost, unless it is set.
+const perf = startPerfLog(pkg.version);
 
 // No boards — a fresh install, or a config whose files have all gone. Rather
 // than printing an error and exiting, which sends the user off to read
@@ -174,7 +178,12 @@ function App() {
     buildPlannerItems(store.state.boards.map((b) => b.board)),
   );
 
-  useKeyboard((key) => handleKey(store, key, plannerItems().length));
+  useKeyboard((key) => {
+    if (!perf) return handleKey(store, key, plannerItems().length);
+    const t0 = performance.now();
+    handleKey(store, key, plannerItems().length);
+    perf.key(perfKeyName(key), performance.now() - t0);
+  });
 
   // Same width the frame is drawn at, updated on the renderer's resize events.
   const dims = useTerminalDimensions();

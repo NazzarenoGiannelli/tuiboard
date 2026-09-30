@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`TUIBOARD_PERF`: a performance log for slow sessions.** Set it to a file path
+  (or `1`) and tuiboard writes JSON lines: a `sample` every 5 s (CPU, memory,
+  worst event-loop lag, keys), a `lag` line when the loop was blocked for 150 ms
+  or more with the last keys pressed before it, and a `slow-key` line when a key
+  handler took 30 ms or more. Off by default: no timers run and nothing is
+  written unless the variable is set. The README explains how to pair it with
+  Bun's CPU profiler to see which functions were busy.
+
 ## [0.14.4] - 2026-09-30
 
 ### Changed

@@ -588,6 +588,24 @@ An ambiguous match is refused rather than guessed at.
 Exit 3 is the mtime watermark: a write is refused rather than allowed to
 clobber an edit made in the TUI or another editor in the meantime.
 
+## Chasing a slow session
+
+If a keypress takes a second to answer, two tools tell you why. Neither costs
+anything unless you turn it on.
+
+**`TUIBOARD_PERF`** writes a JSON-lines log: a `sample` every 5 s (CPU % of one
+core, memory, the worst event-loop lag, keys pressed), a `lag` line whenever the
+loop was blocked for 150 ms or more — with the last keys pressed and how long
+before — and a `slow-key` line when a key handler itself took 30 ms or more.
+Set it to a file path, or to `1` for `<tmpdir>/tuiboard-perf.log`.
+
+**Bun's CPU profiler** says which functions were busy. Run the app directly, and
+quit with `q` so the profile is written:
+
+```bash
+TUIBOARD_PERF=~/tuiboard-perf.log bun --cpu-prof --cpu-prof-md --cpu-prof-interval=5000   --cpu-prof-dir ~/tuiboard-prof --preload <path>/@opentui/solid/scripts/preload.ts <path>/tuiboard/src/app.tsx
+```
+
 ## Omarchy bar widget
 
 On [Omarchy](https://omarchy.org), `omarchy-plugin/` ships a bar widget built

@@ -13,3 +13,7 @@ build/
 .tuiboard/config.yaml
 .tuiboard/config.yml
 *.tsbuildinfo
+
+# Generated demo boards and the images and videos made from them
+demo/data/
+demo/out/

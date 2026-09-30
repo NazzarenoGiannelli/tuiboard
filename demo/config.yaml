@@ -1,0 +1,20 @@
+# The demo environment: invented boards, no calendar, no agents, so nothing of a real
+# setup can show up. Paths are relative to this file. Regenerate the boards for today
+# with `bun demo/seed.ts`; `bun run demo` seeds and opens tuiboard on them.
+#
+# To open it with the installed tuiboard instead:
+#   TUIBOARD_CONFIG=<path to this file> tuiboard
+boards:
+  - path: data/Launch.md
+    name: Launch
+  - path: data/Home.md
+    name: Home
+  - path: data/Side project.md
+    name: Side project
+
+assignees: [Sam, Mia]
+
+zones:
+  planner: on
+  agenda: on
+  agents: off

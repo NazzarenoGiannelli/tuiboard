@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Confirming a move in the Agenda no longer throws you to the board.** Click a
+  block, click its new slot, press Enter: the placement was kept, but a block
+  armed by a click has no "where `c` started" to go back to, so Enter jumped to
+  the task's card in the kanban. It now stays in the Agenda. `g` is the way to
+  the card.
+
 ## [0.14.2] - 2026-09-30
 
 ### Changed

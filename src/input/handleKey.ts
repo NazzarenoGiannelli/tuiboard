@@ -465,10 +465,11 @@ function handleTimelineZone(
     : undefined;
 
   // Enter confirms whatever is armed — placed or not — and goes back to where
-  // `c` started; a task armed straight from its band still jumps to its card.
+  // `c` started. A task armed straight from its band (a click) has no origin:
+  // it stays in the Agenda, where the placement was made. `g` goes to the card.
   if (armedRef && (key.name === "enter" || key.name === "return")) {
     const origin = store.leaveArmMode(true);
-    if (!restoreArmOrigin(store, origin, plannerCount)) jumpToKanban(store, armedRef);
+    restoreArmOrigin(store, origin, plannerCount);
     const t = store.getTask(armedRef);
     store.flashBanner("info", t?.timeBlock ? `✓ ${fmtHm(t.timeBlock.startMin)}-${fmtHm(t.timeBlock.endMin)}` : "Arm mode off");
     return;

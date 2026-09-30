@@ -364,10 +364,7 @@ function ScheduleModal(props: { store: TuiStore; modal: Extract<NonNullable<TuiS
       setError(`Cannot parse "${text}". Try: t · m · +3 · lun · 2026-06-15`);
       return;
     }
-    const n = props.store.applyToMarkedOr(props.modal.ref, (r) =>
-      props.store.setScheduled(r, d ?? undefined),
-    );
-    if (n > 1) props.store.flashBanner("info", `${n} tasks scheduled`);
+    props.store.scheduleMarkedOr(props.modal.ref, d ?? undefined, d ?? "no date");
     props.store.closeModal();
   }
 

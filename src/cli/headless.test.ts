@@ -133,6 +133,14 @@ describe("tuiboard task defer", () => {
     expect(line("Bollette")).toBe("- [ ] Bollette ⏳ 2027-01-15");
   });
 
+  it("drops the time block when the day changes, keeps it when it does not", async () => {
+    writeFileSync(boardPath, BOARD.replace("- [ ] Bollette ⏳ 2026-08-31", `- [ ] Bollette ⌚ 09:30-10:30 ⏳ ${iso(0)}`));
+    expect(await runTask(["defer", ...args("--match", "Bollette", "--days", "0")])).toBe(0);
+    expect(line("Bollette")).toBe(`- [ ] Bollette ⌚ 09:30-10:30 ⏳ ${iso(0)}`);
+    expect(await runTask(["defer", ...args("--match", "Bollette")])).toBe(0);
+    expect(line("Bollette")).toBe(`- [ ] Bollette ⏳ ${iso(1)}`);
+  });
+
   it("rejects a malformed --to without touching the board", async () => {
     const before = board();
     expect(await runTask(["defer", ...args("--match", "Bollette", "--to", "15/01/2027")])).toBe(2);

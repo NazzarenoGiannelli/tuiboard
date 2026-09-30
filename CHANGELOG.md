@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **A task that changes day loses its time block, everywhere.** Shift+T already
+  did it for overdue tasks (#79); now `t`, `m`, the Schedule modal (`s`), clearing
+  the date, and the headless `tuiboard task defer` do too. A slot is an hour on
+  a particular day, so carrying `09:30-10:30` over to another day put blocks on
+  the agenda at hours nobody chose. Moving a task within the same day keeps its
+  block, and undo brings the day and the block back together. The banner says
+  when a block was cleared. Cancelling arm mode with Esc still restores the
+  original day and block.
+
 ## [0.14.3] - 2026-09-30
 
 ### Fixed

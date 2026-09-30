@@ -645,12 +645,30 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     saveBoard(ref.boardPath);
   }
 
-  function setScheduled(ref: TaskRef, date: string | undefined): void {
+  /**
+   * Set (or clear) the scheduled day. A time block is a slot on a particular
+   * day, so moving the task to another day drops it: the old hours mean nothing
+   * on the new one, and re-placing it is two keys with arm mode. Callers that
+   * set the day and the block together on purpose pass `keepTimeBlock`.
+   * Returns whether a time block was dropped.
+   */
+  function setScheduled(
+    ref: TaskRef,
+    date: string | undefined,
+    opts: { keepTimeBlock?: boolean } = {},
+  ): boolean {
     const task = getTask(ref);
-    if (!task) return;
+    if (!task) return false;
     const prev = task.scheduled;
+    const prevBlock = task.timeBlock;
+    const prevBlockSource = task.timeBlockSource;
+    const dropBlock = !opts.keepTimeBlock && prevBlock !== undefined && date !== prev;
     mutateTask(ref, (t) => {
       t.scheduled = date;
+      if (dropBlock) {
+        t.timeBlock = undefined;
+        t.timeBlockSource = undefined;
+      }
       t.dirty = true;
     });
     pushUndo({
@@ -658,12 +676,17 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       inverse: () => {
         mutateTask(ref, (t) => {
           t.scheduled = prev;
+          if (dropBlock) {
+            t.timeBlock = prevBlock;
+            t.timeBlockSource = prevBlockSource;
+          }
           t.dirty = true;
         });
         saveBoard(ref.boardPath);
       },
     });
     saveBoard(ref.boardPath);
+    return dropBlock;
   }
 
   function setTimeBlock(ref: TaskRef, tb: TimeBlock | undefined): void {
@@ -1403,7 +1426,8 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     if (!confirm && ref && snap && sameRef(ref, snap.ref)) {
       const t = getTask(ref);
       if (t && !sameBlock(t.timeBlock, snap.timeBlock)) setTimeBlock(ref, snap.timeBlock);
-      if (t && t.scheduled !== snap.scheduled) setScheduled(ref, snap.scheduled);
+      // The snapshot's block goes back with its day, so don't let the day change drop it.
+      if (t && t.scheduled !== snap.scheduled) setScheduled(ref, snap.scheduled, { keepTimeBlock: true });
     }
     const origin = state.ui.armOrigin;
     armTimeline(undefined);
@@ -1602,6 +1626,22 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       return 1;
     }
     return 0;
+  }
+
+  /**
+   * Move the marked tasks (or the one under the cursor) to `date` and say what
+   * happened, including the time blocks that went with the old day. One place
+   * for `t`, `m` and the Schedule modal, so they cannot drift apart.
+   */
+  function scheduleMarkedOr(fallback: TaskRef | undefined, date: string | undefined, label: string): number {
+    let dropped = 0;
+    const n = applyToMarkedOr(fallback, (r) => {
+      if (setScheduled(r, date)) dropped++;
+    });
+    const note = dropped > 0 ? `${dropped > 1 ? `${dropped} time blocks` : "time block"} cleared` : "";
+    if (n > 1) flashBanner("info", `${n} tasks → ${label}${note ? ` · ${note}` : ""}`);
+    else if (note) flashBanner("info", `→ ${label} · ${note}`);
+    return n;
   }
 
   // ─── Archive ─────────────────────────────────────────────────────────────
@@ -1935,6 +1975,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     clearMarks,
     getMarkedRefs,
     applyToMarkedOr,
+    scheduleMarkedOr,
     archiveTask,
     resetAllOverdueToToday,
     openModal,

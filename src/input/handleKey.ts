@@ -789,13 +789,11 @@ function dispatchTaskAction(
 
   // Quick set scheduled = today / tomorrow
   if (key.name === "t" && !key.shift) {
-    const n = store.applyToMarkedOr(ref, (r) => store.setScheduled(r, isoToday()));
-    if (n > 1) store.flashBanner("info", `${n} tasks → today`);
+    store.scheduleMarkedOr(ref, isoToday(), "today");
     return true;
   }
   if (key.name === "m") {
-    const n = store.applyToMarkedOr(ref, (r) => store.setScheduled(r, isoTomorrow()));
-    if (n > 1) store.flashBanner("info", `${n} tasks → tomorrow`);
+    store.scheduleMarkedOr(ref, isoTomorrow(), "tomorrow");
     return true;
   }
 

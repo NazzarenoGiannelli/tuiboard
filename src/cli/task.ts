@@ -207,8 +207,15 @@ export async function runTask(argv: readonly string[]): Promise<number> {
       // `scheduled` date would write a change that never moves the row.
       // A task with neither date gets a scheduled one, which is what puts it
       // on the agenda in the first place.
-      if (task.scheduled !== undefined) task.scheduled = target;
-      else if (task.due !== undefined) task.due = target;
+      // A time block belongs to the day it was planned for, so it goes with it
+      // when the scheduled day changes (the TUI does the same).
+      if (task.scheduled !== undefined) {
+        if (task.scheduled !== target) {
+          task.timeBlock = undefined;
+          task.timeBlockSource = undefined;
+        }
+        task.scheduled = target;
+      } else if (task.due !== undefined) task.due = target;
       else task.scheduled = target;
 
       task.dirty = true;

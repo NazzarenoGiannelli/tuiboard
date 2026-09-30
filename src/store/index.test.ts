@@ -490,3 +490,85 @@ describe("status file", () => {
     expect(view.body!.length).toBe(STATUS_FILE_MAX_BYTES);
   });
 });
+
+describe("moving a task to another day drops its time block", () => {
+  const START = { startMin: 570, endMin: 630 }; // 09:30-10:30
+
+  function withBoard(run: (store: ReturnType<typeof createTuiStore>, path: string) => void) {
+    const dir = mkdtempSync(join(tmpdir(), "tb-move-"));
+    const path = join(dir, "board.md");
+    writeFileSync(
+      path,
+      "## Todo\n\n- [ ] With a block ⌚ 09:30-10:30 ⏳ 2026-09-20\n- [ ] Second block ⌚ 11:00-12:00 ⏳ 2026-09-20\n- [ ] No block ⏳ 2026-09-20\n",
+    );
+    const store = createTuiStore({ config: emptyConfig({ boards: [{ path }] }) });
+    try {
+      run(store, path);
+    } finally {
+      store.dispose();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+  const refAt = (path: string, taskIndex: number) => ({ boardPath: path, columnIndex: 0, taskIndex });
+
+  it("drops the block on another day, and reports it", () => {
+    withBoard((store, path) => {
+      const ref = refAt(path, 0);
+      expect(store.getTask(ref)!.timeBlock).toEqual(START);
+      expect(store.setScheduled(ref, "2026-09-21")).toBe(true);
+      expect(store.getTask(ref)).toMatchObject({ scheduled: "2026-09-21", timeBlock: undefined });
+    });
+  });
+
+  it("keeps the block when the day does not change, and on a task without one", () => {
+    withBoard((store, path) => {
+      expect(store.setScheduled(refAt(path, 0), "2026-09-20")).toBe(false);
+      expect(store.getTask(refAt(path, 0))!.timeBlock).toEqual(START);
+      expect(store.setScheduled(refAt(path, 2), "2026-09-21")).toBe(false);
+    });
+  });
+
+  it("clearing the date drops the block too", () => {
+    withBoard((store, path) => {
+      expect(store.setScheduled(refAt(path, 0), undefined)).toBe(true);
+      expect(store.getTask(refAt(path, 0))).toMatchObject({ scheduled: undefined, timeBlock: undefined });
+    });
+  });
+
+  it("keepTimeBlock is for callers that place the day and the block together", () => {
+    withBoard((store, path) => {
+      expect(store.setScheduled(refAt(path, 0), "2026-09-21", { keepTimeBlock: true })).toBe(false);
+      expect(store.getTask(refAt(path, 0))).toMatchObject({ scheduled: "2026-09-21", timeBlock: START });
+    });
+  });
+
+  it("undo brings back the day and the block together", () => {
+    withBoard((store, path) => {
+      store.setScheduled(refAt(path, 0), "2026-09-21");
+      store.undo();
+      expect(store.getTask(refAt(path, 0))).toMatchObject({ scheduled: "2026-09-20", timeBlock: START });
+    });
+  });
+
+  it("scheduleMarkedOr covers the marked tasks and counts them", () => {
+    withBoard((store, path) => {
+      store.toggleMark(refAt(path, 0));
+      store.toggleMark(refAt(path, 1));
+      expect(store.scheduleMarkedOr(refAt(path, 2), "2026-09-21", "tomorrow")).toBe(2);
+      expect(store.getTask(refAt(path, 0))).toMatchObject({ scheduled: "2026-09-21", timeBlock: undefined });
+      expect(store.getTask(refAt(path, 1))).toMatchObject({ scheduled: "2026-09-21", timeBlock: undefined });
+      expect(store.getTask(refAt(path, 2))!.scheduled).toBe("2026-09-20"); // marked ones only
+    });
+  });
+
+  it("cancelling arm mode still puts the original day and block back", () => {
+    withBoard((store, path) => {
+      const ref = refAt(path, 0);
+      store.startArmMode(ref);
+      store.setScheduled(ref, "2026-09-21"); // drops the block
+      store.setTimeBlock(ref, { startMin: 840, endMin: 900 });
+      store.leaveArmMode(false);
+      expect(store.getTask(ref)).toMatchObject({ scheduled: "2026-09-20", timeBlock: START });
+    });
+  });
+});

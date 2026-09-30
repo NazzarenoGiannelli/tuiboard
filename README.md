@@ -488,7 +488,7 @@ A placed task stays armed, so it can be sized and moved straight away.
 | `e` | Edit task text |
 | `s` | Schedule date modal |
 | `t` | Set scheduled = today |
-| `m` | Set scheduled = tomorrow |
+| `m` | Set scheduled = tomorrow (same from the Agenda as from the board) |
 | `.` | Schedule **now** — time block at the next 15-min slot |
 | `b` | Set time block modal |
 | `p` | Cycle priority (none → 🔺 → ⏫ → 🔼 → 🔽 → ⏬ → none) |
@@ -569,7 +569,9 @@ tuiboard task add    --board Personal --column Home --text "Nuova task 🔺 ⏳ 
 `--dry-run` reports what would change and writes nothing. `defer` defaults to
 one day and moves the date the planner actually reads (`scheduled`, else
 `due`, else adds a `scheduled`), so the row really moves; `--days 0` pulls a
-task back to today.
+task back to today. A task that has a time block loses it when its scheduled day
+changes — the hours belonged to the old day (same rule as `t`, `m` and the
+Schedule modal in the TUI).
 
 Tasks are matched **by title, not by index**: a position is only valid inside
 one render pass, and a widget polling every couple of minutes holds a stale

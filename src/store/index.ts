@@ -25,6 +25,8 @@ import { createMemo } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 
 import { isHiddenColumn, type Config } from "~/config/loader";
+import { liveSetupDeps } from "~/setup/live";
+import { collectSetupStatus, type SetupStatus } from "~/setup/status";
 import {
   createBoardWatcher,
   type BoardWatcher,
@@ -116,6 +118,7 @@ export type ModalKind =
   | { kind: "search" }
   | { kind: "board-new" }
   | { kind: "status-file" }
+  | { kind: "setup" }
   | { kind: "help" };
 
 /**
@@ -2038,6 +2041,11 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   // ─── Cleanup ─────────────────────────────────────────────────────────────
 
+  /** What is set up on this machine: the Setup dialog's content. */
+  function setupStatus(): SetupStatus {
+    return collectSetupStatus(liveSetupDeps(config, agentsStore.sessions()));
+  }
+
   async function dispose(): Promise<void> {
     await watcher.stop();
     await agentsStore.dispose();
@@ -2071,6 +2079,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     // notes
     taskNote,
     statusFile,
+    setupStatus,
     // boards
     addBoard,
     openBoardNew,

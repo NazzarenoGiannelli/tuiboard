@@ -124,6 +124,11 @@ export function handleKey(
       store.closeModal();
       return;
     }
+    // Setup is read-only: Escape (above) and Shift+S close it, nothing else does anything.
+    if (ui.modal.kind === "setup") {
+      if (key.name === "s" && key.shift) store.closeModal();
+      return;
+    }
     // The status file closes on its own key too, like `o` closes the detail.
     if (ui.modal.kind === "status-file") {
       if (key.name === "i") { store.closeModal(); return; }
@@ -192,6 +197,13 @@ export function handleKey(
   // Help
   if (key.name === "?" || key.sequence === "?") {
     store.openModal({ kind: "help" });
+    return;
+  }
+
+  // Setup: what is connected. Shift+S, checked here so the plain `s` (schedule)
+  // further down never sees it.
+  if (key.name === "s" && key.shift) {
+    store.openModal({ kind: "setup" });
     return;
   }
 

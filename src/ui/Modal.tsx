@@ -74,6 +74,7 @@ function ModalRouter(props: { store: TuiStore; modal: NonNullable<TuiStore["stat
     case "search":   return <SearchModal store={props.store} />;
     case "board-new": return <BoardNewModal store={props.store} />;
     case "status-file": return <StatusFileModal store={props.store} />;
+    case "setup":    return <SetupModal store={props.store} />;
     case "help":     return <HelpModal store={props.store} />;
   }
 }
@@ -286,6 +287,59 @@ function DialogShell(props: DialogShellProps) {
         </text>
       </Show>
     </box>
+  );
+}
+
+// ─── Setup ───────────────────────────────────────────────────────────────────
+
+/**
+ * What is connected on this machine, read-only: it changes no file and opens no
+ * browser. The facts come from `collectSetupStatus`, shared with `tuiboard doctor`.
+ */
+function SetupModal(props: { store: TuiStore }) {
+  const s = createMemo(() => props.store.setupStatus());
+  const row = (ok: boolean, label: string, detail: string) => (
+    <text wrapMode="word">
+      <span style={{ fg: ok ? T.done : T.textDim }}>{ok ? "✓ " : "○ "}</span>
+      <span style={{ fg: T.text }}>{label}</span>
+      <span style={{ fg: T.textDim }}>{"  " + detail}</span>
+    </text>
+  );
+  const heading = (label: string) => (
+    <text wrapMode="word">
+      <span style={{ fg: T.textDim }}>{label}</span>
+    </text>
+  );
+  return (
+    <DialogShell title="Setup" hint="Esc or S to close" width={70}>
+      <box style={{ flexDirection: "column" }}>
+        {row(
+          s().boards.length > 0,
+          "Boards",
+          s().boards.length === 0
+            ? "none yet: press + to add one"
+            : `${s().boards.length}, config ${s().paths.config ?? "(none yet)"}`,
+        )}
+        <For each={s().boards}>{(b) => row(b.exists, "  " + b.name, b.exists ? b.path : b.path + " (file missing)")}</For>
+        {heading("Agents")}
+        <For each={s().agents}>
+          {(a) => row(a.found, a.label, a.found ? `${a.sessions} session${a.sessions === 1 ? "" : "s"}` : "not found: nothing to set up, it appears once you use it")}
+        </For>
+        {row(s().herdr.installed, "herdr", s().herdr.installed ? "installed" : "optional: live status and jump to a session")}
+        {heading("Calendar")}
+        <For each={s().calendars}>
+          {(c) => row(c.connected, c.label, c.connected ? "connected" : "optional: " + c.hint)}
+        </For>
+        {row(
+          s().updates.enabled,
+          "Updates",
+          s().updates.enabled ? `notice on${s().updates.latest ? ", latest known " + s().updates.latest : ""}` : "notice off (update_check: off)",
+        )}
+        <text wrapMode="word">
+          <span style={{ fg: T.textDim }}>{"tuiboard " + s().version + "  ·  boards go in " + s().paths.boardsDir}</span>
+        </text>
+      </box>
+    </DialogShell>
   );
 }
 
@@ -1338,6 +1392,7 @@ const HELP_SECTIONS: HelpSection[] = [
       ["Ctrl-Z", "Undo last mutation"],
       ["i", "Status file (the markdown file set as `status_file`)"],
       ["?", "This help"],
+      ["S", "Setup: what is connected (boards, agents, calendar, updates)"],
       ["q · Ctrl-C", "Quit"],
     ],
   },

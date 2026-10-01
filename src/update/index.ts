@@ -21,7 +21,8 @@ import {
 
 const CACHE_FILE = join(homedir(), ".cache", "tuiboard", "update.json");
 
-function readCache(): UpdateCache | undefined {
+/** The last answer of the update check, or undefined when there is none. Read-only: for Setup and `doctor`. */
+export function readUpdateCache(): UpdateCache | undefined {
   try {
     const raw = JSON.parse(readFileSync(CACHE_FILE, "utf8")) as Partial<UpdateCache>;
     if (typeof raw.checkedAt === "number" && typeof raw.latest === "string") {
@@ -57,7 +58,7 @@ export function startUpdateCheck(opts: {
     void checkForUpdate({
       current: opts.current,
       now: Date.now(),
-      readCache,
+      readCache: readUpdateCache,
       writeCache,
       fetchLatest: () => fetchLatestVersion(),
     })

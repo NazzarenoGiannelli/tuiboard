@@ -1,7 +1,7 @@
 /**
  * Board lifecycle from the command line.
  *
- *   tuiboard board add  --path <file.md> [--name <n>] [--columns "A,B,C"] [--dry-run]
+ *   tuiboard board add  --path <file.md> [--name <n>] [--columns "A,B,C"] [--examples] [--dry-run]
  *   tuiboard board scan <dir>
  *   tuiboard board list
  *
@@ -18,7 +18,7 @@ import { existsSync } from "node:fs";
 import { basename, extname, resolve } from "node:path";
 
 import { addBoardToConfig } from "~/boards/config-writer";
-import { createBoardFile, DEFAULT_COLUMNS } from "~/boards/create";
+import { createBoardFile, DEFAULT_COLUMNS, exampleTasks } from "~/boards/create";
 import { scanDirectory } from "~/boards/scan";
 import { suggestBoardsDir } from "~/boards/suggest";
 import { loadConfig } from "~/config/loader";
@@ -28,11 +28,12 @@ interface Args {
   name?: string;
   columns?: string[];
   dryRun: boolean;
+  examples: boolean;
   rest: string[];
 }
 
 function parse(argv: readonly string[]): Args {
-  const a: Args = { dryRun: false, rest: [] };
+  const a: Args = { dryRun: false, examples: false, rest: [] };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]!;
     const take = () => argv[++i];
@@ -40,6 +41,7 @@ function parse(argv: readonly string[]): Args {
     else if (arg === "--name") a.name = take();
     else if (arg === "--columns") a.columns = splitColumns(take());
     else if (arg === "--dry-run") a.dryRun = true;
+    else if (arg === "--examples") a.examples = true;
     else if (arg.startsWith("--path=")) a.path = arg.slice(7);
     else if (arg.startsWith("--name=")) a.name = arg.slice(7);
     else if (arg.startsWith("--columns=")) a.columns = splitColumns(arg.slice(10));
@@ -125,7 +127,7 @@ export async function runBoard(argv: readonly string[]): Promise<number> {
     // File first, config second: a file with no config entry is a board to
     // adopt next time, while a config entry pointing at nothing is a broken
     // launch. See docs/superpowers/specs/2026-09-01-board-lifecycle-design.md.
-    if (!exists) createBoardFile(path, { columns });
+    if (!exists) createBoardFile(path, { columns, examples: a.examples ? exampleTasks() : undefined });
 
     try {
       const result = addBoardToConfig({ path, name });

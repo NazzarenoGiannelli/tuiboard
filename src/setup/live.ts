@@ -11,10 +11,15 @@ import { AGENT_ADAPTERS } from "~/store/agent-adapters";
 import type { AgentSession } from "~/store/agents";
 import { herdrBin } from "~/store/herdr";
 import { readUpdateCache } from "~/update";
+import { updateCheckEnvDisabled } from "~/update/check";
 import pkg from "../../package.json";
 import type { SetupDeps } from "./status";
 
-export function liveSetupDeps(config: Config, sessions: Pick<AgentSession, "provider" | "lastActivityMs">[]): SetupDeps {
+export function liveSetupDeps(
+  config: Config,
+  sessions: Pick<AgentSession, "provider" | "lastActivityMs">[],
+  env: Record<string, string | undefined> = process.env,
+): SetupDeps {
   const found = findConfigPath();
   const cache = readUpdateCache();
   return {
@@ -30,7 +35,8 @@ export function liveSetupDeps(config: Config, sessions: Pick<AgentSession, "prov
     adapters: AGENT_ADAPTERS,
     sessions: [...sessions],
     herdrBin: herdrBin(),
-    updateCheckEnabled: config.updateCheck,
+    // What the app will do: the config and the environment, not the terminal (doctor is often piped).
+    updateCheckEnabled: config.updateCheck && !updateCheckEnvDisabled(env),
     updateCache: cache ? { latest: cache.latest, checkedAt: cache.checkedAt } : undefined,
     exists: existsSync,
   };

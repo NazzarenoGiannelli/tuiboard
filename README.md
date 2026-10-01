@@ -197,11 +197,16 @@ learn from they go in a folder you can find in a file manager:
 `$XDG_DATA_HOME/tuiboard/boards` if you set `XDG_DATA_HOME`, otherwise
 `~/Documents/tuiboard` if you have a Documents folder, otherwise `~/tuiboard`.
 Boards already in your config stay where they are. The path is shown before
-anything is written.
+anything is written, and the name field takes a path too: type `~/notes/Work`
+(or any path with a separator, or ending in `.md`) and the board goes there,
+named after its last part. If the proposed folder cannot be written to (macOS
+and Windows can protect Documents), the wizard says so, switches to
+`~/tuiboard` and waits for Enter instead of failing again.
 
 To see what tuiboard has found on your machine, press `S` in the app: boards,
 the coding agents it reads, herdr, calendars, the zones and the update notice,
-each with a `✓` when it is set up and a `○` when it is not. Only a board is
+each with a `✓` when it is set up and a `○` when it is not. It lists up to five
+boards (then `+N more`) so it fits a 24-row terminal. Only a board is
 required; every other `○` is optional. The same list is available from a shell
 with `tuiboard doctor`.
 
@@ -605,7 +610,7 @@ block is armed, how to move, resize, keep or undo it.
 | `Shift-T` | Reset ALL overdue tasks (any board) to today — their time blocks are cleared, since a slot chosen for another day means nothing today |
 | `Ctrl-Z` | Undo last mutation |
 | `i` | Status file — the markdown file set as `status_file`, shown read-only |
-| `S` | Setup: what is connected (boards, agents, calendars, zones, updates); `tuiboard doctor` prints the same |
+| `S` | Setup: what is connected (boards, agents, herdr, calendars, zones, updates); `tuiboard doctor` prints the same |
 | `?` | Help modal with the full reference |
 | `q` · `Ctrl-C` | Quit |
 
@@ -665,7 +670,11 @@ The same list the `S` dialog shows (boards, agents, herdr, calendars, zones,
 updates), and read-only: it changes no file. Exit code `0` means a report was printed (a `○` is not an
 error), `1` means the config could not be read (the message names the file), `2`
 means a usage error. `--json` leaves out the per-agent session counts, because
-`doctor` does not read your sessions, only whether their sources are found.
+`doctor` does not read your sessions, only whether their sources are found. Its
+shape does not vary between machines: `paths.config`, `updates.latest` and
+`updates.checkedAt` are `null` when there is no config file or no cached update
+answer. The update notice reads as off under `update_check: off`,
+`TUIBOARD_NO_UPDATE_CHECK=1` or in CI, because it will not run there.
 
 ### `tuiboard task` — mutations
 

@@ -27,9 +27,30 @@ export function formatDoctor(s: SetupStatus, sessionsKnown = true): string {
   lines.push(`${mark(s.herdr.installed)} herdr  ${s.herdr.installed ? "installed" : "optional"}`, "");
   for (const c of s.calendars) lines.push(`${mark(c.connected)} ${c.label}  ${c.connected ? "connected" : "optional: " + c.hint}`);
   lines.push("");
-  lines.push(`${mark(s.updates.enabled)} Update notice  ${s.updates.enabled ? "on" + (s.updates.latest ? `, latest known ${s.updates.latest}` : "") : "off (update_check: off)"}`);
+  lines.push(`${mark(s.updates.enabled)} Update notice  ${s.updates.enabled ? "on" + (s.updates.latest ? `, latest known ${s.updates.latest}` : "") : "off (update_check, TUIBOARD_NO_UPDATE_CHECK or CI)"}`);
   lines.push(`    zones: planner ${s.zones.planner}, agenda ${s.zones.agenda}, agents ${s.zones.agents}`);
   return lines.join("\n") + "\n";
+}
+
+/**
+ * The `--json` object. JSON.stringify drops keys whose value is undefined, so the config
+ * path and the update cache would come and go between machines: they are `null` instead,
+ * and a script can rely on the shape. No sessions are read here, so the per-agent count and
+ * last activity would be invented zeros: they are left out rather than report a measurement
+ * never made.
+ */
+export function doctorJson(status: SetupStatus) {
+  const agents = status.agents.map(({ sessions: _sessions, lastActivityMs: _last, ...a }) => a);
+  return {
+    ...status,
+    paths: { ...status.paths, config: status.paths.config ?? null },
+    agents,
+    updates: {
+      ...status.updates,
+      latest: status.updates.latest ?? null,
+      checkedAt: status.updates.checkedAt ?? null,
+    },
+  };
 }
 
 export function runDoctor(argv: readonly string[]): number {
@@ -51,10 +72,7 @@ export function runDoctor(argv: readonly string[]): number {
   }
   const status = collectSetupStatus(liveSetupDeps(config, []));
   if (json) {
-    // No sessions are read here, so the per-agent count and last activity would be
-    // invented zeros: leave them out rather than report a measurement never made.
-    const agents = status.agents.map(({ sessions: _sessions, lastActivityMs: _last, ...a }) => a);
-    console.log(JSON.stringify({ ...status, agents }, null, 2));
+    console.log(JSON.stringify(doctorJson(status), null, 2));
   } else {
     console.log(formatDoctor(status, false).trimEnd());
   }

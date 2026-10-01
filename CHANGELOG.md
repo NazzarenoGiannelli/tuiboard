@@ -23,14 +23,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   next instead of staying blank.
 - **Setup.** `S` in the app opens a dialog on what is set up (boards, the coding agents tuiboard
   can read, herdr, calendars, zones, the update notice, and where new boards go), with a `✓` or a `○`
-  for each. `tuiboard doctor [--json]` prints the same from a shell, read-only. It exits `0` on a
-  report, `1` when the config cannot be read and `2` on a usage error.
+  for each, one row per item so it fits a 24-row terminal (five boards at most, then `+N more`).
+  `tuiboard doctor [--json]` prints the same from a shell, read-only. It exits `0` on a report, `1`
+  when the config cannot be read and `2` on a usage error. Both say the update notice is off under
+  `update_check: off`, `TUIBOARD_NO_UPDATE_CHECK=1` or in CI, and `--json` always has the same
+  keys (`null` where nothing is known).
 
 ### Changed
 - **New boards go in a visible folder.** With no boards to learn from, a new board is created in
   `~/Documents/tuiboard` (when you have a Documents folder), then `~/tuiboard`, instead of
   `~/.local/share/tuiboard/boards`. Boards
-  already in your config stay where they are, and `XDG_DATA_HOME`, when set, still decides.
+  already in your config stay where they are, and `XDG_DATA_HOME`, when set, still decides. The
+  name field also takes a path (`~/notes/Work`), and when the proposed folder cannot be written to
+  the wizard switches to `~/tuiboard` and says so.
 - **The bottom bar shows the open dialog's own keys.** `Enter confirm · Esc cancel` in an ordinary
   dialog, `Esc close` in Setup, and `Enter confirm` alone on the first-run welcome, which cannot be
   dismissed.

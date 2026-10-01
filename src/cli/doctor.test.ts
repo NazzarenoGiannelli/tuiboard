@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { collectSetupStatus } from "~/setup/status";
-import { formatDoctor, runDoctor } from "./doctor";
+import { doctorJson, formatDoctor, runDoctor } from "./doctor";
 
 const baseDeps = {
   version: "0.16.0", configPath: undefined, boardsDir: "/b", boards: [], zones: { planner: "on", agenda: "on", agents: "on" },
@@ -46,6 +46,33 @@ describe("formatDoctor", () => {
     const out = formatDoctor(off, true);
     expect(out).toContain("✓ Claude Code  found");
     expect(out).not.toMatch(/\d+ sessions?/);
+  });
+});
+
+describe("doctorJson: a stable shape", () => {
+  it("emits null, not a missing key, for the config path and the update cache", () => {
+    const json = JSON.parse(JSON.stringify(doctorJson(status)));
+    expect(json.paths.config).toBeNull();
+    expect(json.updates.latest).toBeNull();
+    expect(json.updates.checkedAt).toBeNull();
+    expect(Object.keys(json.paths).sort()).toEqual(["boardsDir", "config"]);
+    expect(Object.keys(json.updates).sort()).toEqual(["checkedAt", "enabled", "latest"]);
+  });
+
+  it("keeps real values when there are some", () => {
+    const withCache = collectSetupStatus({
+      ...baseDeps, zones: { ...baseDeps.zones }, adapters: [...baseDeps.adapters],
+      configPath: "/c/config.yaml", updateCache: { latest: "0.99.0", checkedAt: 5 },
+    } as any);
+    const json = JSON.parse(JSON.stringify(doctorJson(withCache)));
+    expect(json.paths.config).toBe("/c/config.yaml");
+    expect(json.updates).toEqual({ enabled: true, latest: "0.99.0", checkedAt: 5 });
+  });
+
+  it("still leaves out the per-agent fields it never measured", () => {
+    const a = JSON.parse(JSON.stringify(doctorJson(foundStatus))).agents[0];
+    expect(a).not.toHaveProperty("sessions");
+    expect(a).not.toHaveProperty("lastActivityMs");
   });
 });
 
@@ -100,6 +127,10 @@ describe("runDoctor", () => {
     expect(parsed).toHaveProperty("version");
     expect(parsed).toHaveProperty("agents");
     expect(parsed).toHaveProperty("calendars");
+    // No config file in this sandbox: the key is there, with null, so the shape does not vary.
+    expect(parsed.paths.config).toBeNull();
+    expect(parsed.updates).toHaveProperty("latest");
+    expect(parsed.updates).toHaveProperty("checkedAt");
   });
 
   it("--json leaves out the session fields it never measured", () => {

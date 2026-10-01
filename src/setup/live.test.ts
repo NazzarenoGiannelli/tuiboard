@@ -49,4 +49,32 @@ describe("liveSetupDeps", () => {
       rmSync(d, { recursive: true, force: true });
     }
   });
+
+  describe("the update notice is reported as on only when it can run", () => {
+    const cfg = (updateCheck: boolean) =>
+      ({ boards: [], zones: { planner: "on", agenda: "on", agents: "on" }, updateCheck }) as any;
+    const enabled = (updateCheck: boolean, env: Record<string, string | undefined>) =>
+      liveSetupDeps(cfg(updateCheck), [], env).updateCheckEnabled;
+
+    it("on with the config on and a clean environment", () => {
+      expect(enabled(true, {})).toBe(true);
+    });
+    it("off when the config says off", () => {
+      expect(enabled(false, {})).toBe(false);
+    });
+    it("off under TUIBOARD_NO_UPDATE_CHECK=1, whatever the config says", () => {
+      expect(enabled(true, { TUIBOARD_NO_UPDATE_CHECK: "1" })).toBe(false);
+    });
+    it("empty or 0 does not switch it off, as in the real check", () => {
+      expect(enabled(true, { TUIBOARD_NO_UPDATE_CHECK: "" })).toBe(true);
+      expect(enabled(true, { TUIBOARD_NO_UPDATE_CHECK: "0" })).toBe(true);
+    });
+    it("off in CI", () => {
+      expect(enabled(true, { CI: "true" })).toBe(false);
+    });
+    it("a missing terminal is not part of it: doctor is often piped and the app has one", () => {
+      // liveSetupDeps takes no stdout at all; the environment is the whole answer.
+      expect(enabled(true, {})).toBe(true);
+    });
+  });
 });

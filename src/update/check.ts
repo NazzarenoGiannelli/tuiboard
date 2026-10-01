@@ -90,6 +90,17 @@ export function shouldCheck(now: number, cache: UpdateCache | undefined, interva
   return now - cache.checkedAt >= intervalMs;
 }
 
+/**
+ * The part of the rule that comes from the environment alone: TUIBOARD_NO_UPDATE_CHECK set
+ * to something other than "" or "0", or CI. Setup and `doctor` use it on its own, since
+ * whether there is a terminal says nothing about whether the app will check.
+ */
+export function updateCheckEnvDisabled(env: Record<string, string | undefined>): boolean {
+  const flag = env.TUIBOARD_NO_UPDATE_CHECK;
+  if (flag !== undefined && flag !== "" && flag !== "0") return true;
+  return !!env.CI;
+}
+
 /** Off by config or environment, and never in CI or without a terminal to show it on. */
 export function updateCheckDisabled(opts: {
   configOff: boolean;
@@ -97,9 +108,7 @@ export function updateCheckDisabled(opts: {
   stdout: { isTTY?: boolean };
 }): boolean {
   if (opts.configOff) return true;
-  const flag = opts.env.TUIBOARD_NO_UPDATE_CHECK;
-  if (flag !== undefined && flag !== "" && flag !== "0") return true;
-  if (opts.env.CI) return true;
+  if (updateCheckEnvDisabled(opts.env)) return true;
   return !opts.stdout.isTTY;
 }
 

@@ -25,6 +25,7 @@ import { formatHm } from "~/store/timeline";
 import { HARNESS, formatAge } from "~/store/agents";
 import { HARNESS_COLOR } from "~/ui/AgentRow";
 import { herdrPlace } from "~/store/herdr";
+import { agentRowDetail } from "~/setup/agent-row";
 import { markdownLines, type MdLine, type MdStyle } from "~/ui/markdown-lines";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
@@ -323,17 +324,18 @@ function SetupModal(props: { store: TuiStore }) {
         <For each={s().boards}>{(b) => row(b.exists, "  " + b.name, b.exists ? b.path : b.path + " (file missing)")}</For>
         {heading("Agents")}
         <For each={s().agents}>
-          {(a) => row(a.found, a.label, a.found ? `${a.sessions} session${a.sessions === 1 ? "" : "s"}` : "not found: nothing to set up, it appears once you use it")}
+          {(a) => row(a.found, a.label, agentRowDetail(a, s().zones.agents))}
         </For>
         {row(s().herdr.installed, "herdr", s().herdr.installed ? "installed" : "optional: live status and jump to a session")}
         {heading("Calendar")}
         <For each={s().calendars}>
           {(c) => row(c.connected, c.label, c.connected ? "connected" : "optional: " + c.hint)}
         </For>
+        {heading("Updates")}
         {row(
           s().updates.enabled,
-          "Updates",
-          s().updates.enabled ? `notice on${s().updates.latest ? ", latest known " + s().updates.latest : ""}` : "notice off (update_check: off)",
+          "Update notice",
+          s().updates.enabled ? `on${s().updates.latest ? ", latest known " + s().updates.latest : ""}` : "off (update_check: off)",
         )}
         <text wrapMode="word">
           <span style={{ fg: T.textDim }}>{"tuiboard " + s().version + "  ·  boards go in " + s().paths.boardsDir}</span>

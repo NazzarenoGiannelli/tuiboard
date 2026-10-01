@@ -11,21 +11,33 @@ const renders: Array<{ renderer: { destroy: () => void } }> = [];
 let dir: string;
 let prevXdg: string | undefined;
 const prevColumns = process.stdout.columns;
+// HOME-like variables the code under test reads at call time. Restored (or unset) afterwards.
+const ENV_KEYS = ["HOME", "USERPROFILE", "TUIBOARD_CONFIG"] as const;
+const prevEnv: Record<string, string | undefined> = {};
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "tb-setup-"));
   prevXdg = process.env.XDG_DATA_HOME;
   process.env.XDG_DATA_HOME = dir;
+  for (const k of ENV_KEYS) prevEnv[k] = process.env[k];
+  process.env.HOME = dir;
+  process.env.USERPROFILE = dir;
+  // A config path that does not exist: findConfigPath never falls through to the real one.
+  process.env.TUIBOARD_CONFIG = join(dir, "no-config.yaml");
 });
 afterEach(() => {
   for (const r of renders.splice(0)) r.renderer.destroy();
   if (prevXdg === undefined) delete process.env.XDG_DATA_HOME;
   else process.env.XDG_DATA_HOME = prevXdg;
+  for (const k of ENV_KEYS) {
+    if (prevEnv[k] === undefined) delete process.env[k];
+    else process.env[k] = prevEnv[k];
+  }
   process.stdout.columns = prevColumns as number;
   rmSync(dir, { recursive: true, force: true });
 });
 
-async function setup(width: number, withBoard: boolean) {
+async function setup(width: number, withBoard: boolean, extra: Record<string, unknown> = {}) {
   const boards: { path: string; name: string }[] = [];
   if (withBoard) {
     mkdirSync(join(dir, "boards"), { recursive: true });
@@ -38,7 +50,8 @@ async function setup(width: number, withBoard: boolean) {
       root: dir, loaded: false, boards, assignees: [], doneColumn: "Done", archiveColumn: "Archive",
       resumeTerminal: "auto", resumeShell: "auto", statusIndicators: "symbols", copyResumeCommand: "x",
       zones: { planner: "on", agenda: "on", agents: "off" }, updateCheck: true,
-      // no `calendars` key at all: the dialog must read that without throwing
+      // no `calendars` key at all (unless `extra` brings one): the dialog must read that without throwing
+      ...extra,
     } as any,
   });
   process.stdout.columns = width;
@@ -85,5 +98,34 @@ describe("the Setup dialog", () => {
     const textRows = rows.filter((l) => /[A-Za-z]/.test(l.replace(/[┤├]/g, "")));
     // every row carrying text still ends on the dialog's right border
     for (const line of textRows) expect(line.trimEnd().endsWith("│") || line.trimEnd().endsWith("╮")).toBe(true);
+  });
+
+  it("puts the Updates heading after the calendars and before its status row", async () => {
+    const flat = flatten(await setup(100, true));
+    const lastCalendar = flat.lastIndexOf("setup microsoft");
+    const heading = flat.indexOf("Updates");
+    const status = flat.indexOf("Update notice");
+    expect(lastCalendar).toBeGreaterThan(-1);
+    expect(heading).toBeGreaterThan(lastCalendar);
+    expect(status).toBeGreaterThan(heading);
+  });
+
+  it("with the agents zone off, never says a tool has 0 sessions", async () => {
+    // zones.agents is "off" in setup(): the session list is empty by construction, not by use.
+    for (const width of [100, 40]) {
+      const flat = flatten(await setup(width, true));
+      expect(flat).not.toMatch(/\d+ sessions?/);
+      expect(flat).toContain("Claude Code");
+    }
+  });
+
+  it("opens without throwing with no config, a broken calendar token path and whatever agent folders exist", async () => {
+    const frame = await setup(100, false, {
+      calendars: { google: { token: join(dir, "nonexistent", "token.json") } },
+    });
+    const flat = flatten(frame);
+    expect(flat).toContain("Setup");
+    expect(flat).toContain("none yet");
+    expect(flat).toContain("tuiboard calendar-setup google");
   });
 });

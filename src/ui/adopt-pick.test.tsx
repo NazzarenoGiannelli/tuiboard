@@ -214,6 +214,33 @@ describe("the adopt pick list with 38 candidates", () => {
   });
 });
 
+describe("resizing while the pick list is open", () => {
+  it("re-cuts the header and the rows when the width shrinks from 80 to 40", async () => {
+    const { t, frame, press, settle } = await pick(38, 80);
+    await press("j", 5);
+    t.resize(40, 24);
+    await settle();
+    const lines = frame();
+    expectIntegrity(lines, 40);
+    // The long names were whole-ish at 80 columns and are cut to the new row now.
+    expect(lines.find((l) => l.includes("Board 04"))!).toContain("…");
+    expect(lines.filter((l) => l.includes("board file(s)"))).toHaveLength(1);
+  });
+
+  it("recomputes the window when only the height changes", async () => {
+    const { t, frame, press, settle } = await pick(38, 80, 24);
+    await press("j", 20);
+    const tall = candidateRows(frame()).length;
+    t.resize(80, 14);
+    await settle();
+    const lines = frame();
+    expectIntegrity(lines, 80);
+    const nums = candidateRows(lines).map((r) => r.n);
+    expect(nums).toContain(20);
+    expect(nums.length).toBeLessThan(tall);
+  });
+});
+
 // A span's colour is an RGBA whose buffer holds the four channels as 0-255.
 const hexOf = (c: { buffer: ArrayLike<number> }) =>
   "#" + Array.from(c.buffer).slice(0, 3).map((x) => Math.round(x).toString(16).padStart(2, "0")).join("");

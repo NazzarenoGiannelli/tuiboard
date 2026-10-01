@@ -33,8 +33,10 @@ export interface PickWindow {
   above: number;
   /** Candidates scrolled off below the window. */
   below: number;
-  /** True when the list scrolls, so the two marker rows are part of the layout. */
+  /** True when the list scrolls. */
   scrolls: boolean;
+  /** True when the two "more above/below" rows are part of the layout (not in a terminal too small for them). */
+  markers: boolean;
 }
 
 /** How many terminal rows `text` takes when it wraps at `width` cells. */
@@ -60,19 +62,22 @@ export function pickListBudget(rows: number, inner: number, hint: string, error:
  * Which candidates to show for a cursor at `sel`.
  *
  * When everything fits in `budget` rows, everything is shown and there are no
- * markers. Otherwise two rows go to "N more above" / "N more below" (reserved
+ * markers. Otherwise (and when there is room for them) two rows go to "N more above" / "N more below" (reserved
  * even when empty, so the dialog does not change height as the cursor moves)
  * and the rest to candidates, between MIN_WINDOW and MAX_WINDOW. The window
  * keeps the cursor in the middle until it reaches either end.
  */
 export function pickWindow(total: number, sel: number, budget: number): PickWindow {
   if (total <= Math.max(budget, MIN_WINDOW)) {
-    return { start: 0, size: total, above: 0, below: 0, scrolls: false };
+    return { start: 0, size: total, above: 0, below: 0, scrolls: false, markers: false };
   }
-  const size = Math.max(MIN_WINDOW, Math.min(MAX_WINDOW, budget - 2, total));
+  // With no room for three candidates plus both markers, the markers go: the hint and the
+  // border matter more than a count.
+  const markers = budget >= MIN_WINDOW + 2;
+  const size = Math.max(MIN_WINDOW, Math.min(MAX_WINDOW, markers ? budget - 2 : budget, total));
   const cursor = Math.max(0, Math.min(total - 1, sel));
   const start = Math.max(0, Math.min(total - size, cursor - Math.floor(size / 2)));
-  return { start, size, above: start, below: total - start - size, scrolls: true };
+  return { start, size, above: start, below: total - start - size, scrolls: true, markers };
 }
 
 /** Keep the END of `s` within `max` cells, with a leading ellipsis: the tail of a path is the part that tells folders apart. */

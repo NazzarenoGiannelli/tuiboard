@@ -47,9 +47,13 @@ export const WELCOME_TEXT =
  * The resting colour has to be a value. `T.text` is `undefined` (the renderer's default
  * foreground), and on an update the renderer ignores an `undefined` fg instead of clearing it:
  * a row that had been the cursor kept the accent for good, so moving down the list left every
- * visited row light blue. The renderer's default foreground is white, so this looks the same.
+ * visited row light blue.
+ *
+ * `T.text ?? "#ffffff"` keeps the theme token in charge while it is `undefined`, and the fallback
+ * is the colour the test renderer's buffer shows for the default foreground (255,255,255). That
+ * equivalence is verified in the renderer's cell buffer only, not in a real terminal.
  */
-const ROW_REST_FG = "#ffffff";
+const ROW_REST_FG: string = T.text ?? "#ffffff";
 const rowFg = (cursor: boolean): string => (cursor ? (T.accent as string) : ROW_REST_FG);
 
 /**
@@ -118,7 +122,8 @@ function BoardNewModal(props: { store: TuiStore }) {
   const singlePane = useContext(SinglePaneContext);
   const dims = useTerminalDimensions();
   // Usable width inside the dialog: its box, minus the border and the padding.
-  const inner = () => Math.max(10, dialogWidth(singlePane()) - 4);
+  // Reads the reactive size, so a resize re-cuts the header and the rows.
+  const inner = () => Math.max(10, dialogWidth(singlePane(), dims().width) - 4);
 
   const title = createMemo(() =>
     w()?.mandatory ? "Welcome to tuiboard" : "New board",
@@ -241,7 +246,7 @@ function BoardNewModal(props: { store: TuiStore }) {
                     <text wrapMode="none">
                       <span style={{ fg: T.textDim }}>{header()}</span>
                     </text>
-                    <Show when={win().scrolls}>
+                    <Show when={win().markers}>
                       <text wrapMode="none">
                         <span style={{ fg: T.textDim }}>{win().above > 0 ? `  ↑ ${win().above} more above` : " "}</span>
                       </text>
@@ -261,7 +266,7 @@ function BoardNewModal(props: { store: TuiStore }) {
                         );
                       }}
                     </For>
-                    <Show when={win().scrolls}>
+                    <Show when={win().markers}>
                       <text wrapMode="none">
                         <span style={{ fg: T.textDim }}>{win().below > 0 ? `  ↓ ${win().below} more below` : " "}</span>
                       </text>
@@ -293,18 +298,19 @@ function BoardNewModal(props: { store: TuiStore }) {
  * unreadable squeezed into 50, while a 60-column strip needs it to shrink
  * rather than overflow.
  */
-function dialogWidth(singlePane: boolean): number {
+function dialogWidth(singlePane: boolean, terminalColumns: number = process.stdout.columns ?? 80): number {
   if (!singlePane) return MODAL_WIDTH;
   // Standing in for a pane means behaving like one: take the strip. A dialog
   // that keeps its slot-sized box while the rest of the screen sits empty
   // reads as a window that failed to open, not as a panel.
-  const terminal = process.stdout.columns ?? 80;
-  return Math.max(20, terminal - 4);
+  return Math.max(20, terminalColumns - 4);
 }
 
 function DialogShell(props: DialogShellProps) {
   const singlePane = useContext(SinglePaneContext);
-  const width = () => dialogWidth(singlePane());
+  // The terminal's width comes from the renderer's reactive size, so the box re-cuts on a resize.
+  const dims = useTerminalDimensions();
+  const width = () => dialogWidth(singlePane(), dims().width);
   // `width` survives as the four-zone hint it always was; single-pane fills.
   void props.width;
   return (

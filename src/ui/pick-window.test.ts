@@ -4,13 +4,13 @@ import { MAX_WINDOW, pickListBudget, pickRow, pickWindow, tailFit } from "./pick
 
 describe("pickWindow", () => {
   it("shows everything, with no markers, when it fits", () => {
-    expect(pickWindow(3, 2, 16)).toEqual({ start: 0, size: 3, above: 0, below: 0, scrolls: false });
+    expect(pickWindow(3, 2, 16)).toEqual({ start: 0, size: 3, above: 0, below: 0, scrolls: false, markers: false });
     expect(pickWindow(16, 15, 16)).toMatchObject({ size: 16, scrolls: false });
   });
 
   it("scrolls with two marker rows reserved when it does not", () => {
     const w = pickWindow(38, 0, 15);
-    expect(w).toEqual({ start: 0, size: 12, above: 0, below: 26, scrolls: true });
+    expect(w).toEqual({ start: 0, size: 12, above: 0, below: 26, scrolls: true, markers: true });
     expect(w.size + 2).toBeLessThanOrEqual(15);
   });
 
@@ -62,5 +62,25 @@ describe("pickRow", () => {
   it("drops the 'already open' note before it squeezes the name", () => {
     expect(pickRow("▶ · ", "Work", 3, true, 33).note).toBe("  3 tasks");
     expect(pickRow("▶ · ", "Work", 1, true, 72).note).toBe("  1 task · already open");
+  });
+});
+
+describe("a very small terminal", () => {
+  const hint = "j/k move · Space tick · Enter adopt · Esc back";
+
+  it("has almost no room: 2 rows at height 10, 4 at height 12 (80 columns)", () => {
+    expect(pickListBudget(10, 72, hint, undefined)).toBe(2);
+    expect(pickListBudget(12, 72, hint, undefined)).toBe(4);
+  });
+
+  it("drops the marker rows when they would not fit beside three candidates", () => {
+    for (const budget of [2, 4]) {
+      const w = pickWindow(38, 20, budget);
+      expect(w.markers).toBe(false);
+      expect(w.size).toBe(Math.max(3, budget));
+      expect(20).toBeGreaterThanOrEqual(w.start);
+      expect(20).toBeLessThan(w.start + w.size);
+    }
+    expect(pickWindow(38, 20, 5).markers).toBe(true);
   });
 });

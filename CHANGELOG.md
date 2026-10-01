@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-01
+
 ### Added
 - **An update notice.** When a newer tuiboard is on npm, a toast on the bottom bar says so, once per
   version, with the command that fits how you installed it (`bun add -g tuiboard@latest

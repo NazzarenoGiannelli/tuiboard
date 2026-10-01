@@ -13,6 +13,7 @@
 
 import { For, Show, createContext, createEffect, createMemo, createSignal, useContext } from "solid-js";
 import { join } from "node:path";
+import { useTerminalDimensions } from "@opentui/solid";
 
 import { isTask } from "~/parser/markdown";
 import {
@@ -27,6 +28,8 @@ import { HARNESS, formatAge } from "~/store/agents";
 import { HARNESS_COLOR } from "~/ui/AgentRow";
 import { herdrPlace } from "~/store/herdr";
 import { markdownLines, type MdLine, type MdStyle } from "~/ui/markdown-lines";
+import { pickListBudget, pickRow, pickWindow, tailFit } from "~/ui/pick-window";
+import { fit } from "~/ui/block-box";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
 
@@ -37,6 +40,17 @@ const MODAL_WIDTH = AGENDA_WIDTH;
 /** What the first-run dialog says tuiboard is. Exported so a test can assert it. */
 export const WELCOME_TEXT =
   "tuiboard is a kanban board on plain markdown, plus a Today/Tomorrow planner, a day agenda and a live list of your coding agents. Only the board is required: the rest is there when you want it.";
+
+/**
+ * Colour of a row in a choice list: accent on the cursor row, the plain text colour on the rest.
+ *
+ * The resting colour has to be a value. `T.text` is `undefined` (the renderer's default
+ * foreground), and on an update the renderer ignores an `undefined` fg instead of clearing it:
+ * a row that had been the cursor kept the accent for good, so moving down the list left every
+ * visited row light blue. The renderer's default foreground is white, so this looks the same.
+ */
+const ROW_REST_FG = "#ffffff";
+const rowFg = (cursor: boolean): string => (cursor ? (T.accent as string) : ROW_REST_FG);
 
 /**
  * Whether the dialog is standing in for a whole pane (single-pane) or sitting
@@ -101,6 +115,10 @@ interface DialogShellProps {
  */
 function BoardNewModal(props: { store: TuiStore }) {
   const w = createMemo(() => props.store.state.ui.boardNew);
+  const singlePane = useContext(SinglePaneContext);
+  const dims = useTerminalDimensions();
+  // Usable width inside the dialog: its box, minus the border and the padding.
+  const inner = () => Math.max(10, dialogWidth(singlePane()) - 4);
 
   const title = createMemo(() =>
     w()?.mandatory ? "Welcome to tuiboard" : "New board",
@@ -135,7 +153,7 @@ function BoardNewModal(props: { store: TuiStore }) {
               ]}>
                 {(opt, i) => (
                   <text>
-                    <span style={{ fg: b().sel === i() ? T.accent : T.text }}>
+                    <span style={{ fg: rowFg(b().sel === i()) }}>
                       {b().sel === i() ? "▶ " : "  "}{opt.label}
                     </span>
                     <span style={{ fg: T.textDim }}>{"  — " + opt.desc}</span>
@@ -181,7 +199,7 @@ function BoardNewModal(props: { store: TuiStore }) {
               ]}>
                 {(opt, i) => (
                   <text>
-                    <span style={{ fg: b().sel === i() ? T.accent : T.text }}>
+                    <span style={{ fg: rowFg(b().sel === i()) }}>
                       {b().sel === i() ? "▶ " : "  "}{opt.label}
                     </span>
                     <span style={{ fg: T.textDim }}>{"  — " + opt.desc}</span>
@@ -201,26 +219,56 @@ function BoardNewModal(props: { store: TuiStore }) {
             </Show>
 
             <Show when={b().step === "pick"}>
-              <text>
-                <span style={{ fg: T.textDim }}>
-                  {b().candidates.length + " board file(s) in " + b().dir}
-                </span>
-              </text>
-              <For each={b().candidates}>
-                {(c, i) => (
-                  <text>
-                    <span style={{ fg: b().sel === i() ? T.accent : T.text }}>
-                      {b().sel === i() ? "▶ " : "  "}
-                      {c.alreadyInConfig ? "· " : b().ticked.includes(i()) ? "✓ " : "  "}
-                      {c.suggestedName}
-                    </span>
-                    <span style={{ fg: T.textDim }}>
-                      {"  " + c.taskCount + (c.taskCount === 1 ? " task" : " tasks")
-                        + (c.alreadyInConfig ? " · already open" : "")}
-                    </span>
-                  </text>
-                )}
-              </For>
+              {(() => {
+                // One row per candidate, in a window that follows the cursor. The dialog
+                // never scrolls, so a list taller than it is drawn over itself.
+                const win = createMemo(() =>
+                  pickWindow(
+                    b().candidates.length,
+                    b().sel,
+                    pickListBudget(dims().height, inner(), hint(), b().error),
+                  ),
+                );
+                // The candidates themselves (stable store objects), so moving the cursor
+                // restyles the rows that stay rather than rebuilding them.
+                const shown = createMemo(() => b().candidates.slice(win().start, win().start + win().size));
+                const header = () => {
+                  const head = b().candidates.length + " board file(s) in ";
+                  return fit(head + tailFit(b().dir, Math.max(8, inner() - head.length)), inner());
+                };
+                return (
+                  <>
+                    <text wrapMode="none">
+                      <span style={{ fg: T.textDim }}>{header()}</span>
+                    </text>
+                    <Show when={win().scrolls}>
+                      <text wrapMode="none">
+                        <span style={{ fg: T.textDim }}>{win().above > 0 ? `  ↑ ${win().above} more above` : " "}</span>
+                      </text>
+                    </Show>
+                    <For each={shown()}>
+                      {(c, k) => {
+                        const abs = () => win().start + k();
+                        const lead = () =>
+                          (b().sel === abs() ? "▶ " : "  ") +
+                          (c.alreadyInConfig ? "· " : b().ticked.includes(abs()) ? "✓ " : "  ");
+                        const parts = () => pickRow(lead(), c.suggestedName, c.taskCount, c.alreadyInConfig, inner());
+                        return (
+                          <text wrapMode="none">
+                            <span style={{ fg: rowFg(b().sel === abs()) }}>{lead() + parts().name}</span>
+                            <span style={{ fg: T.textDim }}>{parts().note}</span>
+                          </text>
+                        );
+                      }}
+                    </For>
+                    <Show when={win().scrolls}>
+                      <text wrapMode="none">
+                        <span style={{ fg: T.textDim }}>{win().below > 0 ? `  ↓ ${win().below} more below` : " "}</span>
+                      </text>
+                    </Show>
+                  </>
+                );
+              })()}
             </Show>
 
             <Show when={b().error}>

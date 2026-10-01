@@ -45,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   board scan` and the no-config fallback skip `Name.sync-conflict-<date>-<id>.md`, the copy
   Syncthing leaves beside a board after a conflicting edit. A board you name in the config is still
   used as written.
+- **A long list of boards to adopt is readable.** "Use files I already have" listed every file
+  it found with no scrolling, each name wrapping over two or three rows, so a folder with dozens
+  of boards was drawn over itself. It is now one row per file (a long name is cut with an
+  ellipsis, the task count stays), in a window that follows the cursor and fits the terminal, with
+  `N more above` / `N more below` rows. The first two choices of the wizard also stop leaving every
+  row you passed in the accent colour: only the row under the cursor is highlighted.
 
 ## [0.15.1] - 2026-09-30
 

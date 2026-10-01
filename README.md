@@ -183,6 +183,8 @@ Adopting lists the files in that folder that look like boards (a `.md` with
 `- [ ]` tasks, or a new Kanban board), one row each. Sync-conflict copies such as
 `Tasks.sync-conflict-20260925-111227-ABCDEFG.md`, which Syncthing leaves beside the
 original, are left out; a board you name in the config is used as written.
+A long list shows one file per row in a window that follows the cursor (`j`/`k` to move, `Space`
+to tick, `Enter` to adopt), with `N more above` and `N more below` at its edges.
 
 If you make a new board, the last question is whether to start with four
 example tasks. They are real tasks, not a tutorial screen: one is scheduled

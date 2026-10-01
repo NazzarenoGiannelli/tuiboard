@@ -33,6 +33,10 @@ import type { PriorityLevel, TimeBlock } from "~/types";
  *  slot (the Dashboard renders it there while a modal is open) with no reflow. */
 const MODAL_WIDTH = AGENDA_WIDTH;
 
+/** What the first-run dialog says tuiboard is. Exported so a test can assert it. */
+export const WELCOME_TEXT =
+  "tuiboard is a kanban board on plain markdown, plus a Today/Tomorrow planner, a day agenda and a live list of your coding agents. Only the board is required: the rest is there when you want it.";
+
 /**
  * Whether the dialog is standing in for a whole pane (single-pane) or sitting
  * in the Agenda's slot (four-zone). It decides how wide the dialog may be, and
@@ -115,10 +119,8 @@ function BoardNewModal(props: { store: TuiStore }) {
         {(b: () => NonNullable<ReturnType<typeof w>>) => (
           <box style={{ flexDirection: "column" }}>
             <Show when={b().mandatory && b().step === "mode"}>
-              <text>
-                <span style={{ fg: T.textDim }}>
-                  No boards configured yet. Boards are plain markdown files.
-                </span>
+              <text wrapMode="word">
+                <span style={{ fg: T.textDim }}>{WELCOME_TEXT}</span>
               </text>
               <text> </text>
             </Show>

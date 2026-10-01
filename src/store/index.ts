@@ -1121,7 +1121,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     closeModal();
     const what = added.length === 1 ? added[0]!.name : `${added.length} boards`;
     if (problems.length > 0) flashBanner("warn", `Added ${what} — ${problems.join(" · ")}`);
-    else flashBanner("info", `Added ${what}`);
+    else flashBanner("info", `Added ${what} · n new task · ? keys · S setup`, 8000);
   }
 
   /**

@@ -131,6 +131,7 @@ export function BottomBar(props: { store: TuiStore }) {
       armed: !!ui.armedTimelineRef,
       placed: !!(ui.armedTimelineRef && props.store.getTask(ui.armedTimelineRef)?.timeBlock),
       armMode: ui.armMode,
+      modal: ui.modal ? "open" : undefined,
     });
   };
   return (

@@ -8,6 +8,7 @@ import {
   HINTS_ARM_MODE,
   HINTS_COMPACT,
   HINTS_FULL,
+  HINTS_MODAL,
   hintsFor,
   type HintContext,
 } from "./hints";
@@ -64,5 +65,18 @@ describe("hintsFor", () => {
     for (const line of [HINTS_COMPACT, HINTS_AGENDA_COMPACT, HINTS_ARMED, HINTS_ARMED_NEW, HINTS_ARM_MODE]) {
       expect(line.length).toBeLessThanOrEqual(60);
     }
+  });
+});
+
+describe("hintsFor with a dialog open", () => {
+  it("shows the dialog's keys, not the dashboard's", () => {
+    expect(hintsFor(ctx({ modal: "open" }))).toBe(HINTS_MODAL);
+    expect(hintsFor(ctx({ modal: "open", zone: "timeline", singlePane: true }))).toBe(HINTS_MODAL);
+  });
+  it("no dialog: unchanged", () => {
+    expect(hintsFor(ctx())).toBe(HINTS_FULL);
+  });
+  it("short enough for 60 columns", () => {
+    expect(HINTS_MODAL.length).toBeLessThanOrEqual(60);
   });
 });

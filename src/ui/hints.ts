@@ -16,6 +16,8 @@ export interface HintContext {
   placed?: boolean;
   /** Arm mode is on with nothing armed yet: waiting for a task, then a slot. */
   armMode: boolean;
+  /** A dialog is open: its own keys are on screen, so the bar should not show the dashboard's. */
+  modal?: "open";
 }
 
 /**
@@ -45,7 +47,11 @@ export const HINTS_AGENDA_FULL =
 
 export const HINTS_AGENDA_COMPACT = "c place · n event · [ ] day · ⏎ done · ⇧Tab zone · ? help";
 
+/** One line for every dialog: each one already prints its own specific hint inside the box. */
+export const HINTS_MODAL = "Enter confirm · Esc cancel";
+
 export function hintsFor(ctx: HintContext): string {
+  if (ctx.modal) return HINTS_MODAL;
   if (ctx.armed) return ctx.placed === false ? HINTS_ARMED_NEW : HINTS_ARMED;
   if (ctx.armMode) return HINTS_ARM_MODE;
   if (ctx.zone === "timeline") return ctx.singlePane ? HINTS_AGENDA_COMPACT : HINTS_AGENDA_FULL;

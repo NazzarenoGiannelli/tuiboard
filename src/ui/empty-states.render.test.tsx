@@ -160,4 +160,22 @@ describe("the agenda calendar hint", () => {
     expect(f).toContain("Alpha");
     expect(f).not.toContain(CALENDAR_HINT);
   });
+
+  it("fits a 40-column single pane: the whole hint wraps inside the border", async () => {
+    process.stdout.columns = 40;
+    const s = store("## Todo\n\n", true);
+    s.setActiveZone("timeline");
+    // Single-pane: no fixed width, the Agenda fills the terminal.
+    const f = await frame(
+      () => <box style={{ flexDirection: "row", width: "100%", height: "100%" }}><TimelineView store={s} /></box>,
+      40, 30,
+    );
+    expect(flatten(f)).toContain(CALENDAR_HINT);
+    const rows = f.split("\n").filter((l) => /Optional|connect a|setup/.test(l));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const line of rows) {
+      expect(line.length).toBeLessThanOrEqual(40);
+      expect(line.trimEnd().endsWith("│")).toBe(true);
+    }
+  });
 });

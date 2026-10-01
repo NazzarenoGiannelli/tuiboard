@@ -603,7 +603,7 @@ export function TimelineView(props: TimelineViewProps) {
           dayHasEvents: calEntries().length > 0 || allDayEvents().length > 0,
         })}
       >
-        <text selectable={false} wrapMode="none">
+        <text selectable={false} wrapMode="word">
           <span style={{ fg: T.textDim }}>{CALENDAR_HINT}</span>
         </text>
       </Show>

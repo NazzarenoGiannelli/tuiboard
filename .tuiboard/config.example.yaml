@@ -95,6 +95,8 @@ archive_column: Archive
 # Nushell users typically want `;` instead of `&&`:
 # copy_resume_command: 'cd "{cwd}"; {resume}'
 
+# Run `tuiboard doctor` (or press S in the app) to see what is connected.
+
 # Optional: a markdown file to read from inside tuiboard with `i` — a morning
 # digest, a handover note, whatever you (or an agent) write there. Shown as it
 # is: never parsed, never written to. Relative paths resolve against this file,

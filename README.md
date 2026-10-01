@@ -71,7 +71,10 @@ bun run dev          # or: bun link  → then `tuiboard` globally, live-linked
 Starting fresh — no Obsidian, no special folders required:
 
 1. **Install Bun** ([bun.sh](https://bun.sh)), then `bun install -g tuiboard`.
-2. **Make one or more board files.** A board is a plain `.md` file: every `##`
+2. **Run `tuiboard`** (or the short alias `tb`). With nothing set up, it asks: a short
+   welcome, then a new board or the markdown files you already have. It writes the
+   config for you. See [First run](#first-run).
+3. **Prefer to do it by hand?** A board is a plain `.md` file: every `##`
    heading is a column, every `- [ ]` line is a task. The simplest board:
    ```markdown
    ## To Do
@@ -83,9 +86,9 @@ Starting fresh — no Obsidian, no special folders required:
    ```
    Create one file per tab you want (e.g. `Work.md`, `Personal.md`). Columns
    named exactly `Done` and `Archive` are treated specially (hidden from the
-   board view but used by the done-stats and the archive action).
-3. **Point tuiboard at them.** Create `~/.config/tuiboard/config.yaml` (found
-   from any directory) with **absolute** paths:
+   board view but used by the done-stats and the archive action). Then point
+   tuiboard at them: create `~/.config/tuiboard/config.yaml` (found from any
+   directory) with **absolute** paths:
    ```yaml
    boards:
      - path: /home/you/notes/Work.md
@@ -95,7 +98,6 @@ Starting fresh — no Obsidian, no special folders required:
    ```
    Or skip the config entirely and just run `tuiboard` inside a folder that
    already contains `.md` files with `- [ ]` tasks — it auto-discovers them.
-4. **Run it:** `tuiboard` (or the short alias `tb`).
 
 **The Agent view needs zero setup.** tuiboard reads your local agent sessions
 automatically, read-only — Claude Code from `~/.claude/`, Codex from
@@ -172,15 +174,34 @@ Confirm the directory and file names with me before writing any files.
 ## First run
 
 Launch `tuiboard` with nothing set up and it opens its own onboarding rather
-than an error: point it at a folder and adopt the markdown files already in it,
-or give a name and get a new board. Either way it writes the config for you and
-opens the board. The same screen is behind the `+` in the top bar, so adding a
-board later is the gesture you already learned.
+than an error. It starts with a short welcome that says what tuiboard is (a
+kanban board on plain markdown, plus a Today/Tomorrow planner, a day agenda and
+a live list of your coding agents, of which only the board is required) and
+then asks one thing: make a new board, or adopt the markdown files you already
+have in a folder.
 
-New boards are created next to the boards you already have — usually a vault,
-so they inherit whatever sync and versioning it has — falling back to
-`~/.local/share/tuiboard/boards/` when there is nothing to learn from. The path
-is always shown and editable before anything is written.
+If you make a new board, the last question is whether to start with four
+example tasks. They are real tasks, not a tutorial screen: one is scheduled
+with an hour so the Agenda has something on it, and each one names a key to try
+(`n`, Enter, `b`, `?`). Answer no and you get an empty board. From a shell, the
+same choice is `tuiboard board add --path ~/tuiboard/Work.md --examples`. Either
+way the config is written for you and the board opens. An empty zone says what
+to do next instead of staying blank.
+
+The same screen is behind the `+` in the top bar, so adding a board later is
+the gesture you already learned.
+
+New boards are created next to the boards you already have (usually a vault, so
+they inherit whatever sync and versioning it has). When there is nothing to
+learn from they go in a folder you can find in a file manager: `$XDG_DATA_HOME/tuiboard/boards`
+if you set `XDG_DATA_HOME`, otherwise `~/Documents/tuiboard`, otherwise
+`~/tuiboard`. Boards already in your config stay where they are. The path is
+shown before anything is written.
+
+To see what tuiboard has found on your machine, press `S` in the app: boards,
+the coding agents it reads, calendars, the zones and the update notice, each
+with a `✓` when it is set up and a `○` when it is not (nothing marked `○` is
+required). The same report is available from a shell with `tuiboard doctor`.
 
 ## Configure
 
@@ -582,6 +603,7 @@ block is armed, how to move, resize, keep or undo it.
 | `Shift-T` | Reset ALL overdue tasks (any board) to today — their time blocks are cleared, since a slot chosen for another day means nothing today |
 | `Ctrl-Z` | Undo last mutation |
 | `i` | Status file — the markdown file set as `status_file`, shown read-only |
+| `S` | Setup: what is connected (boards, agents, calendars, zones, updates); `tuiboard doctor` prints the same |
 | `?` | Help modal with the full reference |
 | `q` · `Ctrl-C` | Quit |
 
@@ -625,6 +647,19 @@ code. `add` writes the board file when it is missing and registers it in your
 config either way — the config is edited by insertion, never rewritten, so
 comments and every other setting survive untouched. A duplicate name or path
 is refused rather than guessed at, and `--dry-run` reports without writing.
+
+### `tuiboard doctor`: what is set up
+
+```bash
+tuiboard doctor          # a short report: boards, agents, calendar, zones, updates
+tuiboard doctor --json   # the same, for a script or a bug report
+```
+
+The same facts the `S` dialog shows, from the same code, and read-only: it
+changes no file. Exit code `0` means a report was printed (a `○` is not an
+error), `1` means the config could not be read (the message names the file), `2`
+means a usage error. `--json` leaves out the per-agent session counts, because
+`doctor` does not read your sessions, only whether their sources are found.
 
 ### `tuiboard task` — mutations
 

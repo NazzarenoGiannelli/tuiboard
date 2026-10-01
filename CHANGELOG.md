@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the answer is cached in `~/.cache/tuiboard/update.json`. It stays quiet on a first run, in the
   headless commands, in CI and without a terminal. `update_check: off` in the config or
   `TUIBOARD_NO_UPDATE_CHECK=1` turns it off.
+- **A first run that teaches.** The first screen now says what tuiboard is (a kanban board on
+  plain markdown, plus a Today/Tomorrow planner, a day agenda and a live list of your coding
+  agents, of which only the board is required). Creating a board offers four example tasks that
+  name the keys to try, one with an hour so the Agenda has something on it; from a shell it is
+  `tuiboard board add --examples`. An empty planner, board, Agents list or Agenda says what to do
+  next instead of staying blank.
+- **Setup.** `S` in the app opens a dialog on what is set up (boards, the coding agents tuiboard
+  can read, calendars, zones, the update notice, and where new boards go), with a `✓` or a `○`
+  for each. `tuiboard doctor [--json]` prints the same from a shell, read-only. It exits `0` on a
+  report, `1` when the config cannot be read and `2` on a usage error.
+
+### Changed
+- **New boards go in a visible folder.** With no boards to learn from, a new board is created in
+  `~/Documents/tuiboard`, then `~/tuiboard`, instead of `~/.local/share/tuiboard/boards`. Boards
+  already in your config stay where they are, and `XDG_DATA_HOME`, when set, still decides.
+- **The bottom bar shows the dialog's keys while a dialog is open.**
 
 ## [0.15.1] - 2026-09-30
 

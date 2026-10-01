@@ -40,6 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dialog, `Esc close` in Setup, and `Enter confirm` alone on the first-run welcome, which cannot be
   dismissed.
 
+### Fixed
+- **Sync-conflict copies are no longer offered as boards.** "Use files I already have", `tuiboard
+  board scan` and the no-config fallback skip `Name.sync-conflict-<date>-<id>.md`, the copy
+  Syncthing leaves beside a board after a conflicting edit. A board you name in the config is still
+  used as written.
+
 ## [0.15.1] - 2026-09-30
 
 ### Fixed

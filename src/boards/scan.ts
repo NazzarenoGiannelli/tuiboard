@@ -8,6 +8,12 @@
  * its zero-config fallback — a `.md` file containing a `- [ ]` or `- [x]`
  * line. Two rules would mean a file adopted by one path and ignored by the
  * other, so the loader delegates here rather than keeping its own copy.
+ *
+ * Sync-conflict copies are skipped (`Name.sync-conflict-<date>-<id>.md`, what
+ * Syncthing leaves beside the original when two devices edit at once). They
+ * are byte-for-byte boards, so recognising them would list every conflict as
+ * a second candidate with a long name nobody chose. A board named explicitly
+ * in a config is not scanned and is unaffected.
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -20,6 +26,8 @@ const RE_TASK = /^- \[[ xX]\] /m;
 const RE_TASK_GLOBAL = /^- \[[ xX]\] /gm;
 /** Obsidian Kanban's marker — what tuiboard itself writes into a new board. */
 const RE_KANBAN = /^kanban-plugin:\s*board\s*$/m;
+/** Syncthing's conflict marker in a file name: never a board of its own. */
+const RE_SYNC_CONFLICT = /\.sync-conflict-/i;
 
 export interface BoardCandidate {
   /** Absolute path to the markdown file. */
@@ -40,13 +48,15 @@ export interface ScanOptions {
 /**
  * True when the file looks like a task board.
  *
- * Two ways to qualify, and the second is not optional: a board tuiboard has
- * just created holds no tasks yet, so a checkbox-only rule would make the
- * program blind to its own output until someone typed into it. The Kanban
- * frontmatter marker settles those.
+ * Sync-conflict copies never qualify (see the file header). Otherwise there
+ * are two ways in, and the second is not optional: a board tuiboard has just
+ * created holds no tasks yet, so a checkbox-only rule would make the program
+ * blind to its own output until someone typed into it. The Kanban frontmatter
+ * marker settles those.
  */
 export function isBoardFile(path: string): boolean {
   if (extname(path).toLowerCase() !== ".md") return false;
+  if (RE_SYNC_CONFLICT.test(basename(path))) return false;
   try {
     if (!statSync(path).isFile()) return false;
     const head = readFileSync(path, "utf-8").slice(0, SNIFF_BYTES);

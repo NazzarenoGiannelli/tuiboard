@@ -179,6 +179,10 @@ kanban board on plain markdown, plus a Today/Tomorrow planner, a day agenda and
 a live list of your coding agents, of which only the board is required) and
 then asks one thing: make a new board, or adopt the markdown files you already
 have in a folder.
+Adopting lists the files in that folder that look like boards (a `.md` with
+`- [ ]` tasks, or a new Kanban board), one row each. Sync-conflict copies such as
+`Tasks.sync-conflict-20260925-111227-ABCDEFG.md`, which Syncthing leaves beside the
+original, are left out; a board you name in the config is used as written.
 
 If you make a new board, the last question is whether to start with four
 example tasks. They are real tasks, not a tutorial screen: one is scheduled

@@ -2,6 +2,7 @@
 
 import { For, Show, createEffect, createMemo } from "solid-js";
 
+import { PLANNER_EMPTY } from "~/ui/empty-states";
 import { ATTR, T } from "~/ui/glyphs";
 import { TaskRow } from "~/ui/TaskRow";
 import {
@@ -94,9 +95,10 @@ export function PlannerPanel(props: { store: TuiStore }) {
       <Show
         when={items().length > 0}
         fallback={
-          <text>
-            <span style={{ fg: T.textDim }}>Nothing scheduled.</span>
-          </text>
+          <box style={{ flexDirection: "column" }}>
+            <text wrapMode="word"><span style={{ fg: T.textDim }}>{PLANNER_EMPTY[0]}</span></text>
+            <text wrapMode="word"><span style={{ fg: T.textDim }}>{PLANNER_EMPTY[1]}</span></text>
+          </box>
         }
       >
         <scrollbox

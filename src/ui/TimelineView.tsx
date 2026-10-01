@@ -47,6 +47,7 @@ import {
 } from "solid-js";
 
 import { googleTokenCanWrite } from "~/store/calendar";
+import { CALENDAR_HINT, showCalendarHint } from "~/ui/empty-states";
 import type { TaskRef } from "~/store/index";
 import {
   DAY_START_HOUR,
@@ -590,6 +591,20 @@ export function TimelineView(props: TimelineViewProps) {
           <span style={{ fg: T.warm }}>{"◷ "}</span>
           <span style={{ fg: T.textDim }}>{"[ ] change day · "}</span>
           <span style={{ fg: isToday() ? T.textDim : T.warm }}>{"\\ today"}</span>
+        </text>
+      </Show>
+      <Show
+        when={showCalendarHint({
+          calendarsConfigured: !!(
+            props.store.config.calendars?.google || props.store.config.calendars?.microsoft
+          ),
+          // `entries()` holds only the day's tasks; calendar events are the other two lists.
+          dayHasTasks: tray().length > 0 || entries().length > 0,
+          dayHasEvents: calEntries().length > 0 || allDayEvents().length > 0,
+        })}
+      >
+        <text selectable={false} wrapMode="none">
+          <span style={{ fg: T.textDim }}>{CALENDAR_HINT}</span>
         </text>
       </Show>
       <Show when={tray().length > 0}>

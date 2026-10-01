@@ -12,6 +12,7 @@ import { Index, Show, createEffect, createMemo } from "solid-js";
 
 import { AgentRow } from "~/ui/AgentRow";
 import { useStickyAgentCursor } from "~/ui/agent-cursor";
+import { AGENTS_EMPTY } from "~/ui/empty-states";
 import { T } from "~/ui/glyphs";
 import { HARNESS } from "~/store/agents";
 import type { TuiStore } from "~/store/index";
@@ -81,9 +82,10 @@ export function AgentsBar(props: AgentsBarProps) {
       <Show
         when={allShown().length > 0}
         fallback={
-          <text>
-            <span style={{ fg: T.textDim }}>No active sessions.</span>
-          </text>
+          <box style={{ flexDirection: "column" }}>
+            <text wrapMode="word"><span style={{ fg: T.textDim }}>{AGENTS_EMPTY[0]}</span></text>
+            <text wrapMode="word"><span style={{ fg: T.textDim }}>{AGENTS_EMPTY[1]}</span></text>
+          </box>
         }
       >
         <scrollbox

@@ -13,6 +13,7 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount }
 import { isHiddenColumn } from "~/config/loader";
 import { isTask } from "~/parser/markdown";
 import { computeColumnScrollLeft } from "~/ui/board-scroll";
+import { BOARD_EMPTY } from "~/ui/empty-states";
 import { T } from "~/ui/glyphs";
 import { TaskRow } from "~/ui/TaskRow";
 import type { TuiStore } from "~/store/index";
@@ -90,6 +91,15 @@ export function BoardView(props: BoardViewProps) {
   const visibleColumns = createMemo(() =>
     props.board.columns.filter((c) => !isHiddenColumn(props.store.config, c.name)),
   );
+
+  /**
+   * No open task anywhere on the board: the same count as the top bar's
+   * `0 open`, hidden columns included. Drives the first-run hint.
+   */
+  const boardHasNoOpenTask = createMemo(() => {
+    props.store.state.rev; // recompute on any board mutation
+    return !props.board.columns.some((c) => c.children.some((child) => isTask(child) && !child.done));
+  });
 
   /**
    * In zoom mode we render only the column under the cursor, expanded
@@ -234,6 +244,7 @@ export function BoardView(props: BoardViewProps) {
                   tasksVisible={columnTasksVisible(i())}
                   boxId={columnId(props.board.filepath, originalIndex)}
                   viewportWidth={viewportW()}
+                  emptyHint={boardHasNoOpenTask() && i() === 0}
                 />
               );
             }}
@@ -266,6 +277,8 @@ interface ColumnViewProps {
   /** Real measured board viewport width in cells, used to size the
    * title budget for a zoomed column instead of a hardcoded guess. */
   viewportWidth?: number;
+  /** The whole board has no open task and this is the first visible column: say how to add one. */
+  emptyHint?: boolean;
 }
 
 /** Stable id for a task row inside a column, used by scrollChildIntoView. */
@@ -387,6 +400,11 @@ function ColumnView(props: ColumnViewProps) {
           scrollbarOptions: { visible: false },
         }}
       >
+        <Show when={props.emptyHint && visibleTasks().length === 0}>
+          <text wrapMode="word">
+            <span style={{ fg: T.textDim }}>{BOARD_EMPTY}</span>
+          </text>
+        </Show>
         {/* Blank the task rows only when the column is a thin clipped sliver —
             its title still shows as a "more columns" hint. */}
         <Show when={props.tasksVisible !== false}>

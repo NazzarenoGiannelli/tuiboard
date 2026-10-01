@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -109,6 +109,46 @@ describe("the create path asks about examples after the columns", () => {
     expect(s.state.ui.boardNew?.sel).toBe(1);
     s.boardNewMove(-5);
     expect(s.state.ui.boardNew?.sel).toBe(0);
+    await s.dispose();
+  });
+});
+
+describe("setupStatus follows the boards added in this session", () => {
+  it("a board created by the wizard is in the status at once, and its folder is where new boards go", async () => {
+    const s = fresh();
+    expect(s.setupStatus().boards).toEqual([]);
+    openWizard(s);
+    s.boardNewSubmitText("Work");
+    s.boardNewSubmitText("");
+    s.boardNewAnswerExamples(true);
+    const st = s.setupStatus();
+    expect(st.boards).toHaveLength(1);
+    expect(st.boards[0]).toMatchObject({ name: "Work", path: join(boardsDir, "Work.md"), exists: true });
+    await s.dispose();
+  });
+
+  it("paths.boardsDir follows a board that lives elsewhere than the default folder", async () => {
+    const s = fresh();
+    const elsewhere = join(dir, "vault");
+    mkdirSync(elsewhere, { recursive: true });
+    const p = join(elsewhere, "Notes.md");
+    writeFileSync(p, "## Todo\n- [ ] one\n");
+    expect(s.addBoard(p, "Notes")).toEqual({ ok: true });
+    const st = s.setupStatus();
+    expect(st.boards.map((b) => b.name)).toEqual(["Notes"]);
+    expect(st.paths.boardsDir).toBe(elsewhere);
+    expect(st.paths.boardsDir).not.toBe(boardsDir);
+    await s.dispose();
+  });
+
+  it("a configured board that never loaded stays listed, and is not listed twice once loaded", async () => {
+    const missing = join(dir, "gone.md");
+    const s = createTuiStore({ config: { ...emptyConfig(), boards: [{ path: missing, name: "Gone" }] } });
+    expect(s.setupStatus().boards).toEqual([{ name: "Gone", path: missing, exists: false }]);
+    const p = join(dir, "Live.md");
+    writeFileSync(p, "## Todo\n");
+    s.addBoard(p, "Live");
+    expect(s.setupStatus().boards.map((b) => b.name)).toEqual(["Gone", "Live"]);
     await s.dispose();
   });
 });

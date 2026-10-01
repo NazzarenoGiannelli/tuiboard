@@ -20,7 +20,7 @@
 
 import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { createMemo } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 
@@ -2043,7 +2043,14 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
   /** What is set up on this machine: the Setup dialog's content. */
   function setupStatus(): SetupStatus {
-    return collectSetupStatus(liveSetupDeps(config, agentsStore.sessions()));
+    // The boards as they are now, not as the config was at startup: a board added in this
+    // session (the first-run wizard, the + chip) is in `state.boards` but not in `config`.
+    // Configured boards that never loaded (file missing) stay listed, so Setup can flag them.
+    const known = new Set(config.boards.map((b) => resolve(b.path)));
+    const live = state.boards
+      .filter((lb) => !known.has(resolve(lb.board.filepath)))
+      .map((lb) => ({ path: lb.board.filepath, name: lb.board.name }));
+    return collectSetupStatus(liveSetupDeps({ ...config, boards: [...config.boards, ...live] }, agentsStore.sessions()));
   }
 
   async function dispose(): Promise<void> {

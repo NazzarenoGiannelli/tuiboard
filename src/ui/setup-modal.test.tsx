@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { testRender } from "@opentui/solid";
 
 import { createTuiStore } from "~/store/index";
+import { BottomBar } from "~/ui/Chrome";
 import { ModalLayer } from "~/ui/Modal";
 
 const renders: Array<{ renderer: { destroy: () => void } }> = [];
@@ -127,5 +128,60 @@ describe("the Setup dialog", () => {
     expect(flat).toContain("Setup");
     expect(flat).toContain("none yet");
     expect(flat).toContain("tuiboard calendar-setup google");
+  });
+
+  it("right after the wizard creates a board it is listed, not 'none yet'", async () => {
+    writeFileSync(join(dir, "no-config.yaml"), "boards: []\n");
+    const store = createTuiStore({
+      config: {
+        root: dir, loaded: false, boards: [], assignees: [], doneColumn: "Done", archiveColumn: "Archive",
+        resumeTerminal: "auto", resumeShell: "auto", statusIndicators: "symbols", copyResumeCommand: "x",
+        zones: { planner: "on", agenda: "on", agents: "off" }, updateCheck: true,
+      } as any,
+    });
+    store.openBoardNew(true);
+    store.boardNewChooseMode("create");
+    store.boardNewSubmitText("Work");
+    store.boardNewSubmitText("");
+    store.boardNewAnswerExamples(true);
+    store.openModal({ kind: "setup" });
+    process.stdout.columns = 100;
+    const t = await testRender(() => <box style={{ width: "100%", height: "100%" }}><ModalLayer store={store} /></box>, { width: 100, height: 40 });
+    renders.push(t as any);
+    await t.renderOnce(); await t.renderOnce();
+    const flat = flatten(t.captureCharFrame());
+    expect(flat).toContain("Setup");
+    expect(flat).not.toContain("none yet");
+    expect(flat).toContain("Work");
+    await store.dispose();
+  });
+
+  it("the bottom bar shows the open dialog's own keys: Esc close for Setup, Enter alone for the first-run welcome", async () => {
+    const make = () => createTuiStore({
+      config: {
+        root: dir, loaded: false, boards: [], assignees: [], doneColumn: "Done", archiveColumn: "Archive",
+        resumeTerminal: "auto", resumeShell: "auto", statusIndicators: "symbols", copyResumeCommand: "x",
+        zones: { planner: "on", agenda: "on", agents: "off" }, updateCheck: true,
+      } as any,
+    });
+    process.stdout.columns = 100;
+    const barOf = async (store: ReturnType<typeof make>) => {
+      const t = await testRender(() => <box style={{ width: "100%", height: "100%" }}><BottomBar store={store} /></box>, { width: 100, height: 6 });
+      renders.push(t as any);
+      await t.renderOnce(); await t.renderOnce();
+      return t.captureCharFrame();
+    };
+    const welcome = make();
+    welcome.openBoardNew(true); // no boards: the mandatory welcome
+    const welcomeBar = await barOf(welcome);
+    expect(welcomeBar).toContain("Enter confirm");
+    expect(welcomeBar).not.toContain("Esc");
+    const info = make();
+    info.openModal({ kind: "setup" });
+    const setupBar = await barOf(info);
+    expect(setupBar).toContain("Esc close");
+    expect(setupBar).not.toContain("Enter confirm");
+    await welcome.dispose();
+    await info.dispose();
   });
 });

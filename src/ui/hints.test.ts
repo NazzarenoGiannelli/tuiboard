@@ -9,6 +9,8 @@ import {
   HINTS_COMPACT,
   HINTS_FULL,
   HINTS_MODAL,
+  HINTS_MODAL_INFO,
+  HINTS_MODAL_MANDATORY,
   hintsFor,
   type HintContext,
 } from "./hints";
@@ -76,7 +78,19 @@ describe("hintsFor with a dialog open", () => {
   it("no dialog: unchanged", () => {
     expect(hintsFor(ctx())).toBe(HINTS_FULL);
   });
+  it("the mandatory first-run wizard offers no Esc: there is nothing to go back to", () => {
+    expect(hintsFor(ctx({ modal: "mandatory" }))).toBe(HINTS_MODAL_MANDATORY);
+    expect(hintsFor(ctx({ modal: "mandatory", singlePane: true }))).toBe("Enter confirm");
+    expect(HINTS_MODAL_MANDATORY).not.toContain("Esc");
+  });
+  it("a read-only dialog (Setup) says how to close it, not what to confirm", () => {
+    expect(hintsFor(ctx({ modal: "info" }))).toBe(HINTS_MODAL_INFO);
+    expect(HINTS_MODAL_INFO).toContain("Esc");
+    expect(HINTS_MODAL_INFO).not.toContain("Enter");
+  });
   it("short enough for 60 columns", () => {
-    expect(HINTS_MODAL.length).toBeLessThanOrEqual(60);
+    for (const line of [HINTS_MODAL, HINTS_MODAL_MANDATORY, HINTS_MODAL_INFO]) {
+      expect(line.length).toBeLessThanOrEqual(60);
+    }
   });
 });

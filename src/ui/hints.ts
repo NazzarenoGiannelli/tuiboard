@@ -16,8 +16,12 @@ export interface HintContext {
   placed?: boolean;
   /** Arm mode is on with nothing armed yet: waiting for a task, then a slot. */
   armMode: boolean;
-  /** A dialog is open: its own keys are on screen, so the bar should not show the dashboard's. */
-  modal?: "open";
+  /**
+   * A dialog is open: its own keys are on screen, so the bar should not show the dashboard's.
+   * "mandatory" is the first-run wizard, which cannot be dismissed (Esc does nothing);
+   * "info" is a read-only dialog (Setup), where Enter confirms nothing and Esc closes it.
+   */
+  modal?: "open" | "mandatory" | "info";
 }
 
 /**
@@ -50,7 +54,15 @@ export const HINTS_AGENDA_COMPACT = "c place · n event · [ ] day · ⏎ done �
 /** One line for every dialog: each one already prints its own specific hint inside the box. */
 export const HINTS_MODAL = "Enter confirm · Esc cancel";
 
+/** The first-run wizard has nothing behind it, so there is nothing to cancel back to. */
+export const HINTS_MODAL_MANDATORY = "Enter confirm";
+
+/** A read-only dialog: nothing to confirm, only the way out. */
+export const HINTS_MODAL_INFO = "Esc close";
+
 export function hintsFor(ctx: HintContext): string {
+  if (ctx.modal === "mandatory") return HINTS_MODAL_MANDATORY;
+  if (ctx.modal === "info") return HINTS_MODAL_INFO;
   if (ctx.modal) return HINTS_MODAL;
   if (ctx.armed) return ctx.placed === false ? HINTS_ARMED_NEW : HINTS_ARMED;
   if (ctx.armMode) return HINTS_ARM_MODE;

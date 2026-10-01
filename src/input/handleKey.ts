@@ -89,6 +89,13 @@ export function handleKey(
         if (key.name === "space") { store.boardNewToggle(); return; }
         if (key.name === "enter" || key.name === "return") { store.boardNewConfirmPick(); return; }
       }
+      if (b.step === "examples") {
+        if (key.name === "j" || key.name === "down") { store.boardNewMove(1); return; }
+        if (key.name === "k" || key.name === "up") { store.boardNewMove(-1); return; }
+        if (key.name === "y") { store.boardNewAnswerExamples(true); return; }
+        if (key.name === "n") { store.boardNewAnswerExamples(false); return; }
+        if (key.name === "enter" || key.name === "return") { store.boardNewAnswerExamples(b.sel === 0); return; }
+      }
       return;
     }
     if (ui.modal.kind === "confirm-delete") {

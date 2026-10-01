@@ -51,7 +51,7 @@ import {
 } from "./calendar";
 import { ConflictError, statMtime, writeBoardFile } from "~/io/writer";
 import { addBoardToConfig } from "~/boards/config-writer";
-import { createBoardFile } from "~/boards/create";
+import { createBoardFile, exampleTasks } from "~/boards/create";
 import { scanDirectory, type BoardCandidate } from "~/boards/scan";
 import { suggestBoardsDir } from "~/boards/suggest";
 import { isTask, parseBoard } from "~/parser/markdown";
@@ -130,7 +130,7 @@ export type ModalKind =
  * user has got to.
  */
 export interface BoardNew {
-  step: "mode" | "name" | "columns" | "dir" | "pick";
+  step: "mode" | "name" | "columns" | "examples" | "dir" | "pick";
   /** Chosen path through the wizard. */
   mode?: "create" | "adopt";
   /** Selection index — the mode list on step 1, the candidate list on "pick". */
@@ -138,6 +138,8 @@ export interface BoardNew {
   name: string;
   /** Comma-separated, as typed. */
   columns: string;
+  /** Start the new board with a few example tasks (the "examples" step's answer). */
+  examples: boolean;
   dir: string;
   candidates: BoardCandidate[];
   /** Indexes of the candidates ticked for adoption. */
@@ -982,6 +984,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       sel: 0,
       name: "",
       columns: "Todo, Doing, Done",
+      examples: true,
       dir: suggestBoardsDir(config),
       candidates: [],
       ticked: [],
@@ -1039,7 +1042,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       return patchBoardNew({ name: value, step: "columns", error: undefined });
     }
     if (b.step === "columns") {
-      return commitCreate(b.name, value || b.columns);
+      return patchBoardNew({ columns: value || b.columns, step: "examples", examples: true, sel: 0, error: undefined });
     }
     if (b.step === "dir") {
       const dir = expandHome(value || b.dir);
@@ -1053,16 +1056,23 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     }
   }
 
+  /** The last question of the create path: examples or an empty board. */
+  function boardNewAnswerExamples(yes: boolean): void {
+    const b = state.ui.boardNew;
+    if (!b || b.step !== "examples") return;
+    commitCreate(b.name, b.columns, yes);
+  }
+
   /** Create the file, register it, open it — in that order. */
-  function commitCreate(name: string, columnsText: string): void {
+  function commitCreate(name: string, columnsText: string, withExamples: boolean): void {
     const b = state.ui.boardNew;
     if (!b) return;
     const columns = columnsText.split(",").map((c) => c.trim()).filter(Boolean);
     const path = join(b.dir, `${name}.md`);
     try {
-      createBoardFile(path, { columns });
+      createBoardFile(path, { columns, examples: withExamples ? exampleTasks() : undefined });
     } catch (e) {
-      return patchBoardNew({ error: (e as Error).message });
+      return patchBoardNew({ error: (e as Error).message, step: "name" });
     }
     try {
       addBoardToConfig({ path, name });
@@ -2070,6 +2080,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     boardNewToggle,
     boardNewSubmitText,
     boardNewConfirmPick,
+    boardNewAnswerExamples,
     // ui
     setActiveBoard,
     setCursor,

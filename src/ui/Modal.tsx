@@ -104,6 +104,7 @@ function BoardNewModal(props: { store: TuiStore }) {
     const b = w();
     if (!b) return "";
     if (b.step === "mode") return "j/k choose · Enter confirm" + (b.mandatory ? "" : " · Esc cancel");
+    if (b.step === "examples") return "j/k choose · y yes · n no · Enter confirm";
     if (b.step === "pick") return "j/k move · Space tick · Enter adopt · Esc back";
     return "Enter confirm" + (b.mandatory ? "" : " · Esc cancel");
   });
@@ -162,6 +163,24 @@ function BoardNewModal(props: { store: TuiStore }) {
               <text>
                 <span style={{ fg: T.textDim }}>{"Creating " + b().name + ".md"}</span>
               </text>
+            </Show>
+
+            {/* Step 2a, last: examples or an empty board */}
+            <Show when={b().step === "examples"}>
+              <text><span style={{ fg: T.textDim }}>Start with a few example tasks?</span></text>
+              <For each={[
+                { yes: true, label: "Yes", desc: "four tasks that show the keys" },
+                { yes: false, label: "No", desc: "an empty board" },
+              ]}>
+                {(opt, i) => (
+                  <text>
+                    <span style={{ fg: b().sel === i() ? T.accent : T.text }}>
+                      {b().sel === i() ? "▶ " : "  "}{opt.label}
+                    </span>
+                    <span style={{ fg: T.textDim }}>{"  — " + opt.desc}</span>
+                  </text>
+                )}
+              </For>
             </Show>
 
             {/* Step 2b — a folder, then what was found in it */}

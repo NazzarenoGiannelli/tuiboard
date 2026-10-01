@@ -4,7 +4,7 @@
  * Read-only: it changes no file and opens nothing.
  */
 
-import { loadConfig } from "~/config/loader";
+import { findConfigPath, loadConfig, type Config } from "~/config/loader";
 import { agentRowDetail } from "~/setup/agent-row";
 import { liveSetupDeps } from "~/setup/live";
 import { collectSetupStatus, type SetupStatus } from "~/setup/status";
@@ -38,7 +38,25 @@ export function runDoctor(argv: readonly string[]): number {
     console.error(`tuiboard doctor: unknown argument "${unknown}"\nusage: tuiboard doctor [--json]`);
     return 2;
   }
-  const status = collectSetupStatus(liveSetupDeps(loadConfig(), []));
-  console.log(argv.includes("--json") ? JSON.stringify(status, null, 2) : formatDoctor(status, false).trimEnd());
+  const json = argv.includes("--json");
+  let config: Config;
+  try {
+    config = loadConfig();
+  } catch (err) {
+    // A malformed or unreadable config is exactly what doctor should be able to name.
+    const message = err instanceof Error ? err.message : String(err);
+    if (json) console.log(JSON.stringify({ error: message }));
+    else console.error(`tuiboard doctor: cannot read config ${findConfigPath().path}: ${message}`);
+    return 1;
+  }
+  const status = collectSetupStatus(liveSetupDeps(config, []));
+  if (json) {
+    // No sessions are read here, so the per-agent count and last activity would be
+    // invented zeros: leave them out rather than report a measurement never made.
+    const agents = status.agents.map(({ sessions: _sessions, lastActivityMs: _last, ...a }) => a);
+    console.log(JSON.stringify({ ...status, agents }, null, 2));
+  } else {
+    console.log(formatDoctor(status, false).trimEnd());
+  }
   return 0;
 }

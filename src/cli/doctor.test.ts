@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -53,15 +53,19 @@ describe("runDoctor", () => {
   const ENV_KEYS = ["HOME", "USERPROFILE", "TUIBOARD_CONFIG", "XDG_DATA_HOME"] as const;
   const prevEnv: Record<string, string | undefined> = {};
   let home: string;
+  let prevCwd: string;
   beforeEach(() => {
+    prevCwd = process.cwd();
     home = mkdtempSync(join(tmpdir(), "tb-doctor-home-"));
     for (const k of ENV_KEYS) prevEnv[k] = process.env[k];
     process.env.HOME = home;
     process.env.USERPROFILE = home;
     process.env.XDG_DATA_HOME = home;
     process.env.TUIBOARD_CONFIG = join(home, "no-config.yaml");
+    process.chdir(home); // loadConfig scans cwd for boards when there is no config
   });
   afterEach(() => {
+    process.chdir(prevCwd);
     for (const k of ENV_KEYS) {
       if (prevEnv[k] === undefined) delete process.env[k];
       else process.env[k] = prevEnv[k];
@@ -75,7 +79,9 @@ describe("runDoctor", () => {
     try { return { code: fn(), text }; } finally { console.log = log; }
   };
 
-  it("exits 0 and prints a report, even on a machine with nothing set up", () => {
+  // Boards, config and calendars are hermetic here; agent folder detection is not (adapter
+  // paths are fixed at module load), so nothing below asserts on the agent rows.
+  it("exits 0 and prints a report with no config at all", () => {
     const r = capture(() => runDoctor([]));
     expect(r.code).toBe(0);
     expect(r.text).toContain("tuiboard ");
@@ -94,6 +100,55 @@ describe("runDoctor", () => {
     expect(parsed).toHaveProperty("version");
     expect(parsed).toHaveProperty("agents");
     expect(parsed).toHaveProperty("calendars");
+  });
+
+  it("--json leaves out the session fields it never measured", () => {
+    const r = capture(() => runDoctor(["--json"]));
+    const a = JSON.parse(r.text).agents[0];
+    expect(a).not.toHaveProperty("sessions");
+    expect(a).not.toHaveProperty("lastActivityMs");
+    expect(a).toHaveProperty("provider");
+    expect(a).toHaveProperty("label");
+    expect(a).toHaveProperty("found");
+  });
+
+  it("a Google token path that does not exist reads as not connected, exit 0", () => {
+    const cfg = join(home, "config.yaml");
+    writeFileSync(cfg, `boards: []
+calendars:
+  google:
+    token: ${join(home, "missing-token.json").replace(/\\/g, "/")}
+`);
+    process.env.TUIBOARD_CONFIG = cfg;
+    const r = capture(() => runDoctor([]));
+    expect(r.code).toBe(0);
+    expect(r.text).toContain("○ Google Calendar");
+    expect(r.text).toContain("tuiboard calendar-setup google");
+  });
+
+  const captureErr = (fn: () => number) => {
+    const err = console.error; let errText = "";
+    console.error = (...a: unknown[]) => { errText += a.join(" ") + "\n"; };
+    try { return { ...capture(fn), errText }; } finally { console.error = err; }
+  };
+
+  it("a malformed config is reported, not thrown: exit 1, path on stderr", () => {
+    const cfg = join(home, "bad.yaml");
+    writeFileSync(cfg, "boards: [unclosed");
+    process.env.TUIBOARD_CONFIG = cfg;
+    const r = captureErr(() => runDoctor([]));
+    expect(r.code).toBe(1);
+    expect(r.errText).toContain("tuiboard doctor: cannot read config");
+    expect(r.errText).toContain(cfg);
+  });
+
+  it("--json with a malformed config prints parseable JSON with an error key, exit 1", () => {
+    const cfg = join(home, "bad.yaml");
+    writeFileSync(cfg, "boards: [unclosed");
+    process.env.TUIBOARD_CONFIG = cfg;
+    const r = captureErr(() => runDoctor(["--json"]));
+    expect(r.code).toBe(1);
+    expect(typeof JSON.parse(r.text).error).toBe("string");
   });
 
   it("an unknown flag is a usage error", () => {

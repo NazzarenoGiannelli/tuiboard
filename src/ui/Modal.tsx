@@ -12,6 +12,7 @@
  */
 
 import { For, Show, createContext, createEffect, createMemo, createSignal, useContext } from "solid-js";
+import { join } from "node:path";
 
 import { isTask } from "~/parser/markdown";
 import {
@@ -149,11 +150,14 @@ function BoardNewModal(props: { store: TuiStore }) {
               <text><span style={{ fg: T.textDim }}>Board name</span></text>
               <input
                 focused
-                value=""
+                value={b().name}
                 onSubmit={((v: string) => props.store.boardNewSubmitText(v)) as any}
               />
-              <text>
+              <text wrapMode="word">
                 <span style={{ fg: T.textDim }}>{"It will live in " + b().dir}</span>
+              </text>
+              <text wrapMode="word">
+                <span style={{ fg: T.textDim }}>Or type a path: ~/notes/Work</span>
               </text>
             </Show>
 
@@ -164,8 +168,8 @@ function BoardNewModal(props: { store: TuiStore }) {
                 value={b().columns}
                 onSubmit={((v: string) => props.store.boardNewSubmitText(v)) as any}
               />
-              <text>
-                <span style={{ fg: T.textDim }}>{"Creating " + b().name + ".md"}</span>
+              <text wrapMode="word">
+                <span style={{ fg: T.textDim }}>{"Creating " + join(b().dir, b().name + ".md")}</span>
               </text>
             </Show>
 
@@ -222,7 +226,7 @@ function BoardNewModal(props: { store: TuiStore }) {
 
             <Show when={b().error}>
               <text> </text>
-              <text><span style={{ fg: T.overdue }}>{b().error}</span></text>
+              <text wrapMode="word"><span style={{ fg: T.overdue }}>{b().error}</span></text>
             </Show>
           </box>
         )}

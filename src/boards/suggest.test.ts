@@ -1,7 +1,9 @@
-import { describe, expect, it } from "bun:test";
-import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
-import { defaultBoardsDir, suggestBoardsDir } from "./suggest";
+import { defaultBoardsDir, parseBoardTarget, suggestBoardsDir } from "./suggest";
 
 const home = join("home", "me");
 const noDirs = () => false;
@@ -30,5 +32,67 @@ describe("suggestBoardsDir keeps learning from existing boards", () => {
   it("one shared folder: new boards go next to the others, whatever the default is", () => {
     const dir = join("vault", "tasks");
     expect(suggestBoardsDir({ boards: [{ path: join(dir, "a.md") }, { path: join(dir, "b.md") }] })).toContain("tasks");
+  });
+});
+
+describe("defaultBoardsDir against the real file system", () => {
+  let tmpHome: string;
+  beforeEach(() => {
+    tmpHome = mkdtempSync(join(tmpdir(), "tb-suggest-home-"));
+  });
+  afterEach(() => {
+    rmSync(tmpHome, { recursive: true, force: true });
+  });
+
+  it("a FILE named Documents is not a folder: falls back to ~/tuiboard", () => {
+    writeFileSync(join(tmpHome, "Documents"), "not a folder");
+    expect(defaultBoardsDir({}, tmpHome)).toBe(join(tmpHome, "tuiboard"));
+  });
+
+  it("a real Documents folder is used", () => {
+    mkdirSync(join(tmpHome, "Documents"));
+    expect(defaultBoardsDir({}, tmpHome)).toBe(join(tmpHome, "Documents", "tuiboard"));
+  });
+
+  it("no Documents at all: ~/tuiboard", () => {
+    expect(defaultBoardsDir({}, tmpHome)).toBe(join(tmpHome, "tuiboard"));
+  });
+});
+
+describe("parseBoardTarget: the name field also takes a path", () => {
+  const h = join(resolve("/"), "home", "me");
+
+  it("a plain name stays a plain name: no folder change", () => {
+    expect(parseBoardTarget("Work", h)).toEqual({ ok: true, name: "Work" });
+    expect(parseBoardTarget("My Tasks", h)).toEqual({ ok: true, name: "My Tasks" });
+  });
+
+  it("an absolute path: its folder and its name", () => {
+    const dir = join(resolve("/"), "srv", "boards");
+    expect(parseBoardTarget(join(dir, "Work"), h)).toEqual({ ok: true, dir, name: "Work" });
+  });
+
+  it("a trailing .md is stripped from the name; with no folder in it the proposed folder stays", () => {
+    expect(parseBoardTarget("Work.md", h)).toEqual({ ok: true, name: "Work" });
+    const dir = join(resolve("/"), "srv");
+    expect(parseBoardTarget(join(dir, "Work.md"), h)).toEqual({ ok: true, dir, name: "Work" });
+  });
+
+  it("~/x/Work expands the home folder", () => {
+    expect(parseBoardTarget("~/x/Work", h)).toEqual({ ok: true, dir: join(h, "x"), name: "Work" });
+    if (process.platform === "win32") {
+      expect(parseBoardTarget(String.raw`~\x\Work`, h)).toEqual({ ok: true, dir: join(h, "x"), name: "Work" });
+    }
+  });
+
+  it("a relative path with a separator resolves against the working folder", () => {
+    expect(parseBoardTarget("sub/Work", h)).toEqual({ ok: true, dir: resolve("sub"), name: "Work" });
+  });
+
+  it("a path with no name in it is an error, not a board called ''", () => {
+    for (const bad of ["~/x/", "/", ".md", "~/x/.md"]) {
+      const r = parseBoardTarget(bad, h);
+      expect(r.ok).toBe(false);
+    }
   });
 });

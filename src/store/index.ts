@@ -55,7 +55,7 @@ import { ConflictError, statMtime, writeBoardFile } from "~/io/writer";
 import { addBoardToConfig } from "~/boards/config-writer";
 import { createBoardFile, exampleTasks } from "~/boards/create";
 import { scanDirectory, type BoardCandidate } from "~/boards/scan";
-import { suggestBoardsDir } from "~/boards/suggest";
+import { parseBoardTarget, suggestBoardsDir } from "~/boards/suggest";
 import { isTask, parseBoard } from "~/parser/markdown";
 import { buildNoteIndex, readNoteBody, resolveNote, type NoteIndex } from "~/notes/index";
 import { buildRing, ringPosition, samePane, stepRing, type Pane } from "~/ui/pane-ring";
@@ -144,6 +144,12 @@ export interface BoardNew {
   /** Start the new board with a few example tasks (the "examples" step's answer). */
   examples: boolean;
   dir: string;
+  /**
+   * True while `dir` is the folder tuiboard proposed, false once the user typed a path
+   * or the wizard fell back to `~/tuiboard`. Only a proposed folder may be swapped for the
+   * fallback after a failed write.
+   */
+  dirProposed: boolean;
   candidates: BoardCandidate[];
   /** Indexes of the candidates ticked for adoption. */
   ticked: number[];
@@ -989,6 +995,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       columns: "Todo, Doing, Done",
       examples: true,
       dir: suggestBoardsDir(config),
+      dirProposed: true,
       candidates: [],
       ticked: [],
       mandatory,
@@ -1042,7 +1049,15 @@ export function createTuiStore({ config }: CreateStoreOptions) {
 
     if (b.step === "name") {
       if (!value) return patchBoardNew({ error: "the board needs a name" });
-      return patchBoardNew({ name: value, step: "columns", error: undefined });
+      // A path in the name field picks the folder too; a plain name keeps the proposal.
+      const target = parseBoardTarget(value);
+      if (!target.ok) return patchBoardNew({ error: target.error });
+      return patchBoardNew({
+        name: target.name,
+        ...(target.dir !== undefined ? { dir: target.dir, dirProposed: false } : {}),
+        step: "columns",
+        error: undefined,
+      });
     }
     if (b.step === "columns") {
       return patchBoardNew({ columns: value || b.columns, step: "examples", examples: true, sel: 0, error: undefined });
@@ -1066,6 +1081,24 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     commitCreate(b.name, b.columns, yes);
   }
 
+  /**
+   * What to show after a failed write. A file-system failure in the folder tuiboard proposed
+   * (typically `~/Documents` behind an OS consent prompt) moves the wizard to `~/tuiboard`
+   * and says so: the user sees the new folder and confirms with Enter, nothing is written
+   * silently elsewhere. Anywhere else the folder stays and the message says how to change it.
+   */
+  function createFailure(b: BoardNew, e: NodeJS.ErrnoException): Partial<BoardNew> {
+    // Only errors from the file system carry a code; "already exists" and the like are not
+    // about the folder, so another folder would not help.
+    if (!e.code) return { error: e.message };
+    const why = `Could not write to ${b.dir} (${e.code}).`;
+    const fallback = join(homedir(), "tuiboard");
+    if (b.dirProposed && fallback !== b.dir) {
+      return { dir: fallback, dirProposed: false, error: `${why} Now using ${fallback}: press Enter to try again.` };
+    }
+    return { error: `${why} Type a path as the name to use another folder, e.g. ~/notes/${b.name}.` };
+  }
+
   /** Create the file, register it, open it — in that order. */
   function commitCreate(name: string, columnsText: string, withExamples: boolean): void {
     const b = state.ui.boardNew;
@@ -1075,7 +1108,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     try {
       createBoardFile(path, { columns, examples: withExamples ? exampleTasks() : undefined });
     } catch (e) {
-      return patchBoardNew({ error: (e as Error).message, step: "name" });
+      return patchBoardNew({ ...createFailure(b, e as NodeJS.ErrnoException), step: "name" });
     }
     try {
       addBoardToConfig({ path, name });

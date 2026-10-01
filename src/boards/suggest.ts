@@ -17,7 +17,7 @@
 
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 import type { Config } from "~/config/loader";
 
@@ -52,4 +52,40 @@ export function suggestBoardsDir(config: Pick<Config, "boards">): string {
   const dirs = new Set((config.boards ?? []).map((b) => dirname(resolve(b.path))));
   if (dirs.size === 1) return [...dirs][0]!;
   return defaultBoardsDir();
+}
+
+/** `~` is what people type; node's fs does not know it. Accepts both separators after it. */
+export function expandHomePath(p: string, home: string = homedir()): string {
+  if (p === "~") return home;
+  if (p.startsWith("~/") || p.startsWith("~\\")) return join(home, p.slice(2));
+  return p;
+}
+
+export type BoardTarget =
+  | { ok: true; name: string; dir?: string }
+  | { ok: false; error: string };
+
+/**
+ * What the wizard's name field holds. A plain name is just a name and the proposed
+ * folder stands. A value with a path separator, or ending in `.md`, is a path: `~` is
+ * expanded, it is resolved, its folder becomes the board's folder and its last part
+ * (without `.md`) the board's name. A bare `Work.md` has no folder in it, so it only
+ * loses its extension: guessing the working folder would put the file somewhere the
+ * user never looked.
+ */
+export function parseBoardTarget(input: string, home: string = homedir()): BoardTarget {
+  const value = input.trim();
+  const hasSeparator = /[\\/]/.test(value);
+  const hasExt = /\.md$/i.test(value);
+  if (!hasSeparator && !hasExt) return { ok: true, name: value };
+
+  const stripped = (n: string) => n.replace(/\.md$/i, "").trim();
+  if (!hasSeparator) {
+    const name = stripped(value);
+    return name ? { ok: true, name } : { ok: false, error: "the board needs a name" };
+  }
+  const full = resolve(expandHomePath(value, home));
+  const name = /[\\/]$/.test(value) ? "" : stripped(basename(full));
+  if (!name) return { ok: false, error: "that path has no board name in it, e.g. ~/notes/Work" };
+  return { ok: true, dir: dirname(full), name };
 }

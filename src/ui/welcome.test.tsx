@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { testRender } from "@opentui/solid";
@@ -59,5 +59,54 @@ describe("the welcome dialog", () => {
     const frame = await welcome(40);
     for (const line of frame.split("\n")) expect(line.length).toBeLessThanOrEqual(40);
     expect(frame.replace(/[│╭╮╰╯─┤├]/g, " ").replace(/\s+/g, " ")).toContain("Only the board");
+  });
+});
+
+describe("the name step", () => {
+  const flat = (frame: string) => frame.replace(/[│╭╮╰╯─┤├]/g, " ").replace(/\s+/g, " ");
+
+  async function nameStep(width: number, failFirst: boolean) {
+    const store = createTuiStore({
+      config: {
+        root: dir, loaded: false, boards: [], assignees: [], doneColumn: "Done", archiveColumn: "Archive",
+        resumeTerminal: "auto", resumeShell: "auto", statusIndicators: "symbols", copyResumeCommand: "x",
+        zones: { planner: "on", agenda: "on", agents: "off" }, updateCheck: true,
+      } as any,
+    });
+    process.stdout.columns = width;
+    if (width < 60) store.setNarrow(true);
+    store.openBoardNew(true);
+    store.boardNewChooseMode("create");
+    if (failFirst) {
+      writeFileSync(join(dir, "tuiboard"), "in the way"); // the proposed folder cannot be made
+      store.boardNewSubmitText("Work");
+      store.boardNewSubmitText("");
+      store.boardNewAnswerExamples(true);
+    }
+    const t = await testRender(() => <box style={{ width: "100%", height: "100%" }}><ModalLayer store={store} /></box>, { width, height: 24 });
+    renders.push(t as any);
+    await t.renderOnce(); await t.renderOnce();
+    return t.captureCharFrame();
+  }
+
+  it("tells the user the folder and that a path can be typed", async () => {
+    const f = flat(await nameStep(100, false));
+    expect(f).toContain("It will live in");
+    expect(f).toContain("Or type a path");
+  });
+
+  it("fits 40 columns, folder line and path hint included", async () => {
+    const frame = await nameStep(40, false);
+    for (const line of frame.split("\n")) expect(line.length).toBeLessThanOrEqual(40);
+    expect(flat(frame)).toContain("Or type a path");
+  });
+
+  it("after a failed write, the error and the new folder are on screen and fit 40 columns", async () => {
+    const frame = await nameStep(40, true);
+    for (const line of frame.split("\n")) expect(line.length).toBeLessThanOrEqual(40);
+    const f = flat(frame);
+    expect(f).toContain("Could not write to");
+    expect(f).toContain("Now using");
+    expect(f).toContain("press Enter to try again");
   });
 });

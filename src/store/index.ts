@@ -512,13 +512,14 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   function flashBanner(
     kind: "info" | "warn" | "error",
     text: string,
+    ttlMs?: number,
   ): void {
     const ts = Date.now();
     setState("ui", "banner", { kind, text, ts });
     if (bannerTimer) clearTimeout(bannerTimer);
     // Auto-dismiss after a few seconds so the keybar isn't permanently
     // crowded by stale messages. Errors linger a bit longer.
-    const ttl = kind === "error" ? 6000 : 3000;
+    const ttl = ttlMs ?? (kind === "error" ? 6000 : 3000);
     bannerTimer = setTimeout(() => {
       if (state.ui.banner?.ts === ts) {
         setState("ui", "banner", undefined);

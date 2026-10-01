@@ -21,7 +21,9 @@ project coherent — please keep them in mind when proposing changes:
   each opt-in via config and must degrade gracefully when disabled.
 - **Keyboard-first, mouse-friendly.** Every action has a key; mouse is a bonus,
   not a requirement.
-- **Local and private.** No telemetry, no servers. Calendar credentials are
+- **Local and private.** No telemetry, no servers. The one network call tuiboard makes
+  by itself is the daily update check against the npm registry (nothing about you in it, off
+  with `update_check: off`). Calendar credentials are
   bring-your-own and stay on the user's machine.
 
 ## Prerequisites

@@ -92,6 +92,12 @@ export interface Config {
    * always on (load-bearing) and not configurable here.
    */
   zones: ZonesConfig;
+  /**
+   * Tell me at startup when a newer tuiboard is on npm (config `update_check`).
+   * One request to the npm registry a day, at most; on by default. See
+   * src/update/check.ts.
+   */
+  updateCheck: boolean;
 }
 
 /**
@@ -111,6 +117,20 @@ export interface ZonesConfig {
   agenda: ZoneMode;
   /** Live Claude Code session view. */
   agents: ZoneMode;
+}
+
+/**
+ * `on`/`off` as people write them in YAML: a real boolean, or the words on, off,
+ * true, false, yes, no. Anything else keeps the default.
+ */
+export function normalizeOnOff(raw: unknown, fallback: boolean): boolean {
+  if (typeof raw === "boolean") return raw;
+  if (typeof raw === "string") {
+    const v = raw.trim().toLowerCase();
+    if (["on", "true", "yes"].includes(v)) return true;
+    if (["off", "false", "no"].includes(v)) return false;
+  }
+  return fallback;
 }
 
 export interface GoogleCalendarConfig {
@@ -156,6 +176,7 @@ export const DEFAULT_CONFIG: Omit<Config, "root" | "loaded" | "boards"> = {
   statusIndicators: "symbols",
   copyResumeCommand: DEFAULT_COPY_RESUME_COMMAND,
   zones: { planner: "on", agenda: "on", agents: "on" },
+  updateCheck: true,
 };
 
 /**
@@ -254,6 +275,7 @@ interface RawConfig {
     agenda?: boolean | string;
     agents?: boolean | string;
   };
+  update_check: boolean | string;
 }
 
 /** Expand `~` to the home dir; resolve relative paths against the config dir. */
@@ -394,6 +416,7 @@ function normalize(raw: Partial<RawConfig>, root: string, loaded: boolean): Conf
         : DEFAULT_COPY_RESUME_COMMAND,
     calendars: normalizeCalendars(raw.calendars, root),
     zones: normalizeZones(raw.zones),
+    updateCheck: normalizeOnOff(raw.update_check, DEFAULT_CONFIG.updateCheck),
   };
 }
 

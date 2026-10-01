@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **An update notice.** When a newer tuiboard is on npm, a toast on the bottom bar says so, once per
+  version, with the command that fits how you installed it (`bun add -g tuiboard@latest
+  --no-cache` for a bun global install, `bunx tuiboard@latest`, or `git pull && bun install` for a
+  checkout). It asks the npm registry at most once a day, in the background, a second after start;
+  the answer is cached in `~/.cache/tuiboard/update.json`. It stays quiet on a first run, in the
+  headless commands, in CI and without a terminal. `update_check: off` in the config or
+  `TUIBOARD_NO_UPDATE_CHECK=1` turns it off.
+
 ## [0.15.1] - 2026-09-30
 
 ### Fixed

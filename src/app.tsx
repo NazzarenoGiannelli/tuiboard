@@ -44,6 +44,7 @@ import { BoardOnly } from "~/views/BoardOnly";
 import { Dashboard } from "~/views/Dashboard";
 import { TimelineOnly } from "~/views/TimelineOnly";
 import { AgentsOnly } from "~/views/AgentsOnly";
+import { startUpdateCheck } from "~/update";
 
 // ─── Keep Node's own output off the screen ──────────────────────────────────
 //
@@ -89,6 +90,16 @@ const perf = startPerfLog(pkg.version);
 const needsOnboarding = store.state.boards.length === 0;
 if (needsOnboarding) {
   store.openBoardNew(true);
+}
+
+// A newer tuiboard on npm: one quiet toast per version, not on a first run (they have
+// just installed the latest) and never when it is switched off (`update_check: off`).
+if (!needsOnboarding) {
+  startUpdateCheck({
+    current: pkg.version,
+    configOff: !config.updateCheck,
+    announce: (text) => store.flashBanner("info", text, 10_000),
+  });
 }
 
 process.on("SIGINT", () => void quitApp(() => store.dispose()));

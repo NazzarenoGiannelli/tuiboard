@@ -27,6 +27,7 @@ function emptyConfig(overrides: Partial<Config> = {}): Config {
     statusIndicators: "symbols",
     copyResumeCommand: 'cd "{cwd}" && claude --resume {sessionId}',
     zones: { planner: "on", agenda: "on", agents: "on" },
+    updateCheck: true,
     ...overrides,
   };
 }

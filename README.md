@@ -234,7 +234,22 @@ archive_column: Archive
 # is: never parsed, never written to. `~` works, relative paths resolve against
 # the config file. Unconfigured, `i` just explains how to set it.
 # status_file: ~/vault/Home.md
+
+# Optional: tell me at startup when a newer tuiboard is on npm (a toast, once per
+# version). One request to registry.npmjs.org at most a day, nothing about you in it.
+# on (default) | off. Also off with TUIBOARD_NO_UPDATE_CHECK=1, in CI, and without a terminal.
+# update_check: on
 ```
+
+### Update notice
+
+When a newer version is on npm, tuiboard says so once, as a toast on the bottom bar
+(`tuiboard 0.16.0 is out · bun add -g tuiboard@latest --no-cache`), with the command that fits
+how you installed it: a bun global install, `bunx`, or a checkout. It asks the npm registry at
+most once a day, in the background, a second after it opens; the answer is cached in
+`~/.cache/tuiboard/update.json`, and the request carries nothing about you or your boards. It never
+runs on a first run, in the headless commands (`summary`, `task`, `board`), in CI or without a
+terminal. Turn it off with `update_check: off` or `TUIBOARD_NO_UPDATE_CHECK=1`.
 
 ## Zones
 

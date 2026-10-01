@@ -101,6 +101,11 @@ archive_column: Archive
 # `~` works. tuiboard picks up changes while the dialog is open.
 # status_file: ~/vault/Home.md
 
+# Optional: a toast at startup when a newer tuiboard is on npm, once per version. One request
+# to registry.npmjs.org at most a day, with nothing about you in it. on (default) | off.
+# Also off with TUIBOARD_NO_UPDATE_CHECK=1, in CI, and without a terminal.
+# update_check: on
+
 # Optional: overlay read-only calendar events on the Agenda (the 24h timeline).
 # Connect a provider with `tuiboard calendar-setup google` / `... microsoft`,
 # which opens the auth flow and prints the exact block to paste here. Bring your

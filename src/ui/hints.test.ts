@@ -9,6 +9,7 @@ import {
   HINTS_COMPACT,
   HINTS_FULL,
   HINTS_MODAL,
+  HINTS_MODAL_BACK,
   HINTS_MODAL_INFO,
   HINTS_MODAL_MANDATORY,
   hintsFor,
@@ -89,8 +90,17 @@ describe("hintsFor with a dialog open", () => {
     expect(HINTS_MODAL_INFO).not.toContain("Enter");
   });
   it("short enough for 60 columns", () => {
-    for (const line of [HINTS_MODAL, HINTS_MODAL_MANDATORY, HINTS_MODAL_INFO]) {
+    for (const line of [HINTS_MODAL, HINTS_MODAL_BACK, HINTS_MODAL_MANDATORY, HINTS_MODAL_INFO]) {
       expect(line.length).toBeLessThanOrEqual(60);
     }
+  });
+});
+
+describe("hintsFor in the board wizard's steps where Esc goes back", () => {
+  it("says Esc back, and never Esc cancel", () => {
+    expect(hintsFor(ctx({ modal: "back" }))).toBe(HINTS_MODAL_BACK);
+    expect(HINTS_MODAL_BACK).toContain("Esc back");
+    expect(HINTS_MODAL_BACK).not.toContain("cancel");
+    expect(HINTS_MODAL_BACK.length).toBeLessThanOrEqual(60);
   });
 });

@@ -128,9 +128,9 @@ function BoardNewModal(props: { store: TuiStore }) {
     const b = w();
     if (!b) return "";
     if (b.step === "mode") return "j/k choose · Enter confirm" + (b.mandatory ? "" : " · Esc cancel");
-    if (b.step === "examples") return "j/k choose · y yes · n no · Enter confirm";
+    if (b.step === "examples") return "j/k choose · y yes · n no · Enter confirm · Esc back";
     if (b.step === "pick") return "j/k move · Space tick · Enter adopt · Esc back";
-    return "Enter confirm" + (b.mandatory ? "" : " · Esc cancel");
+    return "Enter confirm · Esc back";
   });
 
   return (
@@ -213,7 +213,7 @@ function BoardNewModal(props: { store: TuiStore }) {
               <text><span style={{ fg: T.textDim }}>Folder to scan</span></text>
               <input
                 focused
-                value={b().dir}
+                value={b().scanDir}
                 onSubmit={((v: string) => props.store.boardNewSubmitText(v)) as any}
               />
             </Show>
@@ -234,7 +234,7 @@ function BoardNewModal(props: { store: TuiStore }) {
                 const shown = createMemo(() => b().candidates.slice(win().start, win().start + win().size));
                 const header = () => {
                   const head = b().candidates.length + " board file(s) in ";
-                  return fit(head + tailFit(b().dir, Math.max(8, inner() - head.length)), inner());
+                  return fit(head + tailFit(b().scanDir, Math.max(8, inner() - head.length)), inner());
                 };
                 return (
                   <>

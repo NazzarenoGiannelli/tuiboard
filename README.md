@@ -183,6 +183,8 @@ Adopting lists the files in that folder that look like boards (a `.md` with
 `- [ ]` tasks, or a new Kanban board), one row each. Sync-conflict copies such as
 `Tasks.sync-conflict-20260925-111227-ABCDEFG.md`, which Syncthing leaves beside the
 original, are left out; a board you name in the config is used as written.
+In the wizard `Esc` goes back one step (to the welcome from the folder or the name), keeping what you
+typed; on the welcome itself it closes the dialog, except on a first run, where it does nothing.
 A long list shows one file per row in a window that follows the cursor (`j`/`k` to move, `Space`
 to tick, `Enter` to adopt), with `N more above` and `N more below` at its edges.
 

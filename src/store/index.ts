@@ -143,7 +143,13 @@ export interface BoardNew {
   columns: string;
   /** Start the new board with a few example tasks (the "examples" step's answer). */
   examples: boolean;
+  /** Where the create path writes the board file. Never touched by the adopt path. */
   dir: string;
+  /**
+   * The adopt path's "Folder to scan", as typed. Kept apart from `dir` so that going back to the
+   * welcome and choosing "create" shows the create path's own folder, not a folder meant for scanning.
+   */
+  scanDir: string;
   /**
    * True while `dir` is the folder tuiboard proposed, false once the user typed a path
    * or the wizard fell back to `~/tuiboard`. Only a proposed folder may be swapped for the
@@ -995,6 +1001,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       columns: "Todo, Doing, Done",
       examples: true,
       dir: suggestBoardsDir(config),
+      scanDir: suggestBoardsDir(config),
       dirProposed: true,
       candidates: [],
       ticked: [],
@@ -1019,6 +1026,23 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   /** Step 1: which way through. */
   function boardNewChooseMode(mode: "create" | "adopt"): void {
     patchBoardNew({ mode, step: mode === "create" ? "name" : "dir", error: undefined });
+  }
+
+  /**
+   * Esc: one step back, keeping what was typed (name, columns and both folders stay in the state).
+   * On the first step it closes the wizard, unless it is the mandatory first-run one.
+   */
+  function boardNewBack(): void {
+    const b = state.ui.boardNew;
+    if (!b) return;
+    switch (b.step) {
+      case "mode": return closeBoardNew();
+      case "name": return patchBoardNew({ step: "mode", sel: 0, error: undefined });
+      case "dir": return patchBoardNew({ step: "mode", sel: 1, error: undefined });
+      case "columns": return patchBoardNew({ step: "name", error: undefined });
+      case "examples": return patchBoardNew({ step: "columns", error: undefined });
+      case "pick": return patchBoardNew({ step: "dir", error: undefined });
+    }
   }
 
   function boardNewMove(delta: number): void {
@@ -1063,14 +1087,14 @@ export function createTuiStore({ config }: CreateStoreOptions) {
       return patchBoardNew({ columns: value || b.columns, step: "examples", examples: true, sel: 0, error: undefined });
     }
     if (b.step === "dir") {
-      const dir = expandHome(value || b.dir);
-      const candidates = scanDirectory(dir, {
+      const scanDir = expandHome(value || b.scanDir);
+      const candidates = scanDirectory(scanDir, {
         existingPaths: state.boards.map((lb) => lb.board.filepath),
       });
       if (candidates.length === 0) {
-        return patchBoardNew({ dir, error: `no board files in ${dir}` });
+        return patchBoardNew({ scanDir, error: `no board files in ${scanDir}` });
       }
-      return patchBoardNew({ dir, candidates, step: "pick", sel: 0, ticked: [], error: undefined });
+      return patchBoardNew({ scanDir, candidates, step: "pick", sel: 0, ticked: [], error: undefined });
     }
   }
 
@@ -2125,6 +2149,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     openBoardNew,
     closeBoardNew,
     boardNewChooseMode,
+    boardNewBack,
     boardNewMove,
     boardNewToggle,
     boardNewSubmitText,

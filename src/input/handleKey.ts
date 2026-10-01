@@ -59,12 +59,10 @@ export function handleKey(
   // Modal dispatcher first — most keys go to the modal's <input>.
   if (ui.modal) {
     if (key.name === "escape") {
-      // The board wizard owns its own dismissal: on first run there is no
-      // board behind it, so Escape must not leave the user on a blank screen.
+      // The board wizard owns its own Escape: one step back, and on its first step a
+      // close, except on first run, where there is no board behind it to return to.
       if (ui.modal.kind === "board-new") {
-        const b = store.state.ui.boardNew;
-        if (b?.step === "pick") { store.boardNewChooseMode("adopt"); return; }
-        store.closeBoardNew();
+        store.boardNewBack();
         return;
       }
       store.closeModal();

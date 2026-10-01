@@ -19,9 +19,10 @@ export interface HintContext {
   /**
    * A dialog is open: its own keys are on screen, so the bar should not show the dashboard's.
    * "mandatory" is the first-run wizard, which cannot be dismissed (Esc does nothing);
+   * "back" is a step of the board wizard past its first one, where Esc goes back a step;
    * "info" is a read-only dialog (Setup), where Enter confirms nothing and Esc closes it.
    */
-  modal?: "open" | "mandatory" | "info";
+  modal?: "open" | "mandatory" | "back" | "info";
 }
 
 /**
@@ -54,7 +55,10 @@ export const HINTS_AGENDA_COMPACT = "c place · n event · [ ] day · ⏎ done �
 /** One line for every dialog: each one already prints its own specific hint inside the box. */
 export const HINTS_MODAL = "Enter confirm · Esc cancel";
 
-/** The first-run wizard has nothing behind it, so there is nothing to cancel back to. */
+/** A step of the board wizard past the first: Esc goes back a step, first run or not. */
+export const HINTS_MODAL_BACK = "Enter confirm · Esc back";
+
+/** The first-run wizard's first step has nothing behind it, so there is nothing to cancel back to. */
 export const HINTS_MODAL_MANDATORY = "Enter confirm";
 
 /** A read-only dialog: nothing to confirm, only the way out. */
@@ -62,6 +66,7 @@ export const HINTS_MODAL_INFO = "Esc close";
 
 export function hintsFor(ctx: HintContext): string {
   if (ctx.modal === "mandatory") return HINTS_MODAL_MANDATORY;
+  if (ctx.modal === "back") return HINTS_MODAL_BACK;
   if (ctx.modal === "info") return HINTS_MODAL_INFO;
   if (ctx.modal) return HINTS_MODAL;
   if (ctx.armed) return ctx.placed === false ? HINTS_ARMED_NEW : HINTS_ARMED;

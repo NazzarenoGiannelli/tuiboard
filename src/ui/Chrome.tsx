@@ -133,11 +133,13 @@ export function BottomBar(props: { store: TuiStore }) {
       armMode: ui.armMode,
       modal: !ui.modal
         ? undefined
-        : ui.boardNew?.mandatory
-          ? "mandatory"
-          : ui.modal.kind === "setup"
-            ? "info"
-            : "open",
+        : ui.modal.kind === "board-new" && ui.boardNew && ui.boardNew.step !== "mode"
+          ? "back"
+          : ui.boardNew?.mandatory
+            ? "mandatory"
+            : ui.modal.kind === "setup"
+              ? "info"
+              : "open",
     });
   };
   return (

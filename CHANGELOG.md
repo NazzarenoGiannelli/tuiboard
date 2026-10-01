@@ -30,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keys (`null` where nothing is known).
 
 ### Changed
+- **Esc goes back one step in the new-board wizard.** From "Folder to scan" (or any later step) it returns
+  to the step before, all the way to the welcome, and keeps what you typed; Esc on the first step still
+  only closes the dialog when it is not the first-run welcome. The folder you scan is no longer mixed up
+  with the folder a new board is created in.
 - **New boards go in a visible folder.** With no boards to learn from, a new board is created in
   `~/Documents/tuiboard` (when you have a Documents folder), then `~/tuiboard`, instead of
   `~/.local/share/tuiboard/boards`. Boards

@@ -19,7 +19,6 @@
  */
 
 import { readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createMemo } from "solid-js";
 import { createStore, produce } from "solid-js/store";
@@ -55,7 +54,7 @@ import { ConflictError, statMtime, writeBoardFile } from "~/io/writer";
 import { addBoardToConfig } from "~/boards/config-writer";
 import { createBoardFile, exampleTasks } from "~/boards/create";
 import { scanDirectory, type BoardCandidate } from "~/boards/scan";
-import { parseBoardTarget, suggestBoardsDir } from "~/boards/suggest";
+import { parseBoardTarget, suggestBoardsDir, userHome } from "~/boards/suggest";
 import { isTask, parseBoard } from "~/parser/markdown";
 import { buildNoteIndex, readNoteBody, resolveNote, type NoteIndex } from "~/notes/index";
 import { buildRing, ringPosition, samePane, stepRing, type Pane } from "~/ui/pane-ring";
@@ -1116,7 +1115,7 @@ export function createTuiStore({ config }: CreateStoreOptions) {
     // about the folder, so another folder would not help.
     if (!e.code) return { error: e.message };
     const why = `Could not write to ${b.dir} (${e.code}).`;
-    const fallback = join(homedir(), "tuiboard");
+    const fallback = join(userHome(), "tuiboard");
     if (b.dirProposed && fallback !== b.dir) {
       return { dir: fallback, dirProposed: false, error: `${why} Now using ${fallback}: press Enter to try again.` };
     }
@@ -2245,8 +2244,8 @@ function noopCalendarStore(): CalendarStore {
  */
 /** `~` is what people type; node's fs does not know it. */
 function expandHome(p: string): string {
-  if (p === "~") return homedir();
-  if (p.startsWith("~/")) return join(homedir(), p.slice(2));
+  if (p === "~") return userHome();
+  if (p.startsWith("~/")) return join(userHome(), p.slice(2));
   return p;
 }
 

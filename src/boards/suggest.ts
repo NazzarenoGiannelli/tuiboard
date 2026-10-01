@@ -21,6 +21,22 @@ import { basename, dirname, join, resolve } from "node:path";
 
 import type { Config } from "~/config/loader";
 
+/**
+ * The home folder, the way Node's `os.homedir()` resolves it: `USERPROFILE` on Windows,
+ * `HOME` everywhere else, and the system lookup only when that variable is unset or empty.
+ * Bun's own `os.homedir()` on Linux reads the account database and ignores a `HOME` set
+ * after startup, so anything that redirects the home folder (tests, a wrapper script)
+ * would silently be ignored. Every home lookup in the first-run feature goes through here.
+ */
+export function userHome(
+  env: Record<string, string | undefined> = process.env,
+  platform: string = process.platform,
+  fallback: () => string = homedir,
+): string {
+  const fromEnv = platform === "win32" ? env.USERPROFILE : env.HOME;
+  return fromEnv ? fromEnv : fallback();
+}
+
 function isDirectory(path: string): boolean {
   try {
     return statSync(path).isDirectory();
@@ -39,7 +55,7 @@ function isDirectory(path: string): boolean {
  */
 export function defaultBoardsDir(
   env: Record<string, string | undefined> = process.env,
-  home: string = homedir(),
+  home: string = userHome(),
   isDir: (path: string) => boolean = isDirectory,
 ): string {
   const xdg = env.XDG_DATA_HOME;
@@ -55,7 +71,7 @@ export function suggestBoardsDir(config: Pick<Config, "boards">): string {
 }
 
 /** `~` is what people type; node's fs does not know it. Accepts both separators after it. */
-export function expandHomePath(p: string, home: string = homedir()): string {
+export function expandHomePath(p: string, home: string = userHome()): string {
   if (p === "~") return home;
   if (p.startsWith("~/") || p.startsWith("~\\")) return join(home, p.slice(2));
   return p;
@@ -73,7 +89,7 @@ export type BoardTarget =
  * loses its extension: guessing the working folder would put the file somewhere the
  * user never looked.
  */
-export function parseBoardTarget(input: string, home: string = homedir()): BoardTarget {
+export function parseBoardTarget(input: string, home: string = userHome()): BoardTarget {
   const value = input.trim();
   const hasSeparator = /[\\/]/.test(value);
   const hasExt = /\.md$/i.test(value);

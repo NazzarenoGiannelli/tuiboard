@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { defaultBoardsDir, parseBoardTarget, suggestBoardsDir } from "./suggest";
+import { defaultBoardsDir, parseBoardTarget, suggestBoardsDir, userHome } from "./suggest";
 
 const home = join("home", "me");
 const noDirs = () => false;
@@ -93,6 +93,42 @@ describe("parseBoardTarget: the name field also takes a path", () => {
     for (const bad of ["~/x/", "/", ".md", "~/x/.md"]) {
       const r = parseBoardTarget(bad, h);
       expect(r.ok).toBe(false);
+    }
+  });
+});
+
+describe("userHome: the home folder follows the environment, like Node's os.homedir()", () => {
+  const system = () => join(resolve("/"), "from-system");
+
+  it("win32 prefers USERPROFILE and ignores HOME", () => {
+    expect(userHome({ USERPROFILE: "C:/u", HOME: "/h" }, "win32", system)).toBe("C:/u");
+    expect(userHome({ HOME: "/h" }, "win32", system)).toBe(system());
+  });
+
+  it("linux and darwin prefer HOME and ignore USERPROFILE", () => {
+    for (const platform of ["linux", "darwin"]) {
+      expect(userHome({ HOME: "/h", USERPROFILE: "C:/u" }, platform, system)).toBe("/h");
+      expect(userHome({ USERPROFILE: "C:/u" }, platform, system)).toBe(system());
+    }
+  });
+
+  it("an unset or empty variable falls back to the system lookup", () => {
+    expect(userHome({}, "linux", system)).toBe(system());
+    expect(userHome({ HOME: "" }, "linux", system)).toBe(system());
+    expect(userHome({ USERPROFILE: "" }, "win32", system)).toBe(system());
+  });
+
+  it("the real defaults give a non-empty folder and follow a runtime change of the variable", () => {
+    expect(userHome().length).toBeGreaterThan(0);
+    const key = process.platform === "win32" ? "USERPROFILE" : "HOME";
+    const before = process.env[key];
+    const dir = join(resolve("/"), "redirected-home");
+    process.env[key] = dir;
+    try {
+      expect(userHome()).toBe(dir);
+    } finally {
+      if (before === undefined) delete process.env[key];
+      else process.env[key] = before;
     }
   });
 });

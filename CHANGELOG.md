@@ -22,15 +22,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tuiboard board add --examples`. An empty planner, board, Agents list or Agenda says what to do
   next instead of staying blank.
 - **Setup.** `S` in the app opens a dialog on what is set up (boards, the coding agents tuiboard
-  can read, calendars, zones, the update notice, and where new boards go), with a `✓` or a `○`
+  can read, herdr, calendars, zones, the update notice, and where new boards go), with a `✓` or a `○`
   for each. `tuiboard doctor [--json]` prints the same from a shell, read-only. It exits `0` on a
   report, `1` when the config cannot be read and `2` on a usage error.
 
 ### Changed
 - **New boards go in a visible folder.** With no boards to learn from, a new board is created in
-  `~/Documents/tuiboard`, then `~/tuiboard`, instead of `~/.local/share/tuiboard/boards`. Boards
+  `~/Documents/tuiboard` (when you have a Documents folder), then `~/tuiboard`, instead of
+  `~/.local/share/tuiboard/boards`. Boards
   already in your config stay where they are, and `XDG_DATA_HOME`, when set, still decides.
-- **The bottom bar shows the dialog's keys while a dialog is open.**
+- **The bottom bar shows the open dialog's own keys.** `Enter confirm · Esc cancel` in an ordinary
+  dialog, `Esc close` in Setup, and `Enter confirm` alone on the first-run welcome, which cannot be
+  dismissed.
 
 ## [0.15.1] - 2026-09-30
 

@@ -193,15 +193,17 @@ the gesture you already learned.
 
 New boards are created next to the boards you already have (usually a vault, so
 they inherit whatever sync and versioning it has). When there is nothing to
-learn from they go in a folder you can find in a file manager: `$XDG_DATA_HOME/tuiboard/boards`
-if you set `XDG_DATA_HOME`, otherwise `~/Documents/tuiboard`, otherwise
-`~/tuiboard`. Boards already in your config stay where they are. The path is
-shown before anything is written.
+learn from they go in a folder you can find in a file manager:
+`$XDG_DATA_HOME/tuiboard/boards` if you set `XDG_DATA_HOME`, otherwise
+`~/Documents/tuiboard` if you have a Documents folder, otherwise `~/tuiboard`.
+Boards already in your config stay where they are. The path is shown before
+anything is written.
 
 To see what tuiboard has found on your machine, press `S` in the app: boards,
-the coding agents it reads, calendars, the zones and the update notice, each
-with a `✓` when it is set up and a `○` when it is not (nothing marked `○` is
-required). The same report is available from a shell with `tuiboard doctor`.
+the coding agents it reads, herdr, calendars, the zones and the update notice,
+each with a `✓` when it is set up and a `○` when it is not. Only a board is
+required; every other `○` is optional. The same list is available from a shell
+with `tuiboard doctor`.
 
 ## Configure
 
@@ -269,7 +271,7 @@ When a newer version is on npm, tuiboard says so once, as a toast on the bottom 
 how you installed it: a bun global install, `bunx`, or a checkout. It asks the npm registry at
 most once a day, in the background, a second after it opens; the answer is cached in
 `~/.cache/tuiboard/update.json`, and the request carries nothing about you or your boards. It never
-runs on a first run, in the headless commands (`summary`, `task`, `board`), in CI or without a
+runs on a first run, in the headless commands (`summary`, `task`, `board`, `doctor`), in CI or without a
 terminal. Turn it off with `update_check: off` or `TUIBOARD_NO_UPDATE_CHECK=1`.
 
 ## Zones
@@ -610,13 +612,14 @@ block is armed, how to move, resize, keep or undo it.
 ## Headless commands
 
 > Driving tuiboard from Claude Code, Codex or any other agent?
-> [docs/agent-interface.md](docs/agent-interface.md) documents these two
-> commands as an API: the JSON shape, the matching rules, the exit codes, and
+> [docs/agent-interface.md](docs/agent-interface.md) documents `summary` and
+> `task` as an API: the JSON shape, the matching rules, the exit codes, and
 > the handful of rules that keep an agent from corrupting a board.
 
-Two subcommands run without the TUI, for status bars, widgets and scripts.
-Both reuse the same config loader and parser as the dashboard, so they can
-never disagree with it about what is on your board.
+Four subcommands run without the TUI, for status bars, widgets and scripts:
+`summary`, `task`, `board` and `doctor`. They all reuse the same config loader
+and parser as the dashboard, so they can never disagree with it about what is
+on your board, and none of them makes a network request.
 
 ### `tuiboard summary` — JSON snapshot
 
@@ -638,6 +641,7 @@ only of what is left.
 ```bash
 tuiboard board add --path ~/vault/Work.md --name Work   # adopt it if it exists, create it if not
 tuiboard board add --path ~/vault/New.md --columns "Todo,Doing,Done"
+tuiboard board add --path ~/vault/Try.md --examples     # a new board with four example tasks
 tuiboard board scan ~/vault                             # which files there are boards
 tuiboard board list                                     # what is configured, and where new boards would go
 ```
@@ -647,6 +651,8 @@ code. `add` writes the board file when it is missing and registers it in your
 config either way — the config is edited by insertion, never rewritten, so
 comments and every other setting survive untouched. A duplicate name or path
 is refused rather than guessed at, and `--dry-run` reports without writing.
+`--examples` puts the four example tasks of the first run in the board, and only
+when the file is being created: an existing board is never touched.
 
 ### `tuiboard doctor`: what is set up
 
@@ -655,8 +661,8 @@ tuiboard doctor          # a short report: boards, agents, calendar, zones, upda
 tuiboard doctor --json   # the same, for a script or a bug report
 ```
 
-The same facts the `S` dialog shows, from the same code, and read-only: it
-changes no file. Exit code `0` means a report was printed (a `○` is not an
+The same list the `S` dialog shows (boards, agents, herdr, calendars, zones,
+updates), and read-only: it changes no file. Exit code `0` means a report was printed (a `○` is not an
 error), `1` means the config could not be read (the message names the file), `2`
 means a usage error. `--json` leaves out the per-agent session counts, because
 `doctor` does not read your sessions, only whether their sources are found.

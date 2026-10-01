@@ -26,7 +26,6 @@ import { formatHm } from "~/store/timeline";
 import { HARNESS, formatAge } from "~/store/agents";
 import { HARNESS_COLOR } from "~/ui/AgentRow";
 import { herdrPlace } from "~/store/herdr";
-import { agentRowDetail } from "~/setup/agent-row";
 import { markdownLines, type MdLine, type MdStyle } from "~/ui/markdown-lines";
 import type { TuiStore } from "~/store/index";
 import type { PriorityLevel, TimeBlock } from "~/types";
@@ -303,50 +302,91 @@ function DialogShell(props: DialogShellProps) {
  */
 function SetupModal(props: { store: TuiStore }) {
   const s = createMemo(() => props.store.setupStatus());
-  const row = (ok: boolean, label: string, detail: string) => (
+  const shownBoards = createMemo(() => s().boards.slice(0, SETUP_MAX_BOARDS));
+  const hiddenBoards = createMemo(() => Math.max(0, s().boards.length - SETUP_MAX_BOARDS));
+  const zoneModes = createMemo(() => s().zones);
+  const mark = (ok: boolean) => (
+    <span style={{ fg: ok ? T.done : T.textDim }}>{ok ? "✓ " : "○ "}</span>
+  );
+  const row = (ok: boolean, label: string, detail = "") => (
     <text wrapMode="word">
-      <span style={{ fg: ok ? T.done : T.textDim }}>{ok ? "✓ " : "○ "}</span>
+      {mark(ok)}
       <span style={{ fg: T.text }}>{label}</span>
-      <span style={{ fg: T.textDim }}>{"  " + detail}</span>
+      <Show when={detail}>
+        <span style={{ fg: T.textDim }}>{"  " + detail}</span>
+      </Show>
     </text>
   );
-  const heading = (label: string) => (
+  const heading = (label: string, note = "") => (
     <text wrapMode="word">
-      <span style={{ fg: T.textDim }}>{label}</span>
+      <span style={{ fg: T.textDim }}>{label + (note ? "  " + note : "")}</span>
     </text>
   );
+  // The dialog never scrolls and a pane may be 20 rows tall, so it stays one row per item:
+  // paths live in the footer, the four agent tools share a row, the update status is one row.
   return (
-    <DialogShell title="Setup" hint="Esc or S to close" width={70}>
+    <DialogShell title={"Setup  tuiboard " + s().version} hint="Esc or S to close" width={70}>
       <box style={{ flexDirection: "column" }}>
         {row(
           s().boards.length > 0,
           "Boards",
-          s().boards.length === 0
-            ? "none yet: press + to add one"
-            : `${s().boards.length}, config ${s().paths.config ?? "(none yet)"}`,
+          s().boards.length === 0 ? "none yet: press + to add one" : String(s().boards.length),
         )}
-        <For each={s().boards}>{(b) => row(b.exists, "  " + b.name, b.exists ? b.path : b.path + " (file missing)")}</For>
-        {heading("Agents")}
-        <For each={s().agents}>
-          {(a) => row(a.found, a.label, agentRowDetail(a, s().zones.agents))}
+        <For each={shownBoards()}>
+          {(b) => row(b.exists, "  " + clipName(b.name), b.exists ? "" : "(file missing)")}
         </For>
-        {row(s().herdr.installed, "herdr", s().herdr.installed ? "installed" : "optional: live status and jump to a session")}
-        {heading("Calendar")}
+        <Show when={hiddenBoards() > 0}>
+          {heading("    +" + hiddenBoards() + " more")}
+        </Show>
+        {row(
+          zoneModes().planner !== "off" || zoneModes().agenda !== "off" || zoneModes().agents !== "off",
+          "Zones",
+          `planner ${zoneModes().planner}, agenda ${zoneModes().agenda}, agents ${zoneModes().agents}`,
+        )}
+        {heading("Agents", "found on disk")}
+        <text wrapMode="word">
+          <For each={s().agents}>
+            {(a) => (
+              <>
+                {mark(a.found)}
+                <span style={{ fg: T.text }}>{a.label}</span>
+                <span style={{ fg: T.textDim }}>
+                  {(a.found && zoneModes().agents !== "off" ? ` (${a.sessions})` : "") + "  "}
+                </span>
+              </>
+            )}
+          </For>
+        </text>
+        {row(s().herdr.installed, "herdr", s().herdr.installed ? "installed" : "optional: jump to a session")}
+        {heading("Calendar", "optional")}
         <For each={s().calendars}>
-          {(c) => row(c.connected, c.label, c.connected ? "connected" : "optional: " + c.hint)}
+          {(c) =>
+            c.connected
+              ? row(true, c.provider === "google" ? "Google" : "Microsoft", "connected")
+              : row(false, c.hint)
+          }
         </For>
-        {heading("Updates")}
         {row(
           s().updates.enabled,
-          "Update notice",
-          s().updates.enabled ? `on${s().updates.latest ? ", latest known " + s().updates.latest : ""}` : "off (update_check: off)",
+          "Updates",
+          s().updates.enabled ? `notice on${s().updates.latest ? ", latest known " + s().updates.latest : ""}` : "notice off",
         )}
         <text wrapMode="word">
-          <span style={{ fg: T.textDim }}>{"tuiboard " + s().version + "  ·  boards go in " + s().paths.boardsDir}</span>
+          <span style={{ fg: T.textDim }}>
+            {"config " + (s().paths.config ?? "(none yet)") + " · new boards in " + s().paths.boardsDir}
+          </span>
         </text>
       </box>
     </DialogShell>
   );
+}
+
+/** How many boards the Setup dialog lists before "+N more". */
+const SETUP_MAX_BOARDS = 5;
+
+/** A board name that would take a whole row on its own is cut. */
+function clipName(name: string): string {
+  return name.length > 32 ? name.slice(0, 31) + "…" : name;
 }
 
 // ─── Add new task ────────────────────────────────────────────────────────────

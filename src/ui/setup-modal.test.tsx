@@ -38,13 +38,19 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-async function setup(width: number, withBoard: boolean, extra: Record<string, unknown> = {}) {
+/**
+ * `withBoard`: false for none, true for one ("Work"), or a number of boards (Board1, Board2, ...).
+ * `height` defaults to a tall terminal; the real content area of a 24-row terminal is 20 rows
+ * (padding, top bar, spacer and bottom bar take the rest).
+ */
+async function setup(width: number, withBoard: boolean | number, extra: Record<string, unknown> = {}, height = 40) {
   const boards: { path: string; name: string }[] = [];
-  if (withBoard) {
-    mkdirSync(join(dir, "boards"), { recursive: true });
-    const p = join(dir, "boards", "Work.md");
+  const names = withBoard === true ? ["Work"] : typeof withBoard === "number" ? Array.from({ length: withBoard }, (_, i) => `Board${i + 1}`) : [];
+  if (names.length > 0) mkdirSync(join(dir, "boards"), { recursive: true });
+  for (const name of names) {
+    const p = join(dir, "boards", name + ".md");
     writeFileSync(p, "## Todo\n");
-    boards.push({ path: p, name: "Work" });
+    boards.push({ path: p, name });
   }
   const store = createTuiStore({
     config: {
@@ -56,9 +62,10 @@ async function setup(width: number, withBoard: boolean, extra: Record<string, un
     } as any,
   });
   process.stdout.columns = width;
-  if (width < 60) store.setNarrow(true);
+  // The app runs below 100 columns as a single pane (see app.tsx), which is where the dialog is tightest.
+  if (width < 100) store.setNarrow(true);
   store.openModal({ kind: "setup" });
-  const t = await testRender(() => <box style={{ width: "100%", height: "100%" }}><ModalLayer store={store} /></box>, { width, height: 40 });
+  const t = await testRender(() => <box style={{ width: "100%", height: "100%" }}><ModalLayer store={store} /></box>, { width, height });
   renders.push(t as any);
   await t.renderOnce(); await t.renderOnce();
   const f = t.captureCharFrame();
@@ -69,6 +76,49 @@ async function setup(width: number, withBoard: boolean, extra: Record<string, un
 const flatten = (frame: string) => frame.replace(/[│╭╮╰╯─┤├]/g, " ").replace(/\s+/g, " ");
 
 describe("the Setup dialog", () => {
+  it("at 80x24 with five boards everything is on screen: remedies, Updates, zones, the close hint", async () => {
+    const frame = await setup(80, 5, {}, 20);
+    const flat = flatten(frame);
+    for (const n of ["Board1", "Board2", "Board3", "Board4", "Board5"]) expect(flat).toContain(n);
+    expect(flat).toContain("Zones");
+    expect(flat).toContain("tuiboard calendar-setup google");
+    expect(flat).toContain("tuiboard calendar-setup microsoft");
+    expect(flat).toContain("Updates");
+    expect(flat).toContain("Esc or S to close");
+    expect(flat).toContain("new boards in");
+    expect(frame).toContain("╰");
+  });
+
+  it("one row per board, no path in it, capped at five with a dim '+N more'", async () => {
+    const frame = await setup(100, 7, {}, 40);
+    const flat = flatten(frame);
+    expect(flat).toContain("Board5");
+    expect(flat).not.toContain("Board6");
+    expect(flat).toContain("+2 more");
+    const boardRows = frame.split("\n").filter((l) => /Board\d/.test(l));
+    expect(boardRows).toHaveLength(5);
+    expect(flat).not.toContain("Board1.md");
+  });
+
+  it("a missing board file is marked on its row", async () => {
+    const frame = await setup(100, 1, { boards: [{ path: join(dir, "gone.md"), name: "Gone" }] });
+    expect(flatten(frame)).toContain("(file missing)");
+  });
+
+  it("shows the zones, like doctor does", async () => {
+    const flat = flatten(await setup(100, true));
+    expect(flat).toContain("Zones");
+    expect(flat).toContain("planner on");
+    expect(flat).toContain("agenda on");
+    expect(flat).toContain("agents off");
+  });
+
+  it("at 40x24 with one board the close hint is still visible", async () => {
+    const frame = await setup(40, true, {}, 20);
+    expect(flatten(frame)).toContain("Esc or S to close");
+    expect(flatten(frame)).toContain("tuiboard calendar-setup microsoft");
+  });
+
   it("lists boards, agents, calendar and updates, with the calendar remedy", async () => {
     const frame = await setup(100, true);
     const flat = flatten(frame);
@@ -101,14 +151,21 @@ describe("the Setup dialog", () => {
     for (const line of textRows) expect(line.trimEnd().endsWith("│") || line.trimEnd().endsWith("╮")).toBe(true);
   });
 
-  it("puts the Updates heading after the calendars and before its status row", async () => {
+  it("puts the Updates row after the calendars, with the on/off state in it", async () => {
     const flat = flatten(await setup(100, true));
     const lastCalendar = flat.lastIndexOf("setup microsoft");
-    const heading = flat.indexOf("Updates");
-    const status = flat.indexOf("Update notice");
+    const updates = flat.indexOf("Updates");
     expect(lastCalendar).toBeGreaterThan(-1);
-    expect(heading).toBeGreaterThan(lastCalendar);
-    expect(status).toBeGreaterThan(heading);
+    expect(updates).toBeGreaterThan(lastCalendar);
+    expect(flat.slice(updates)).toMatch(/Updates\s+notice (on|off)/);
+  });
+
+  it("at 100x24 (four zones, the dialog in the Agenda's slot) five boards still show everything", async () => {
+    const flat = flatten(await setup(100, 5, {}, 20));
+    expect(flat).toContain("Board5");
+    expect(flat).toContain("tuiboard calendar-setup microsoft");
+    expect(flat).toContain("Updates");
+    expect(flat).toContain("Esc or S to close");
   });
 
   it("with the agents zone off, never says a tool has 0 sessions", async () => {

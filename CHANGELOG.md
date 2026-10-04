@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Two-way Microsoft 365 calendar.** `tuiboard calendar-setup microsoft --write` requests
+  `Calendars.ReadWrite`; with it, `n` creates events on your default Outlook calendar and events you
+  organise can be edited (`e`) or deleted (`d`) from the Agenda, same as Google. Read-only setups are
+  unchanged. When both providers are write-connected the new-event picker lists both.
+
 ## [0.16.0] - 2026-10-01
 
 ### Added

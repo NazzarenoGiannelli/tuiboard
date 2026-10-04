@@ -46,7 +46,6 @@ import {
   untrack,
 } from "solid-js";
 
-import { googleTokenCanWrite } from "~/store/calendar";
 import { CALENDAR_HINT, showCalendarHint } from "~/ui/empty-states";
 import type { TaskRef } from "~/store/index";
 import {
@@ -302,6 +301,7 @@ export function TimelineView(props: TimelineViewProps) {
         if (entry.editable && entry.calendarId && entry.eventId) {
           const wasSelected = selectedCalKey() === `${entry.calendarId}:${entry.eventId}`;
           props.store.selectCalEvent({
+            source: entry.source,
             calendarId: entry.calendarId,
             eventId: entry.eventId,
             title: entry.title,

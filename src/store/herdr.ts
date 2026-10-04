@@ -64,6 +64,7 @@ export const HERDR_AGENT: Record<AgentProvider, string> = {
   codex: "codex",
   opencode: "opencode",
   pi: "pi",
+  omp: "omp",
 };
 const PROVIDER_OF: Record<string, AgentProvider> = Object.fromEntries(
   Object.entries(HERDR_AGENT).map(([p, a]) => [a, p as AgentProvider]),

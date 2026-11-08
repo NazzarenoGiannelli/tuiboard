@@ -334,7 +334,7 @@ tuiboard calendar-setup microsoft   # device-code flow, no redirect
 ```
 
 **Microsoft** needs an Azure app registration (Public client, `Calendars.Read`
-delegated) whose client ID goes in `~/.config/tuiboard/azure_config.json` —
+delegated; `Calendars.ReadWrite` for `--write`) whose client ID goes in `~/.config/tuiboard/azure_config.json` —
 running `calendar-setup microsoft` with no config writes a template that walks
 you through it.
 
@@ -436,8 +436,12 @@ calendars:
 ```
 
 The write scope is opt-in: without `--write`, tuiboard stays read-only and the
-`n` shortcut / slot-click / event-selection do nothing. Microsoft event write
-isn't supported yet (read-only).
+`n` shortcut / slot-click / event-selection do nothing.
+
+Microsoft 365 works the same way: `tuiboard calendar-setup microsoft --write`
+requests `Calendars.ReadWrite` (add that delegated permission to your Azure app
+first). New events go to your default Outlook calendar — the one the Agenda
+reads — and you can edit or delete events you organise.
 
 ## Markdown board format
 

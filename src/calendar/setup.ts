@@ -25,6 +25,8 @@ const GOOGLE_SCOPE_RO = "https://www.googleapis.com/auth/calendar.readonly";
 /** Added with `--write`: lets tuiboard CREATE events (and still read them). */
 const GOOGLE_SCOPE_EVENTS = "https://www.googleapis.com/auth/calendar.events";
 const MS_SCOPE = "Calendars.Read offline_access openid profile";
+/** Added with `--write`: lets tuiboard create/edit/delete events (and still read them). */
+const MS_SCOPE_WRITE = "Calendars.ReadWrite offline_access openid profile";
 
 function expandPath(p: string, root: string): string {
   if (p.startsWith("~")) return join(homedir(), p.slice(1).replace(/^[/\\]/, ""));
@@ -192,8 +194,9 @@ Create it:
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-async function setupMicrosoft(configPath: string, tokenPath: string): Promise<number> {
+async function setupMicrosoft(configPath: string, tokenPath: string, write = false): Promise<number> {
   console.log("\n── Microsoft 365 setup ────────────────────────────────────");
+  console.log(write ? "Mode: read + create/edit/delete events" : "Mode: read-only (add --write to edit events)");
   if (!existsSync(configPath)) {
     writeJson(configPath, {
       client_id: "YOUR_AZURE_APP_CLIENT_ID",
@@ -206,6 +209,7 @@ Complete it:
      Redirect URI: Public client/native → http://localhost
   2. Authentication → enable "Allow public client flows"
   3. API permissions → Microsoft Graph → Delegated → Calendars.Read
+     (add Calendars.ReadWrite too if you will use --write)
   4. Put the Application (client) ID into the file above
   5. Re-run: tuiboard calendar-setup microsoft\n`);
     return 1;
@@ -228,7 +232,7 @@ Complete it:
   const dcRes = await fetch(`${authority}/oauth2/v2.0/devicecode`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: clientId, scope: MS_SCOPE }),
+    body: new URLSearchParams({ client_id: clientId, scope: write ? MS_SCOPE_WRITE : MS_SCOPE }),
   });
   if (!dcRes.ok) {
     console.log(`Failed to start device flow (${dcRes.status}): ${await dcRes.text()}`);
@@ -263,6 +267,7 @@ Complete it:
       access_token?: string;
       refresh_token?: string;
       expires_in?: number;
+      scope?: string;
       error?: string;
       error_description?: string;
     };
@@ -270,6 +275,7 @@ Complete it:
       writeJson(tokenPath, {
         access_token: data.access_token,
         refresh_token: data.refresh_token,
+        scope: data.scope,
         expiry: data.expires_in
           ? new Date(Date.now() + data.expires_in * 1000).toISOString()
           : undefined,
@@ -297,7 +303,8 @@ function usage(): void {
 Usage:
   tuiboard calendar-setup google           Browser OAuth, read-only
   tuiboard calendar-setup google --write   Browser OAuth, read + create events
-  tuiboard calendar-setup microsoft        Device-code flow for Microsoft 365
+  tuiboard calendar-setup microsoft        Device-code flow for Microsoft 365, read-only
+  tuiboard calendar-setup microsoft --write  Device-code flow, read + create/edit/delete events
 
 Tokens are written to the paths in your tuiboard config (calendars.google.token
 / calendars.microsoft.tokenCache), or ~/.config/tuiboard/ if no calendars block
@@ -336,7 +343,7 @@ calendars:
     const tokenPath = m?.tokenCache
       ? expandPath(m.tokenCache, root)
       : join(TUIBOARD_DIR, "ms_token.json");
-    const rc = await setupMicrosoft(configPath, tokenPath);
+    const rc = await setupMicrosoft(configPath, tokenPath, write);
     if (rc === 0 && !m) {
       console.log(`Add this to your tuiboard config:
 

@@ -42,11 +42,14 @@ import { AGENT_ADAPTERS } from "./agent-adapters";
 import { createHerdrSource } from "./herdr";
 import {
   createCalendarStore,
+  calendarWriteEnabled,
   createGoogleEvent,
+  createMicrosoftEvent,
   deleteGoogleEvent,
-  googleTokenCanWrite,
-  listGoogleCalendars,
+  deleteMicrosoftEvent,
+  listAllWritableCalendars,
   updateGoogleEvent,
+  updateMicrosoftEvent,
   type CalendarStore,
   type WritableCalendar,
 } from "./calendar";
@@ -215,6 +218,8 @@ export interface EventPicker {
  * calendar events rather than tasks. While set, `e` edits and `d` deletes it.
  */
 export interface SelectedCalEvent {
+  /** Provider the event lives on (default "google"). */
+  source?: "google" | "microsoft";
   calendarId: string;
   eventId: string;
   title: string;
@@ -1925,15 +1930,14 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   /** Open the "new event" modal for a time slot. Guarded on Google write being
    *  connected; prefetches the writable calendars while the user types. */
   function openEventModal(dateIso: string, startMin: number, endMin: number): void {
-    const g = config.calendars?.google;
-    if (!g || !googleTokenCanWrite(g.token)) {
-      flashBanner("warn", "Connect Google write first: tuiboard calendar-setup google --write");
+    if (!calendarWriteEnabled(config.calendars)) {
+      flashBanner("warn", "Connect calendar write first: tuiboard calendar-setup google --write (or microsoft --write)");
       return;
     }
     setState("ui", "eventPicker", { step: 1, sel: 0, title: "", dateIso, startMin, endMin, cals: [] });
     // Defer the modal open so the OpenTUI <input> mounts after this key event.
     setTimeout(() => openModal({ kind: "event", dateIso, startMin, endMin }), 0);
-    void listGoogleCalendars(g).then((cals) => {
+    void listAllWritableCalendars(config.calendars).then((cals) => {
       setState("ui", "eventPicker", produce((p: EventPicker | undefined) => {
         if (p && p.cals.length === 0) p.cals = cals;
       }));
@@ -1944,16 +1948,15 @@ export function createTuiStore({ config }: CreateStoreOptions) {
    *  preselect the default, and either show the picker or (single calendar)
    *  create immediately. */
   async function advanceEventToStep2(title: string, startMin: number, endMin: number, dateIso?: string, allDay?: boolean): Promise<void> {
-    const g = config.calendars?.google;
-    if (!g || !state.ui.eventPicker) { closeModal(); return; }
+    if (!state.ui.eventPicker) { closeModal(); return; }
     let cals = state.ui.eventPicker.cals;
-    if (cals.length === 0) cals = await listGoogleCalendars(g);
+    if (cals.length === 0) cals = await listAllWritableCalendars(config.calendars);
     if (cals.length === 0) {
-      flashBanner("warn", "No writable Google calendars");
+      flashBanner("warn", "No writable calendars");
       closeModal();
       return;
     }
-    const def = g.defaultCalendar;
+    const def = config.calendars?.google?.defaultCalendar;
     const idx = cals.findIndex((c) => (def ? c.id === def : c.primary));
     setState("ui", "eventPicker", produce((p: EventPicker | undefined) => {
       if (!p) return;
@@ -1991,20 +1994,23 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   /** Create the event on the selected calendar, refresh the agenda, close. */
   async function confirmEventPicker(): Promise<void> {
     const p = state.ui.eventPicker;
-    const g = config.calendars?.google;
-    if (!p || !g) { closeModal(); return; }
-    const calendarId = p.cals[p.sel]?.id ?? g.defaultCalendar ?? "primary";
+    if (!p) { closeModal(); return; }
+    const chosen = p.cals[p.sel];
+    const source = chosen?.source ?? "google";
     const title = p.title.trim() || "(busy)";
     const allDay = !!p.allDay;
     closeModal();
-    const r = await createGoogleEvent(g, {
-      calendarId,
-      title,
-      dateIso: p.dateIso,
-      startMin: p.startMin,
-      endMin: p.endMin,
-      allDay,
-    });
+    const ev = { title, dateIso: p.dateIso, startMin: p.startMin, endMin: p.endMin, allDay };
+    const g = config.calendars?.google;
+    const m = config.calendars?.microsoft;
+    let r: { ok: true } | { ok: false; error: string };
+    if (source === "microsoft" && m) {
+      r = await createMicrosoftEvent(m, { ...ev, calendarId: chosen?.id ?? "default" });
+    } else if (g) {
+      r = await createGoogleEvent(g, { ...ev, calendarId: chosen?.id ?? g.defaultCalendar ?? "primary" });
+    } else {
+      return;
+    }
     if (r.ok) {
       calendarStore.refresh(true);
       flashBanner("info", allDay ? `📅 All-day event created: ${title}` : `📅 Event created: ${title}`);
@@ -2044,16 +2050,20 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   async function confirmEventEdit(title: string, startMin: number, endMin: number, dateIso?: string): Promise<void> {
     const sel = state.ui.selectedCalEvent;
     const g = config.calendars?.google;
-    if (!sel || !g) { closeModal(); return; }
+    const m = config.calendars?.microsoft;
+    const isMs = sel?.source === "microsoft";
+    if (!sel || !(isMs ? m : g)) { closeModal(); return; }
     closeModal();
-    const r = await updateGoogleEvent(g, {
-      calendarId: sel.calendarId,
+    const ev = {
       eventId: sel.eventId,
       title: title.trim() || sel.title,
       dateIso: dateIso ?? sel.dateIso,
       startMin,
       endMin,
-    });
+    };
+    const r = isMs
+      ? await updateMicrosoftEvent(m!, ev)
+      : await updateGoogleEvent(g!, { ...ev, calendarId: sel.calendarId });
     clearCalSelection();
     if (r.ok) {
       calendarStore.refresh(true);
@@ -2067,9 +2077,13 @@ export function createTuiStore({ config }: CreateStoreOptions) {
   async function confirmDeleteEvent(): Promise<void> {
     const sel = state.ui.selectedCalEvent;
     const g = config.calendars?.google;
-    if (!sel || !g) { closeModal(); return; }
+    const m = config.calendars?.microsoft;
+    const isMs = sel?.source === "microsoft";
+    if (!sel || !(isMs ? m : g)) { closeModal(); return; }
     closeModal();
-    const r = await deleteGoogleEvent(g, { calendarId: sel.calendarId, eventId: sel.eventId });
+    const r = isMs
+      ? await deleteMicrosoftEvent(m!, { eventId: sel.eventId })
+      : await deleteGoogleEvent(g!, { calendarId: sel.calendarId, eventId: sel.eventId });
     clearCalSelection();
     if (r.ok) {
       calendarStore.refresh(true);

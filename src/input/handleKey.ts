@@ -27,7 +27,7 @@ import { planHerdrFocus, planHerdrResume } from "~/input/herdr-open";
 import { isMinusKey, isPlusKey } from "~/input/keys";
 import { HARNESS, type AgentSession } from "~/store/agents";
 import { herdrBin, herdrPlace } from "~/store/herdr";
-import { googleTokenCanWrite } from "~/store/calendar";
+import { calendarWriteEnabled } from "~/store/calendar";
 import { isTask } from "~/parser/markdown";
 import {
   isoToday,
@@ -460,15 +460,14 @@ function handleTimelineZone(
     store.clearCalSelection();
   }
 
-  // `n` (Agenda zone) = create a Google Calendar event at the now-rounded slot.
+  // `n` (Agenda zone) = create a calendar event at the now-rounded slot.
   // Mirrors `n` = new task in the board. Gated on Google write being connected.
   if ((key.name === "n" || key.name === "N") && !key.ctrl) {
-    const g = store.config.calendars?.google;
-    if (g && googleTokenCanWrite(g.token)) {
+    if (calendarWriteEnabled(store.config.calendars)) {
       const { startMin, endMin } = nextNowBlock();
       store.openEventModal(store.agendaDate(), startMin, endMin);
     } else {
-      store.flashBanner("warn", "Connect Google write first: tuiboard calendar-setup google --write");
+      store.flashBanner("warn", "Connect calendar write first: tuiboard calendar-setup google --write (or microsoft --write)");
     }
     return;
   }

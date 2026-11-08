@@ -1435,7 +1435,7 @@ const HELP_SECTIONS: HelpSection[] = [
     emoji: "⏰",
     title: "Agenda — scheduling",
     rows: [
-      ["n", "New Google Calendar event (needs: calendar-setup google --write) append date+time: Lunch tomorrow 12-13 · Review 2026-06-10 15-16 · Holiday 25-12 allday"],
+      ["n", "New calendar event (needs: calendar-setup google|microsoft --write) append date+time: Lunch tomorrow 12-13 · Review 2026-06-10 15-16 · Holiday 25-12 allday"],
       ["click an event", "Select an editable Google event — then e edit · d delete · Esc"],
       ["To place", "The day's tasks that have no hour yet, at the top of the Agenda — j/k walks them, then the blocks"],
       ["c (any zone)", "Arm the task under the cursor (arming only arms: a task with no hour waits in the tray). Then click a slot, or press j/k, to choose where it goes — the first j/k puts it in the first free half hour. Also ARM MODE: click a task, click a slot, repeat"],

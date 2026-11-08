@@ -29,13 +29,14 @@ export interface CalEvent {
   endMin: number;
   color: string;
   source: "google" | "microsoft";
-  /** Google calendar id this event lives on (set for Google events only). */
+  /** Calendar id this event lives on (Google calendar id, or Microsoft's
+   *  default-calendar id). */
   calendarId?: string;
-  /** Google event id (set for Google events only). Needed to edit/delete. */
+  /** Provider event id. Needed to edit/delete. */
   eventId?: string;
   /** True when this event can be edited/deleted from tuiboard: a Google event
-   *  on an owner/writer calendar, with a write-scoped token. Microsoft events
-   *  and read-only-calendar events are never editable. */
+   *  on an owner/writer calendar, or a Microsoft event you organise, with a
+   *  write-scoped token. Everything else is read-only. */
   editable?: boolean;
   /** All-day event (date-only, no time). Rendered as a chip at the top of the
    *  Agenda rather than on the 24h grid; startMin/endMin are unused. Display
@@ -46,6 +47,10 @@ export interface CalEvent {
 const GOOGLE_FALLBACK_COLOR = "#e8a05c";
 const MS_FALLBACK_COLOR = "#b39ddb";
 const MS_GRAPH_SCOPE = "Calendars.Read offline_access";
+/** Placeholder calendar id for events on the signed-in user's default calendar
+ *  (the only one `fetchMicrosoft` reads). */
+const MS_DEFAULT_CALENDAR = "default";
+const MS_GRAPH_SCOPE_WRITE = "Calendars.ReadWrite offline_access";
 const CACHE_DIR = join(homedir(), ".config", "tuiboard", "cal_cache");
 const CACHE_TTL_MS = 30 * 60 * 1000;
 
@@ -159,6 +164,8 @@ async function googleAccessToken(tokenPath: string): Promise<string | null> {
 
 /** A calendar the connected account can write to (accessRole owner/writer). */
 export interface WritableCalendar {
+  /** Which provider this calendar belongs to (default "google"). */
+  source?: "google" | "microsoft";
   id: string;
   summary: string;
   accessRole: string;
@@ -472,6 +479,19 @@ interface MsToken {
   access_token?: string;
   refresh_token?: string;
   expiry?: string;
+  /** Space-separated scopes granted at setup (`tuiboard calendar-setup microsoft --write`). */
+  scope?: string;
+}
+
+/** True if the persisted Microsoft token carries a calendar-write scope. Gates
+ *  the Microsoft side of event creation/edit/delete. */
+export function microsoftTokenCanWrite(tokenPath: string): boolean {
+  try {
+    const tok = JSON.parse(readFileSync(tokenPath, "utf-8")) as MsToken;
+    return typeof tok.scope === "string" && /\bCalendars\.ReadWrite\b/i.test(tok.scope);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -508,7 +528,7 @@ async function microsoftAccessToken(cfg: MicrosoftCalendarConfig): Promise<strin
         client_id: clientId,
         grant_type: "refresh_token",
         refresh_token: tok.refresh_token,
-        scope: MS_GRAPH_SCOPE,
+        scope: microsoftTokenCanWrite(cfg.tokenCache) ? MS_GRAPH_SCOPE_WRITE : MS_GRAPH_SCOPE,
       }),
     });
     if (!res.ok) return null;
@@ -516,10 +536,12 @@ async function microsoftAccessToken(cfg: MicrosoftCalendarConfig): Promise<strin
       access_token?: string;
       refresh_token?: string;
       expires_in?: number;
+      scope?: string;
     };
     if (!data.access_token) return null;
     try {
       tok.access_token = data.access_token;
+      if (data.scope) tok.scope = data.scope;
       if (data.refresh_token) tok.refresh_token = data.refresh_token;
       if (data.expires_in) tok.expiry = new Date(Date.now() + data.expires_in * 1000).toISOString();
       writeFileSync(cfg.tokenCache, JSON.stringify(tok), "utf-8");
@@ -553,6 +575,7 @@ async function fetchMicrosoft(
   const base = dayStartMs(dateIso);
   const { min, max } = dayBoundsIso(dateIso);
   const color = cfg.color || MS_FALLBACK_COLOR;
+  const canWrite = microsoftTokenCanWrite(cfg.tokenCache);
 
   try {
     const url =
@@ -569,6 +592,8 @@ async function fetchMicrosoft(
     if (!r.ok) return [];
     const data = (await r.json()) as {
       value?: Array<{
+        id?: string;
+        isOrganizer?: boolean;
         subject?: string;
         isAllDay?: boolean;
         start?: { dateTime?: string };
@@ -599,6 +624,11 @@ async function fetchMicrosoft(
         endMin,
         color,
         source: "microsoft",
+        calendarId: MS_DEFAULT_CALENDAR,
+        eventId: it.id,
+        // Editable only with a write-scoped token, and only where you are the
+        // organiser (Graph rejects edits to events you merely attend).
+        editable: canWrite && !!it.id && it.isOrganizer !== false,
       });
     }
     events.sort((a, b) => a.startMin - b.startMin);
@@ -607,6 +637,157 @@ async function fetchMicrosoft(
   } catch {
     return [];
   }
+}
+
+// ─── Microsoft write (calendar list + event create/edit/delete) ──────────────
+
+const MS_NOT_AUTHORIZED = "not authorized — run: tuiboard calendar-setup microsoft --write";
+const GRAPH = "https://graph.microsoft.com/v1.0";
+
+/** Graph wall-clock UTC timestamp (`2026-06-03T13:00:00`) for `min` minutes past
+ *  local midnight of `dateIso`. Sent with `timeZone: "UTC"`, so the instant is
+ *  exact across DST. */
+function utcGraphTime(dateIso: string, min: number): string {
+  return new Date(dayStartMs(dateIso) + min * 60000).toISOString().slice(0, 19);
+}
+
+function graphEventBody(args: {
+  title: string;
+  dateIso: string;
+  startMin: number;
+  endMin: number;
+  allDay?: boolean;
+}): Record<string, unknown> {
+  if (args.allDay) {
+    return {
+      subject: args.title,
+      isAllDay: true,
+      // All-day events must start/end at midnight in the given zone; end is exclusive.
+      start: { dateTime: `${args.dateIso}T00:00:00`, timeZone: "UTC" },
+      end: { dateTime: `${nextDayIso(args.dateIso)}T00:00:00`, timeZone: "UTC" },
+    };
+  }
+  return {
+    subject: args.title,
+    start: { dateTime: utcGraphTime(args.dateIso, args.startMin), timeZone: "UTC" },
+    end: { dateTime: utcGraphTime(args.dateIso, args.endMin), timeZone: "UTC" },
+  };
+}
+
+async function graphWrite(
+  cfg: MicrosoftCalendarConfig,
+  method: "POST" | "PATCH" | "DELETE",
+  path: string,
+  body?: Record<string, unknown>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const access = await microsoftAccessToken(cfg);
+  if (!access || !microsoftTokenCanWrite(cfg.tokenCache)) return { ok: false, error: MS_NOT_AUTHORIZED };
+  try {
+    const res = await fetch(`${GRAPH}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${access}`,
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    // 404 on DELETE = already gone; the goal state is reached.
+    if (!res.ok && !(method === "DELETE" && res.status === 404)) {
+      const text = await res.text().catch(() => "");
+      return { ok: false, error: `${res.status} ${text.slice(0, 140)}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+/**
+ * The Microsoft calendars new events can be created on. Only the signed-in
+ * user's DEFAULT calendar is offered — it is the only one the Agenda reads, so
+ * an event created elsewhere would never show up. Returns [] on any failure.
+ */
+export async function listMicrosoftCalendars(
+  cfg: MicrosoftCalendarConfig,
+): Promise<WritableCalendar[]> {
+  const access = await microsoftAccessToken(cfg);
+  if (!access) return [];
+  try {
+    const res = await fetch(`${GRAPH}/me/calendars?%24select=id,name,hexColor,isDefaultCalendar,canEdit`, {
+      headers: { Authorization: `Bearer ${access}` },
+    });
+    if (!res.ok) return [];
+    const list = (await res.json()) as {
+      value?: Array<{ id: string; name?: string; hexColor?: string; isDefaultCalendar?: boolean; canEdit?: boolean }>;
+    };
+    return (list.value ?? [])
+      .filter((c) => c.isDefaultCalendar === true && c.canEdit !== false)
+      .map((c) => ({
+        source: "microsoft" as const,
+        id: c.id,
+        summary: c.name ? `${c.name} (Microsoft)` : "Microsoft calendar",
+        accessRole: "owner",
+        color: c.hexColor || cfg.color || MS_FALLBACK_COLOR,
+        primary: false,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/** Create a Microsoft 365 event on `calendarId`. Surfaces failures for the UI banner. */
+export async function createMicrosoftEvent(
+  cfg: MicrosoftCalendarConfig,
+  args: { calendarId: string; title: string; dateIso: string; startMin: number; endMin: number; allDay?: boolean },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const path =
+    args.calendarId && args.calendarId !== MS_DEFAULT_CALENDAR
+      ? `/me/calendars/${encodeURIComponent(args.calendarId)}/events`
+      : "/me/calendar/events";
+  return graphWrite(cfg, "POST", path, graphEventBody(args));
+}
+
+/** Edit a Microsoft 365 event's title + time. PATCH, so attendees/body are preserved. */
+export async function updateMicrosoftEvent(
+  cfg: MicrosoftCalendarConfig,
+  args: { eventId: string; title: string; dateIso: string; startMin: number; endMin: number },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return graphWrite(cfg, "PATCH", `/me/events/${encodeURIComponent(args.eventId)}`, graphEventBody(args));
+}
+
+/** Delete a Microsoft 365 event. DELETE returns 204 on success. */
+export async function deleteMicrosoftEvent(
+  cfg: MicrosoftCalendarConfig,
+  args: { eventId: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return graphWrite(cfg, "DELETE", `/me/events/${encodeURIComponent(args.eventId)}`);
+}
+
+/** True if at least one connected calendar provider has a write-scoped token. */
+export function calendarWriteEnabled(calendars: CalendarsConfig | undefined): boolean {
+  const g = calendars?.google;
+  const m = calendars?.microsoft;
+  return (
+    (!!g && googleTokenCanWrite(g.token)) ||
+    (!!m && m.enabled !== false && !!m.tokenCache && microsoftTokenCanWrite(m.tokenCache))
+  );
+}
+
+/** Writable calendars across every write-scoped provider (Google first). */
+export async function listAllWritableCalendars(
+  calendars: CalendarsConfig | undefined,
+): Promise<WritableCalendar[]> {
+  const g = calendars?.google;
+  const m = calendars?.microsoft;
+  const [gc, mc] = await Promise.all([
+    g && googleTokenCanWrite(g.token)
+      ? listGoogleCalendars(g).then((l) => l.map((c) => ({ ...c, source: "google" as const })))
+      : Promise.resolve([] as WritableCalendar[]),
+    m && m.enabled !== false && m.tokenCache && microsoftTokenCanWrite(m.tokenCache)
+      ? listMicrosoftCalendars(m)
+      : Promise.resolve([] as WritableCalendar[]),
+  ]);
+  return [...gc, ...mc];
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

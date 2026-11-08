@@ -1,0 +1,85 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    # Optional: Only run on specific file changes
+    # paths:
+    #   - "src/**/*.ts"
+    #   - "src/**/*.tsx"
+    #   - "src/**/*.js"
+    #   - "src/**/*.jsx"
+
+jobs:
+  claude-review:
+    # Optional: Filter by PR author
+    # if: |
+    #   github.event.pull_request.user.login == 'external-contributor' ||
+    #   github.event.pull_request.user.login == 'new-developer' ||
+    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      # Pin bun below the 1.3.10 regression (oven-sh/bun#30477, #25730/#22023):
+      # 1.3.10-1.3.14 hit "Internal error: directory mismatch for directory
+      # .../tsconfig.json" during claude-code-action's tsconfig auto-discovery,
+      # aborting the run with exit code 1 before any review happens. Fixed
+      # upstream in oven-sh/bun#30478 but not released yet — remove this pin
+      # once ubuntu-latest ships a bun with that fix.
+      - name: Pin working bun version
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.9"
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Please review this pull request and provide feedback on:
+            - Code quality and best practices
+            - Potential bugs or issues
+            - Performance considerations
+            - Security concerns
+            - Test coverage
+
+            Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
+
+            Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
+
+          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
+          # or https://docs.claude.com/en/docs/claude-code/cli-reference for available options
+          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
+
+      # Flag routine-authored PRs after the review is posted, so the event-driven
+      # review-responder routine ("Pull request labeled" trigger) fires only when a
+      # review actually exists. Scoped to fix/followup-* and claude/* branches so
+      # human PRs are untouched.
+      # Once the responder has marked a PR "ready-for-merge", do NOT re-add the label on
+      # subsequent synchronize events — that would re-trigger the responder and trap the PR
+      # in the loop. The ready-for-merge guard lets the PR exit the loop for manual merge.
+      - name: Flag follow-up PR for review-responder routine
+        if: >-
+          (startsWith(github.head_ref, 'fix/followup-') || startsWith(github.head_ref, 'claude/')) &&
+          !contains(github.event.pull_request.labels.*.name, 'ready-for-merge')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "awaiting-followup" --repo "${{ github.repository }}" --color FBCA04 --description "Burndown PR reviewed, awaiting the follow-up routine" --force 2>/dev/null || true
+          gh pr edit "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --add-label "awaiting-followup"
+

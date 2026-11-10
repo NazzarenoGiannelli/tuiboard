@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Deleted boards are not silently recreated by stale writers.** Expected-mtime writes now fail with a conflict when the target disappeared, and failed commits clean up their temporary file.
+
 ## [0.16.0] - 2026-10-01
 
 ### Added
